@@ -176,6 +176,10 @@ Plates are compared after normalising: uppercase, all non-alphanumerics stripped
 
 - The three driver rules are mutually exclusive; the most specific one wins, in table order.
 - `PLATE_VIN_HISTORY_CONFLICT` is AMBER, not RED: plates legitimately change on a provincial transfer, and personalised plates move between vehicles.
+- Checked at entry only: `DISC_EXPIRED`, `LICENCE_EXPIRED`, `PLATE_VIN_HISTORY_CONFLICT`, `UNFAMILIAR_VEHICLE`. Checked at exit only: the three driver rules, `NO_ENTRY_RECORD`, `OCCUPANT_COUNT_DROP`, `OVERSTAY`. Both: `PLATE_DISC_MISMATCH`, `DISC_CLONE_ON_SITE`.
+- A car flagged `DISC_CLONE_ON_SITE` isn't also reported as `DUPLICATE_ENTRY`, and a clone on site suppresses `PLATE_VIN_HISTORY_CONFLICT` for the same evidence.
+- Without an entry record there's no entry driver, so `UNKNOWN_DRIVER` doesn't fire alongside `NO_ENTRY_RECORD`. `DRIVER_VEHICLE_MISMATCH` and `WALKED_IN_DRIVING_OUT` still do.
+- Documents are valid through their whole expiry date, judged by the calendar day at the site (`RuleConfig.utcOffsetMinutes`).
 
 ### Pedestrian lane
 
@@ -188,6 +192,8 @@ Documents: smart ID card, driver's licence, green ID book, manual fallback.
 | `DRIVER_LEFT_ON_FOOT` | Person leaving on foot is the entry driver of a vehicle still on site | INFO |
 
 `DRIVER_LEFT_ON_FOOT` is informational on its own. If that vehicle later leaves with someone else, `UNKNOWN_DRIVER` fires at the vehicle gate.
+
+An authorised co-driver was scanned in with the car, so leaving on foot raises nothing, and walking back in isn't a `PEDESTRIAN_DUPLICATE_ENTRY` (that rule covers people on foot and drivers only).
 
 ### Both lanes
 
