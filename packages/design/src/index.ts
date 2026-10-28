@@ -25,6 +25,10 @@ export const colors = {
   blockedSoft: '#FDE4E1',
 } as const;
 
+// Categorical chart colours in fixed order. Validated 2026-10-28 for colour-blind separation on the white
+// card surface; slot 3 is under 3:1 contrast there, so charts using it must show their values as visible labels.
+export const seriesColors = ['#2a78d6', '#eb6834', '#1baf7a'] as const;
+
 export const space = {
   xxs: 4,
   xs: 8,

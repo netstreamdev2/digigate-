@@ -4,7 +4,7 @@ Gate access control for boom-gated sites. A guard scans the driver's SA licence 
 
 The first customer is a **hospital**. The product is built to be reused for **residential estates** next, and later other gated sites (office parks, schools, mines). See Site types and tenancy.
 
-Status (2026-10-28): monorepo scaffolded. The gate app has a design mock-up (home, vehicle entry, vehicle exit with a vehicle-swap block) built on Expo Router, using provisional tokens in `packages/design`, Astra's custom icons and Inter / Inter Tight. All data in it comes from `apps/gate/src/demo/` and is fake. Next: review the mock-up on the DT50, then Phase 0 (scanner) and the `packages/core` decoders and rules.
+Status (2026-10-28): monorepo scaffolded. The gate app has a design mock-up (home, vehicle entry, vehicle exit with a vehicle-swap block) built on Expo Router, using provisional tokens in `packages/design`, Astra's custom icons and Inter / Inter Tight. All data in it comes from `apps/gate/src/demo/` and is fake. The rules engine in `packages/core` is done and tested. The dashboard has an overview mock-up (KPI tiles, entries by hour, entries by type, open alerts, recent activity) on demo data from `apps/dashboard/src/demo/`, using the same tokens and icons. Next: Phase 0 (scanner) and the `packages/core` decoders, then wire the gate screens to the rules engine.
 
 ## Non-negotiables
 

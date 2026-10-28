@@ -1,1 +1,47 @@
 @import "tailwindcss";
+
+/* Values come from @digigate/design via src/theme.ts; this block only exposes them to Tailwind. */
+@theme inline {
+  --color-background: var(--dg-color-background);
+  --color-surface: var(--dg-color-surface);
+  --color-surface-muted: var(--dg-color-surface-muted);
+  --color-border: var(--dg-color-border);
+  --color-ink: var(--dg-color-ink);
+  --color-ink-raised: var(--dg-color-ink-raised);
+  --color-ink-muted: var(--dg-color-ink-muted);
+  --color-ink-subtle: var(--dg-color-ink-subtle);
+  --color-ink-inverse: var(--dg-color-ink-inverse);
+  --color-brand: var(--dg-color-brand);
+  --color-tile-sky: var(--dg-color-tile-sky);
+  --color-tile-mint: var(--dg-color-tile-mint);
+  --color-tile-butter: var(--dg-color-tile-butter);
+  --color-tile-lilac: var(--dg-color-tile-lilac);
+  --color-badge: var(--dg-color-badge);
+  --color-clear: var(--dg-color-clear);
+  --color-clear-soft: var(--dg-color-clear-soft);
+  --color-warning: var(--dg-color-warning);
+  --color-warning-soft: var(--dg-color-warning-soft);
+  --color-blocked: var(--dg-color-blocked);
+  --color-blocked-soft: var(--dg-color-blocked-soft);
+  --color-series-1: var(--dg-color-series-1);
+  --color-series-2: var(--dg-color-series-2);
+  --color-series-3: var(--dg-color-series-3);
+
+  --radius-sm: var(--dg-radius-sm);
+  --radius-md: var(--dg-radius-md);
+  --radius-lg: var(--dg-radius-lg);
+  --radius-xl: var(--dg-radius-xl);
+  --radius-pill: var(--dg-radius-pill);
+
+  --shadow-card: var(--dg-shadow-card);
+  --shadow-floating: var(--dg-shadow-floating);
+  --shadow-glow: var(--dg-shadow-glow);
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
