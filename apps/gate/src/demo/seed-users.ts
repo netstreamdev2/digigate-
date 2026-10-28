@@ -33,8 +33,8 @@ export const seedUsers: readonly GateUser[] = [
   {
     id: 'user-2001',
     employeeNumber: '2001',
-    firstName: 'Priya',
-    lastName: 'Naidoo',
+    firstName: 'Kagiso',
+    lastName: 'Molefe',
     role: 'supervisor',
     pin: {
       algorithm: 'pbkdf2-sha256',
