@@ -1,0 +1,17 @@
+packages:
+  - apps/*
+  - packages/*
+
+# React Native autolinking and Gradle expect a flat node_modules.
+nodeLinker: hoisted
+
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+
+minimumReleaseAgeExclude:
+  - '@expo/cli@58.1.16'
+  - babel-preset-expo@58.0.21
+  - expo-modules-core@58.0.27
+  - expo@58.0.20
+  - expo-router@58.0.27

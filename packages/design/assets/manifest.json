@@ -1,0 +1,1131 @@
+{
+  "grid": 24,
+  "padding": 2,
+  "constructionStroke": 1.75,
+  "icons": [
+    {
+      "name": "scan",
+      "file": "icons/scan.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "licence-card",
+      "file": "icons/licence-card.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "licence-disc",
+      "file": "icons/licence-disc.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "id-card",
+      "file": "icons/id-card.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "id-book",
+      "file": "icons/id-book.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "manual-entry",
+      "file": "icons/manual-entry.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "camera",
+      "file": "icons/camera.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rescan",
+      "file": "icons/rescan.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "scan-failed",
+      "file": "icons/scan-failed.svg",
+      "section": "Scanning and documents",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "vehicle",
+      "file": "icons/vehicle.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "vehicle-filled",
+      "file": "icons/vehicle-filled.svg",
+      "section": "Vehicles and people",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "number-plate",
+      "file": "icons/number-plate.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "occupants",
+      "file": "icons/occupants.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "driver",
+      "file": "icons/driver.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "co-driver",
+      "file": "icons/co-driver.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "pedestrian",
+      "file": "icons/pedestrian.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "visitor",
+      "file": "icons/visitor.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "staff",
+      "file": "icons/staff.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "staff-pending",
+      "file": "icons/staff-pending.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "contractor",
+      "file": "icons/contractor.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "delivery",
+      "file": "icons/delivery.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "patient-dropoff",
+      "file": "icons/patient-dropoff.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "emergency",
+      "file": "icons/emergency.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "unfamiliar-vehicle",
+      "file": "icons/unfamiliar-vehicle.svg",
+      "section": "Vehicles and people",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "entry",
+      "file": "icons/entry.svg",
+      "section": "Gate and movement",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "exit",
+      "file": "icons/exit.svg",
+      "section": "Gate and movement",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "boom-gate-closed",
+      "file": "icons/boom-gate-closed.svg",
+      "section": "Gate and movement",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "boom-gate-open",
+      "file": "icons/boom-gate-open.svg",
+      "section": "Gate and movement",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "pedestrian-gate",
+      "file": "icons/pedestrian-gate.svg",
+      "section": "Gate and movement",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "on-site",
+      "file": "icons/on-site.svg",
+      "section": "Gate and movement",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "on-site-filled",
+      "file": "icons/on-site-filled.svg",
+      "section": "Gate and movement",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "duration",
+      "file": "icons/duration.svg",
+      "section": "Gate and movement",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "overstay",
+      "file": "icons/overstay.svg",
+      "section": "Gate and movement",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "result-clear",
+      "file": "icons/result-clear.svg",
+      "section": "Results",
+      "priority": "P1",
+      "variant": "filled"
+    },
+    {
+      "name": "result-warning",
+      "file": "icons/result-warning.svg",
+      "section": "Results",
+      "priority": "P1",
+      "variant": "filled"
+    },
+    {
+      "name": "result-blocked",
+      "file": "icons/result-blocked.svg",
+      "section": "Results",
+      "priority": "P1",
+      "variant": "filled"
+    },
+    {
+      "name": "info",
+      "file": "icons/info.svg",
+      "section": "Results",
+      "priority": "P1",
+      "variant": "filled"
+    },
+    {
+      "name": "override",
+      "file": "icons/override.svg",
+      "section": "Results",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-vehicle-swap",
+      "file": "icons/rule-vehicle-swap.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-unknown-driver",
+      "file": "icons/rule-unknown-driver.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-walked-in-driving-out",
+      "file": "icons/rule-walked-in-driving-out.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-no-entry-record",
+      "file": "icons/rule-no-entry-record.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-plate-mismatch",
+      "file": "icons/rule-plate-mismatch.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-clone",
+      "file": "icons/rule-clone.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-duplicate-entry",
+      "file": "icons/rule-duplicate-entry.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-expired",
+      "file": "icons/rule-expired.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "rule-occupant-drop",
+      "file": "icons/rule-occupant-drop.svg",
+      "section": "Rule icons",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "guard",
+      "file": "icons/guard.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "supervisor",
+      "file": "icons/supervisor.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "pin",
+      "file": "icons/pin.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "filled"
+    },
+    {
+      "name": "lock",
+      "file": "icons/lock.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "unlock",
+      "file": "icons/unlock.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "switch-guard",
+      "file": "icons/switch-guard.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "sign-out",
+      "file": "icons/sign-out.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "offline",
+      "file": "icons/offline.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "synced",
+      "file": "icons/synced.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "syncing",
+      "file": "icons/syncing.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "pending-upload",
+      "file": "icons/pending-upload.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "device",
+      "file": "icons/device.svg",
+      "section": "Guard session and device",
+      "priority": "P1",
+      "variant": "outline"
+    },
+    {
+      "name": "device-filled",
+      "file": "icons/device-filled.svg",
+      "section": "Guard session and device",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "overview",
+      "file": "icons/overview.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "overview-filled",
+      "file": "icons/overview-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "visits",
+      "file": "icons/visits.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "visits-filled",
+      "file": "icons/visits-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "alerts",
+      "file": "icons/alerts.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "alerts-filled",
+      "file": "icons/alerts-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "people",
+      "file": "icons/people.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "people-filled",
+      "file": "icons/people-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "approvals",
+      "file": "icons/approvals.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "approvals-filled",
+      "file": "icons/approvals-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "users",
+      "file": "icons/users.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "users-filled",
+      "file": "icons/users-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "sites",
+      "file": "icons/sites.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "sites-filled",
+      "file": "icons/sites-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "reports",
+      "file": "icons/reports.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "reports-filled",
+      "file": "icons/reports-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "audit-log",
+      "file": "icons/audit-log.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "audit-log-filled",
+      "file": "icons/audit-log-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "settings",
+      "file": "icons/settings.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "settings-filled",
+      "file": "icons/settings-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "site-config",
+      "file": "icons/site-config.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "outline"
+    },
+    {
+      "name": "site-config-filled",
+      "file": "icons/site-config-filled.svg",
+      "section": "Dashboard navigation",
+      "priority": "P2",
+      "variant": "filled"
+    },
+    {
+      "name": "search",
+      "file": "icons/search.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "search-filled",
+      "file": "icons/search-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "filter",
+      "file": "icons/filter.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "filter-filled",
+      "file": "icons/filter-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "sort",
+      "file": "icons/sort.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "sort-filled",
+      "file": "icons/sort-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "add",
+      "file": "icons/add.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "add-filled",
+      "file": "icons/add-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "remove",
+      "file": "icons/remove.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "remove-filled",
+      "file": "icons/remove-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "edit",
+      "file": "icons/edit.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "edit-filled",
+      "file": "icons/edit-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "delete",
+      "file": "icons/delete.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "delete-filled",
+      "file": "icons/delete-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "close",
+      "file": "icons/close.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "close-filled",
+      "file": "icons/close-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "back",
+      "file": "icons/back.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "back-filled",
+      "file": "icons/back-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "chevron-right",
+      "file": "icons/chevron-right.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "chevron-right-filled",
+      "file": "icons/chevron-right-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "chevron-down",
+      "file": "icons/chevron-down.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "chevron-down-filled",
+      "file": "icons/chevron-down-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "chevron-up",
+      "file": "icons/chevron-up.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "chevron-up-filled",
+      "file": "icons/chevron-up-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "more",
+      "file": "icons/more.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "more-filled",
+      "file": "icons/more-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "menu",
+      "file": "icons/menu.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "menu-filled",
+      "file": "icons/menu-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "refresh",
+      "file": "icons/refresh.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "refresh-filled",
+      "file": "icons/refresh-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "check",
+      "file": "icons/check.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "check-filled",
+      "file": "icons/check-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "copy",
+      "file": "icons/copy.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "copy-filled",
+      "file": "icons/copy-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "download",
+      "file": "icons/download.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "download-filled",
+      "file": "icons/download-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "upload",
+      "file": "icons/upload.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "upload-filled",
+      "file": "icons/upload-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "export",
+      "file": "icons/export.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "export-filled",
+      "file": "icons/export-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "calendar",
+      "file": "icons/calendar.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "calendar-filled",
+      "file": "icons/calendar-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "date-range",
+      "file": "icons/date-range.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "date-range-filled",
+      "file": "icons/date-range-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "external-link",
+      "file": "icons/external-link.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "external-link-filled",
+      "file": "icons/external-link-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "reveal",
+      "file": "icons/reveal.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "reveal-filled",
+      "file": "icons/reveal-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "masked",
+      "file": "icons/masked.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "masked-filled",
+      "file": "icons/masked-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "help",
+      "file": "icons/help.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "help-filled",
+      "file": "icons/help-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "bell",
+      "file": "icons/bell.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "bell-filled",
+      "file": "icons/bell-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "user",
+      "file": "icons/user.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "user-filled",
+      "file": "icons/user-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "qr-code",
+      "file": "icons/qr-code.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "qr-code-filled",
+      "file": "icons/qr-code-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "mfa",
+      "file": "icons/mfa.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "mfa-filled",
+      "file": "icons/mfa-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "sign-in",
+      "file": "icons/sign-in.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "outline"
+    },
+    {
+      "name": "sign-in-filled",
+      "file": "icons/sign-in-filled.svg",
+      "section": "Common interface",
+      "priority": "P1/P2",
+      "variant": "filled"
+    },
+    {
+      "name": "resident",
+      "file": "icons/resident.svg",
+      "section": "Estates",
+      "priority": "P4",
+      "variant": "outline"
+    },
+    {
+      "name": "unit",
+      "file": "icons/unit.svg",
+      "section": "Estates",
+      "priority": "P4",
+      "variant": "outline"
+    },
+    {
+      "name": "invite",
+      "file": "icons/invite.svg",
+      "section": "Estates",
+      "priority": "P4",
+      "variant": "outline"
+    },
+    {
+      "name": "arrival-notification",
+      "file": "icons/arrival-notification.svg",
+      "section": "Estates",
+      "priority": "P4",
+      "variant": "outline"
+    },
+    {
+      "name": "worker",
+      "file": "icons/worker.svg",
+      "section": "Estates",
+      "priority": "P4",
+      "variant": "outline"
+    },
+    {
+      "name": "worker-permit",
+      "file": "icons/worker-permit.svg",
+      "section": "Estates",
+      "priority": "P4",
+      "variant": "outline"
+    },
+    {
+      "name": "ehailing",
+      "file": "icons/ehailing.svg",
+      "section": "Estates",
+      "priority": "P4",
+      "variant": "outline"
+    },
+    {
+      "name": "nfc-tap",
+      "file": "icons/nfc-tap.svg",
+      "section": "Later",
+      "priority": "Later",
+      "variant": "outline"
+    },
+    {
+      "name": "card-revoked",
+      "file": "icons/card-revoked.svg",
+      "section": "Later",
+      "priority": "Later",
+      "variant": "outline"
+    },
+    {
+      "name": "panic",
+      "file": "icons/panic.svg",
+      "section": "Later",
+      "priority": "Later",
+      "variant": "outline"
+    },
+    {
+      "name": "lockdown",
+      "file": "icons/lockdown.svg",
+      "section": "Later",
+      "priority": "Later",
+      "variant": "outline"
+    },
+    {
+      "name": "incident-pack",
+      "file": "icons/incident-pack.svg",
+      "section": "Later",
+      "priority": "Later",
+      "variant": "outline"
+    },
+    {
+      "name": "watchlist",
+      "file": "icons/watchlist.svg",
+      "section": "Later",
+      "priority": "Later",
+      "variant": "outline"
+    },
+    {
+      "name": "parking",
+      "file": "icons/parking.svg",
+      "section": "Later",
+      "priority": "Later",
+      "variant": "outline"
+    },
+    {
+      "name": "evacuation",
+      "file": "icons/evacuation.svg",
+      "section": "Later",
+      "priority": "Later",
+      "variant": "outline"
+    }
+  ],
+  "identity": [
+    "app-icon.png",
+    "android-icon-foreground.png",
+    "android-icon-background.png",
+    "android-icon-monochrome.png",
+    "splash-icon.png",
+    "notification-icon.png",
+    "apple-icon.png",
+    "icon.svg",
+    "favicon.ico"
+  ]
+}

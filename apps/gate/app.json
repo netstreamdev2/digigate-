@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "DigiGate",
+    "slug": "digigate-gate",
+    "scheme": "digigate",
+    "version": "1.0.0",
+    "platforms": [
+      "android"
+    ],
+    "orientation": "portrait",
+    "icon": "../../packages/design/assets/identity/app-icon.png",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.digigate.gate",
+      "adaptiveIcon": {
+        "backgroundColor": "#062C65",
+        "foregroundImage": "../../packages/design/assets/identity/android-icon-foreground.png",
+        "backgroundImage": "../../packages/design/assets/identity/android-icon-background.png",
+        "monochromeImage": "../../packages/design/assets/identity/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "../../packages/design/assets/identity/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#FFFFFF"
+        }
+      ],
+      "expo-image"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

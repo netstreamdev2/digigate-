@@ -1,0 +1,7 @@
+{
+  "name": "digigate-icon-build",
+  "private": true,
+  "type": "module",
+  "scripts": { "generate": "node generate.mjs" },
+  "dependencies": { "@napi-rs/canvas": "1.0.13" }
+}
