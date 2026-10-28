@@ -1,5 +1,6 @@
 import { colors, radius, space } from '@digigate/design';
-import { useState } from 'react';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +12,10 @@ import { Logo } from '@/components/logo';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
+import { useLocalDatabase } from '@/db/database-context';
+import { countGateUsers } from '@/db/gate-users';
 import { demoPost } from '@/demo/gate-demo';
+import { useSync, type SyncStatus } from '@/sync/sync-context';
 
 const EMPLOYEE_NUMBER_MIN_LENGTH = 3;
 const EMPLOYEE_NUMBER_MAX_LENGTH = 8;
@@ -31,10 +35,24 @@ function problemFor(result: Exclude<SignInResult, { ok: true }>): Problem {
   return { tone: 'warning', title: 'Try again', message: `That employee number and PIN don't match. ${tries}.` };
 }
 
+function noGuardsMessage(status: SyncStatus): string {
+  if (status.state === 'not-paired') return 'Pair it with the dashboard so the guard list can sync.';
+  if (status.state === 'local-only') return 'This build has no Supabase settings and no demo guards.';
+  return 'Waiting for the guard list to sync. Check the connection.';
+}
+
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
-  const { state, signIn, unlock, signOut } = useSession();
+  const { state, signIn, unlock, signOut, storageProblem } = useSession();
+  const { db } = useLocalDatabase();
+  const sync = useSync();
+  const [guardCount, setGuardCount] = useState<number | null>(null);
   const lockedUser = state.status === 'locked' ? state.user : null;
+
+  // Recount whenever sync reports in, so a newly synced guard list unlocks the screen without a restart.
+  useEffect(() => {
+    countGateUsers(db).then(setGuardCount, () => setGuardCount(null));
+  }, [db, sync.status]);
   const [employeeNumber, setEmployeeNumber] = useState('');
   const [enteringPin, setEnteringPin] = useState(false);
   const [pin, setPin] = useState('');
@@ -115,6 +133,21 @@ export default function SignInScreen() {
       </View>
 
       {problem ? <ResultBanner tone={problem.tone} title={problem.title} message={problem.message} /> : null}
+      {storageProblem ? (
+        <ResultBanner
+          tone="warning"
+          title="Record not saved"
+          message="A lock or sign-out couldn't be saved on this device. Tell your supervisor."
+        />
+      ) : null}
+      {guardCount === 0 && !lockedUser ? (
+        <View style={styles.noGuards}>
+          <ResultBanner tone="warning" title="No guards on this device yet" message={noGuardsMessage(sync.status)} />
+          {sync.status.state === 'not-paired' ? (
+            <PillButton label="Pair this device" variant="secondary" onPress={() => router.push('/pair')} />
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.controls}>
         <Keypad onDigit={onDigit} onDelete={onDelete} disabled={checking} />
@@ -189,5 +222,8 @@ const styles = StyleSheet.create({
   },
   controls: {
     gap: space.md,
+  },
+  noGuards: {
+    gap: space.sm,
   },
 });

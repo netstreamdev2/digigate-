@@ -4,7 +4,7 @@ Gate access control for boom-gated sites. A guard scans the driver's SA licence 
 
 The first customer is a **hospital**. The product is built to be reused for **residential estates** next, and later other gated sites (office parks, schools, mines). See Site types and tenancy.
 
-Status (2026-10-28): monorepo scaffolded. The gate app has a design mock-up (home, vehicle entry, vehicle exit with a vehicle-swap block) built on Expo Router, using provisional tokens in `packages/design`, Astra's custom icons and Inter / Inter Tight. All data in it comes from `apps/gate/src/demo/` and is fake. The rules engine in `packages/core` is done and tested. The dashboard has an overview mock-up (KPI tiles, entries by hour, entries by type, open alerts, recent activity) on demo data from `apps/dashboard/src/demo/`, using the same tokens and icons. The gate app has guard sign-in (employee number + PIN, lockout, idle lock, switch guard) on seeded demo users. The `scanner` module (Urovo adapter) and a scan-test screen (long-press the logo) are written but untested until the first EAS development build is installed on the DT50. Next: verify scanning on the DT50, the `packages/core` decoders, then wire the gate screens to the rules engine.
+Status (2026-10-28): monorepo scaffolded. The gate app has a design mock-up (home, vehicle entry, vehicle exit with a vehicle-swap block) built on Expo Router, using provisional tokens in `packages/design`, Astra's custom icons and Inter / Inter Tight. All data in it comes from `apps/gate/src/demo/` and is fake. The rules engine in `packages/core` is done and tested. The dashboard has an overview mock-up (KPI tiles, entries by hour, entries by type, open alerts, recent activity) on demo data from `apps/dashboard/src/demo/`, using the same tokens and icons. The gate app has guard sign-in (employee number + PIN, lockout, idle lock, switch guard) that works offline against an encrypted local database, an outbox of sign-in events, and Supabase sync and device pairing. The Supabase schema, RLS, `pair-device` Edge Function and demo seed are written but not yet applied: no Supabase project exists yet. The `scanner` module (Urovo adapter) and a scan-test screen (long-press the logo) are untested until the EAS development build is on the DT50. Next: create the Supabase project and apply the schema, verify scanning on the DT50, the `packages/core` decoders, then wire the gate screens to the rules engine.
 
 ## Non-negotiables
 
@@ -123,8 +123,9 @@ Visit types come from the site type; see Site types and tenancy.
 - Gate devices are shared. Each guard signs in with employee number + PIN, so every event records who did it. "Switch guard" handles shift change, and the app locks after a configurable idle time.
 - Sign-in works offline: devices hold the site's user list and PIN hashes from sync. Deactivating a user takes effect on each device at its next sync.
 - PIN hashes are PBKDF2-HMAC-SHA256 (`{ algorithm, iterations, salt, hash }`, 20,000 iterations for now; measure sign-in time on the DT50 before raising it). The app verifies with `@noble/hashes`; `scripts/hash-pin.mjs` and, later, the server produce the same format with platform crypto.
-- Five wrong PINs lock that employee number for five minutes. Until the local database exists (Phase 1), failed-attempt counts live in memory, so an app restart clears them.
-- Until Phase 2, users come from the demo seed list in `apps/gate/src/demo/seed-users.ts`, which must never ship.
+- Five wrong PINs lock that employee number for five minutes. The count lives in the local database, so restarting the app doesn't clear it.
+- Sign-in, failed PINs, lockouts, locks and sign-outs are written to the outbox as events and synced up.
+- Paired devices get their site's guard list from Supabase (`gate_users`). Development builds load the demo seed list in `apps/gate/src/demo/seed-users.ts` only while the device is unpaired and has no guards; release builds never do.
 - Each device has its own Supabase credential, issued at registration via a one-time pairing QR shown in the dashboard and scanned with the DT50. Revocable from the dashboard.
 - Dashboard users (`security_manager`, `admin`) sign in with Supabase Auth and MFA. Guards never get dashboard access.
 
@@ -213,6 +214,13 @@ An authorised co-driver was scanned in with the car, so leaving on foot raises n
 - **Down:** each device keeps everything it needs to run every rule offline: open visits across all gates, registered people with their known vehicles, users and PIN hashes, site config. Refreshed on an interval and on reconnect.
 - **Limits of offline:** a device only knows what it has synced, and two offline devices can't see each other. The server re-runs the rules over incoming events and raises alerts for anything a device missed. The dashboard marks these as server-detected.
 - Times are stored in UTC and shown in Africa/Johannesburg (SAST). Device clocks drift, so keep both device time and server time.
+
+How it's built (`apps/gate/src/db`, `apps/gate/src/sync`):
+- Local database: `expo-sqlite` with SQLCipher, keyed with a random 256-bit key held in `expo-secure-store`. Expo Go has no SQLCipher, so there the file is unencrypted. The app detects this (`PRAGMA cipher_version`), and the shift screen shows it. Local schema changes go in `MIGRATIONS` in `db/database.ts` (append only, tracked by `PRAGMA user_version`).
+- Pairing: an admin issues a one-time 10-digit code for a device row. The app sends it to the `pair-device` Edge Function, which creates the device's own auth user and returns a session. The session is stored in the encrypted database, never in plain storage. Pairing discards outbox events from before pairing, since they belong to no site.
+- Sync runs on start, every 60 s, when the app returns to the foreground, and 2 s after any new event. One round uploads the outbox oldest first (idempotent upserts on the UUIDv7 id), deletes acknowledged events, then replaces the local guard list with the site's.
+- `gate_events.gate_user_id` has no foreign key on purpose: the log must never reject an event and leave the outbox stuck behind it.
+- `apps/gate/src/sync/database-types.ts` is hand-written. Replace it with `supabase gen types typescript` once the project is linked.
 
 ## Performance
 
@@ -307,6 +315,17 @@ A decode failure prompts a rescan. Never guess fields.
 - `JAVA_HOME` = Android Studio's bundled JBR (OpenJDK 21); `ANDROID_HOME` = `%LOCALAPPDATA%\Android\Sdk`. Both are set at user level.
 - npm's global bin (`%APPDATA%\npm`, where pnpm lives) was added to the user PATH. Shells started before that change need it prepended.
 
+### Environment variables
+
+Templates: `apps/gate/.env.example`, `apps/dashboard/.env.example`. Real values go in the gitignored `apps/gate/.env` and `apps/dashboard/.env.local`, in EAS environment variables for app builds, and in Vercel for the dashboard.
+
+| Name | Where | Notes |
+|---|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Gate app | Built into the app, which is safe for these two. Without them the app runs on local data only |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Dashboard | Browser-safe |
+| `SUPABASE_SECRET_KEY` | Dashboard server code only | Bypasses RLS. Never `NEXT_PUBLIC_`, never in the app |
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` | Edge Functions | Provided by Supabase automatically; nothing to set |
+
 ### Commands
 
 Run from the repo root unless noted.
@@ -319,6 +338,9 @@ Run from the repo root unless noted.
 | Gate app in Expo Go on a phone (Wi-Fi) | `pnpm exec expo start --lan --go` in `apps/gate`, then open `exp://<laptop IP>:8081` in Expo Go. `--go` is required now that `expo-dev-client` is installed |
 | Development build (cloud) | `eas build --platform android --profile development` in `apps/gate`. Install the APK on the DT50, then run `pnpm exec expo start` and open it from the dev client |
 | Hash a PIN for the seed list | `node scripts/hash-pin.mjs <6-digit PIN>` in `apps/gate` |
+| Link the Supabase project (once) | From the repo root: `pnpm dlx supabase init` (creates `supabase/config.toml`, keeps the existing migrations), `pnpm dlx supabase login`, then `pnpm dlx supabase link --project-ref <ref>` |
+| Apply database migrations | `pnpm dlx supabase db push` (add `--include-seed` for the demo data, development projects only) |
+| Deploy the pairing function | `pnpm dlx supabase functions deploy pair-device --no-verify-jwt` |
 | Gate app dev server (Expo Go over USB) | `adb reverse tcp:8081 tcp:8081`, then in `apps/gate` with `NODE_OPTIONS=--dns-result-order=ipv4first` set: `pnpm exec expo start --localhost`. Open `exp://127.0.0.1:8081` in Expo Go (or `adb shell am start -a android.intent.action.VIEW -d exp://127.0.0.1:8081 host.exp.exponent`). Without the IPv4 flag, Metro binds only to `::1`, the USB forward can't reach it, and Expo Go shows "Failed to download remote update" |
 | Dashboard dev server | `pnpm dashboard dev` |
 | Dashboard lint | `pnpm dashboard lint` |

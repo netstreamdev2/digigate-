@@ -5,6 +5,7 @@ import back from '@digigate/design/icons/back';
 import bell from '@digigate/design/icons/bell';
 import check from '@digigate/design/icons/check';
 import close from '@digigate/design/icons/close';
+import device from '@digigate/design/icons/device';
 import duration from '@digigate/design/icons/duration';
 import entry from '@digigate/design/icons/entry';
 import exit from '@digigate/design/icons/exit';
@@ -15,6 +16,7 @@ import licenceDisc from '@digigate/design/icons/licence-disc';
 import lock from '@digigate/design/icons/lock';
 import manualEntry from '@digigate/design/icons/manual-entry';
 import occupants from '@digigate/design/icons/occupants';
+import offline from '@digigate/design/icons/offline';
 import overviewFilled from '@digigate/design/icons/overview-filled';
 import override from '@digigate/design/icons/override';
 import pedestrian from '@digigate/design/icons/pedestrian';
@@ -26,6 +28,7 @@ import ruleVehicleSwap from '@digigate/design/icons/rule-vehicle-swap';
 import scan from '@digigate/design/icons/scan';
 import supervisor from '@digigate/design/icons/supervisor';
 import synced from '@digigate/design/icons/synced';
+import syncing from '@digigate/design/icons/syncing';
 import vehicle from '@digigate/design/icons/vehicle';
 import Svg, { Path } from 'react-native-svg';
 
@@ -37,6 +40,7 @@ const icons = {
   bell,
   check,
   close,
+  device,
   duration,
   entry,
   exit,
@@ -47,6 +51,7 @@ const icons = {
   lock,
   'manual-entry': manualEntry,
   occupants,
+  offline,
   'overview-filled': overviewFilled,
   override,
   pedestrian,
@@ -58,6 +63,7 @@ const icons = {
   scan,
   supervisor,
   synced,
+  syncing,
   vehicle,
 } satisfies Record<string, string>;
 

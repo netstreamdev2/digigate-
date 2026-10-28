@@ -8,9 +8,10 @@ import { Icon } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
 import { LastScanCard } from '@/components/last-scan-card';
 import { Logo } from '@/components/logo';
-import { StatStrip } from '@/components/stat-strip';
-import { Text } from '@/components/text';
 import { useCurrentUser } from '@/auth/session';
+import { StatStrip } from '@/components/stat-strip';
+import { SyncPill } from '@/components/sync-pill';
+import { Text } from '@/components/text';
 import { demoLastScan, demoPost, demoSiteStats } from '@/demo/gate-demo';
 
 const DOCK_HEIGHT = 156;
@@ -33,12 +34,7 @@ export default function HomeScreen() {
             <Logo height={26} />
           </Pressable>
           <View style={styles.topActions}>
-            <View style={styles.syncPill}>
-              <Icon name="synced" size={16} color={colors.clear} />
-              <Text variant="label" color={colors.clear}>
-                Synced
-              </Text>
-            </View>
+            <SyncPill />
             <IconButton icon="bell" label={`${demoSiteStats.openAlerts} open alerts`} badge={demoSiteStats.openAlerts} />
           </View>
         </View>
@@ -136,15 +132,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
-  },
-  syncPill: {
-    height: 32,
-    paddingHorizontal: space.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.clearSoft,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
   greeting: {
     gap: space.xs,

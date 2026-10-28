@@ -1,4 +1,7 @@
+import type { GateEventPayload, GateEventType } from '@digigate/core';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+
+import type { FailureRecord } from '@/db/sign-in-failures';
 
 import { verifyPin } from './pin';
 import type { GateUser } from './users';
@@ -17,6 +20,15 @@ export type SignInResult =
   | { ok: false; reason: 'wrong-details'; attemptsLeft: number }
   | { ok: false; reason: 'locked-out'; retryAt: number };
 
+/** Where sign-in reads guards and keeps its records. On the device: the encrypted local database. */
+export type SessionStore = {
+  findUser(employeeNumber: string): Promise<GateUser | null>;
+  getFailure(employeeNumber: string): Promise<FailureRecord | null>;
+  setFailure(employeeNumber: string, record: FailureRecord): Promise<void>;
+  clearFailure(employeeNumber: string): Promise<void>;
+  record(type: GateEventType, gateUserId: string | null, payload?: GateEventPayload): Promise<void>;
+};
+
 type SessionApi = {
   state: SessionState;
   signIn(employeeNumber: string, pin: string): Promise<SignInResult>;
@@ -25,82 +37,113 @@ type SessionApi = {
   signOut(): void;
   /** Called on every touch, so the idle lock measures real inactivity. */
   recordActivity(): void;
-};
-
-type FailureRecord = {
-  count: number;
-  lockedUntil: number;
+  /** True when a lock or sign-out couldn't be written to the device's records. */
+  storageProblem: boolean;
 };
 
 const SessionContext = createContext<SessionApi | null>(null);
 
 type Props = {
-  users: readonly GateUser[];
+  store: SessionStore;
   idleLockMinutes: number;
   children: ReactNode;
 };
 
-// Failed attempts are kept in memory for now, so a restart clears a lockout.
-// They move into the encrypted local database with the rest of Phase 1.
-export function SessionProvider({ users, idleLockMinutes, children }: Props) {
+// Works the same with or without a connection: PINs are checked against the guard list on the device,
+// and every sign-in, failure and lock is written to the outbox for the next sync.
+export function SessionProvider({ store, idleLockMinutes, children }: Props) {
   const [state, setState] = useState<SessionState>({ status: 'signed-out' });
-  const failures = useRef(new Map<string, FailureRecord>());
+  const [storageProblem, setStorageProblem] = useState(false);
+  const stateRef = useRef(state);
   const lastActivity = useRef(Date.now());
 
-  const attempt = useCallback(async (employeeNumber: string, pin: string, user: GateUser | undefined): Promise<SignInResult> => {
-    const now = Date.now();
-    const record = failures.current.get(employeeNumber);
-    if (record && record.lockedUntil > now) {
-      return { ok: false, reason: 'locked-out', retryAt: record.lockedUntil };
-    }
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
-    if (user && (await verifyPin(pin, user.pin))) {
-      failures.current.delete(employeeNumber);
-      return { ok: true };
-    }
+  const recordInBackground = useCallback(
+    (type: GateEventType, gateUserId: string, payload: GateEventPayload = {}) => {
+      store.record(type, gateUserId, payload).catch(() => setStorageProblem(true));
+    },
+    [store],
+  );
 
-    // A lockout that has run out starts the count again.
-    const count = (record && record.lockedUntil === 0 ? record.count : 0) + 1;
-    if (count >= MAX_FAILED_ATTEMPTS) {
-      const lockedUntil = now + LOCKOUT_MS;
-      failures.current.set(employeeNumber, { count, lockedUntil });
-      return { ok: false, reason: 'locked-out', retryAt: lockedUntil };
-    }
-    failures.current.set(employeeNumber, { count, lockedUntil: 0 });
-    return { ok: false, reason: 'wrong-details', attemptsLeft: MAX_FAILED_ATTEMPTS - count };
-  }, []);
+  const attempt = useCallback(
+    async (employeeNumber: string, pin: string, user: GateUser | null): Promise<SignInResult> => {
+      const now = Date.now();
+      const record = await store.getFailure(employeeNumber);
+      if (record && record.lockedUntil > now) {
+        return { ok: false, reason: 'locked-out', retryAt: record.lockedUntil };
+      }
+
+      if (user && user.active && (await verifyPin(pin, user.pin))) {
+        await store.clearFailure(employeeNumber);
+        return { ok: true };
+      }
+
+      // A lockout that has run out starts the count again.
+      const count = (record && record.lockedUntil === 0 ? record.count : 0) + 1;
+      const gateUserId = user?.id ?? null;
+      if (count >= MAX_FAILED_ATTEMPTS) {
+        const lockedUntil = now + LOCKOUT_MS;
+        await store.setFailure(employeeNumber, { count, lockedUntil });
+        await store.record('locked_out', gateUserId, { employee_number: employeeNumber, locked_until: lockedUntil });
+        return { ok: false, reason: 'locked-out', retryAt: lockedUntil };
+      }
+      await store.setFailure(employeeNumber, { count, lockedUntil: 0 });
+      await store.record('sign_in_failed', gateUserId, { employee_number: employeeNumber, attempt: count });
+      return { ok: false, reason: 'wrong-details', attemptsLeft: MAX_FAILED_ATTEMPTS - count };
+    },
+    [store],
+  );
 
   const signIn = useCallback(
     async (employeeNumber: string, pin: string) => {
-      const user = users.find((candidate) => candidate.employeeNumber === employeeNumber);
+      const user = await store.findUser(employeeNumber);
       const result = await attempt(employeeNumber, pin, user);
       if (result.ok && user) {
+        await store.record('sign_in', user.id);
         lastActivity.current = Date.now();
         setState({ status: 'active', user, startedAt: Date.now() });
       }
       return result;
     },
-    [attempt, users],
+    [attempt, store],
   );
 
   const unlock = useCallback(
     async (pin: string): Promise<SignInResult> => {
-      if (state.status !== 'locked') return { ok: false, reason: 'wrong-details', attemptsLeft: 0 };
-      const result = await attempt(state.user.employeeNumber, pin, state.user);
+      const current = stateRef.current;
+      if (current.status !== 'locked') return { ok: false, reason: 'wrong-details', attemptsLeft: 0 };
+      const result = await attempt(current.user.employeeNumber, pin, current.user);
       if (result.ok) {
+        await store.record('unlock', current.user.id);
         lastActivity.current = Date.now();
-        setState({ ...state, status: 'active' });
+        setState({ ...current, status: 'active' });
       }
       return result;
     },
-    [attempt, state],
+    [attempt, store],
   );
 
-  const lock = useCallback(() => {
-    setState((current) => (current.status === 'active' ? { ...current, status: 'locked' } : current));
-  }, []);
+  const lockWith = useCallback(
+    (reason: 'manual' | 'idle') => {
+      const current = stateRef.current;
+      if (current.status !== 'active') return;
+      setState({ ...current, status: 'locked' });
+      recordInBackground('lock', current.user.id, { reason });
+    },
+    [recordInBackground],
+  );
 
-  const signOut = useCallback(() => setState({ status: 'signed-out' }), []);
+  const lock = useCallback(() => lockWith('manual'), [lockWith]);
+
+  const signOut = useCallback(() => {
+    const current = stateRef.current;
+    if (current.status === 'signed-out') return;
+    setState({ status: 'signed-out' });
+    recordInBackground('sign_out', current.user.id);
+  }, [recordInBackground]);
 
   const recordActivity = useCallback(() => {
     lastActivity.current = Date.now();
@@ -109,14 +152,14 @@ export function SessionProvider({ users, idleLockMinutes, children }: Props) {
   useEffect(() => {
     if (state.status !== 'active') return;
     const timer = setInterval(() => {
-      if (Date.now() - lastActivity.current > idleLockMinutes * 60_000) lock();
+      if (Date.now() - lastActivity.current > idleLockMinutes * 60_000) lockWith('idle');
     }, IDLE_CHECK_MS);
     return () => clearInterval(timer);
-  }, [idleLockMinutes, lock, state.status]);
+  }, [idleLockMinutes, lockWith, state.status]);
 
   const api = useMemo<SessionApi>(
-    () => ({ state, signIn, unlock, lock, signOut, recordActivity }),
-    [lock, recordActivity, signIn, signOut, state, unlock],
+    () => ({ state, signIn, unlock, lock, signOut, recordActivity, storageProblem }),
+    [lock, recordActivity, signIn, signOut, state, storageProblem, unlock],
   );
 
   return <SessionContext.Provider value={api}>{children}</SessionContext.Provider>;

@@ -7,4 +7,10 @@ export type GateUser = {
   lastName: string;
   role: 'guard' | 'supervisor';
   pin: PinHash;
+  /** Deactivated users stay on the device so the change arrives, but can't sign in. */
+  active: boolean;
 };
+
+export function isGateUserRole(value: string): value is GateUser['role'] {
+  return value === 'guard' || value === 'supervisor';
+}

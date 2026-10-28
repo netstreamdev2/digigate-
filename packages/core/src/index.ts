@@ -1,4 +1,6 @@
+export type { GateEvent, GateEventPayload, GateEventType } from './events';
 export { normaliseIdentifier } from './identifiers';
+export { uuidv7 } from './ids';
 export { RULE_SEVERITY, type RuleCode, type Severity } from './rules/codes';
 export { outcomeOf } from './rules/hits';
 export { findOverstays } from './rules/overstay';

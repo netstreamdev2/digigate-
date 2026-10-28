@@ -8,11 +8,35 @@ import { Card } from '@/components/card';
 import { IconButton } from '@/components/icon-button';
 import { PillButton } from '@/components/pill-button';
 import { Text } from '@/components/text';
+import { useLocalDatabase } from '@/db/database-context';
 import { demoPost } from '@/demo/gate-demo';
+import { useSync, type SyncStatus } from '@/sync/sync-context';
+
+function clockTime(at: number): string {
+  return new Date(at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+}
+
+function syncSummary(status: SyncStatus, pending: number): string {
+  const waiting = `${pending} waiting to upload`;
+  switch (status.state) {
+    case 'local-only':
+      return 'Not set up in this build. Records stay on this device.';
+    case 'not-paired':
+      return `Not paired · ${waiting}`;
+    case 'syncing':
+      return 'Syncing now';
+    case 'synced':
+      return `Synced at ${clockTime(status.lastSyncedAt)} · ${waiting}`;
+    case 'offline':
+      return `${status.lastSyncedAt ? `Offline since ${clockTime(status.lastSyncedAt)}` : 'Not synced yet'} · ${waiting}`;
+  }
+}
 
 export default function ShiftScreen() {
   const insets = useSafeAreaInsets();
   const { state, lock, signOut } = useSession();
+  const { encrypted } = useLocalDatabase();
+  const sync = useSync();
   if (state.status === 'signed-out') return null;
   const { user, startedAt } = state;
 
@@ -41,17 +65,19 @@ export default function ShiftScreen() {
           </Text>
         </View>
         <Field label="Employee number" value={user.employeeNumber} />
-        <Field
-          label="Signed in"
-          value={new Date(startedAt).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
-        />
+        <Field label="Signed in" value={clockTime(startedAt)} />
         <Field label="Post" value={`${demoPost.gate} · ${demoPost.lane}`} />
         <Field label="Screen locks after" value={`${demoPost.idleLockMinutes} minutes without a touch`} />
+        <Field label="Sync" value={syncSummary(sync.status, sync.pendingEvents)} />
+        <Field label="Device storage" value={encrypted ? 'Encrypted' : 'Not encrypted (Expo Go, demo data only)'} />
       </Card>
 
       <View style={styles.actions}>
         <PillButton label="Switch guard" icon="guard" onPress={signOut} />
         <PillButton label="Lock screen" icon="lock" variant="secondary" onPress={lock} />
+        {sync.status.state !== 'local-only' ? (
+          <PillButton label="Sync now" icon="syncing" variant="secondary" onPress={() => void sync.syncNow()} />
+        ) : null}
       </View>
     </View>
   );

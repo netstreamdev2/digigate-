@@ -13,6 +13,20 @@ export type PinHash = {
   hash: string;
 };
 
+/** PIN hashes arrive from the server and the local database, so check their shape before trusting them. */
+export function isPinHash(value: unknown): value is PinHash {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    candidate.algorithm === 'pbkdf2-sha256' &&
+    typeof candidate.iterations === 'number' &&
+    Number.isInteger(candidate.iterations) &&
+    candidate.iterations > 0 &&
+    typeof candidate.salt === 'string' &&
+    typeof candidate.hash === 'string'
+  );
+}
+
 function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   let difference = 0;

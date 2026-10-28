@@ -10,6 +10,7 @@ export const seedUsers: readonly GateUser[] = [
     firstName: 'Thabo',
     lastName: 'Khumalo',
     role: 'guard',
+    active: true,
     pin: {
       algorithm: 'pbkdf2-sha256',
       iterations: 20000,
@@ -23,6 +24,7 @@ export const seedUsers: readonly GateUser[] = [
     firstName: 'Zanele',
     lastName: 'Mthembu',
     role: 'guard',
+    active: true,
     pin: {
       algorithm: 'pbkdf2-sha256',
       iterations: 20000,
@@ -36,6 +38,7 @@ export const seedUsers: readonly GateUser[] = [
     firstName: 'Kagiso',
     lastName: 'Molefe',
     role: 'supervisor',
+    active: true,
     pin: {
       algorithm: 'pbkdf2-sha256',
       iterations: 20000,
