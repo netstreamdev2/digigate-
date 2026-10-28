@@ -11,6 +11,7 @@ import { IconButton } from '@/components/icon-button';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
+import { fromBase64 } from '@/lib/bytes';
 
 import { Scanner, type ScanEvent, type ScannerInfo } from '../../modules/scanner';
 
@@ -21,10 +22,6 @@ const LICENCE_BARCODE_LENGTH = 720;
 const fixturesDir = new Directory(Paths.document, 'scan-fixtures');
 
 type ReceivedScan = ScanEvent & { saved: boolean };
-
-function decodeBase64(value: string): Uint8Array {
-  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
-}
 
 // Describes the shape of a scan only. The decoded contents are personal information and stay off screen.
 function describeScan(bytes: Uint8Array): string {
@@ -63,7 +60,7 @@ export default function ScanTestScreen() {
       fixturesDir.create({ idempotent: true, intermediates: true });
       const file = new File(fixturesDir, `${scan.receivedAt}-${scan.length}.bin`);
       file.create({ overwrite: true });
-      await file.write(decodeBase64(scan.bytes));
+      await file.write(fromBase64(scan.bytes));
       setScans((current) =>
         current.map((item) => (item.receivedAt === scan.receivedAt ? { ...item, saved: true } : item)),
       );
@@ -130,7 +127,7 @@ export default function ScanTestScreen() {
               </Text>
             ) : (
               scans.map((scan) => {
-                const bytes = decodeBase64(scan.bytes);
+                const bytes = fromBase64(scan.bytes);
                 return (
                   <Card key={scan.receivedAt} style={styles.scan}>
                     <Text variant="bodyStrong">{describeScan(bytes)}</Text>

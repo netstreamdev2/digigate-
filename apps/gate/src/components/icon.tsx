@@ -1,6 +1,7 @@
 import { colors } from '@digigate/design';
 import add from '@digigate/design/icons/add';
 import alerts from '@digigate/design/icons/alerts';
+import back from '@digigate/design/icons/back';
 import bell from '@digigate/design/icons/bell';
 import check from '@digigate/design/icons/check';
 import close from '@digigate/design/icons/close';
@@ -11,6 +12,7 @@ import guard from '@digigate/design/icons/guard';
 import info from '@digigate/design/icons/info';
 import licenceCard from '@digigate/design/icons/licence-card';
 import licenceDisc from '@digigate/design/icons/licence-disc';
+import lock from '@digigate/design/icons/lock';
 import manualEntry from '@digigate/design/icons/manual-entry';
 import occupants from '@digigate/design/icons/occupants';
 import overviewFilled from '@digigate/design/icons/overview-filled';
@@ -31,6 +33,7 @@ import Svg, { Path } from 'react-native-svg';
 const icons = {
   add,
   alerts,
+  back,
   bell,
   check,
   close,
@@ -41,6 +44,7 @@ const icons = {
   info,
   'licence-card': licenceCard,
   'licence-disc': licenceDisc,
+  lock,
   'manual-entry': manualEntry,
   occupants,
   'overview-filled': overviewFilled,

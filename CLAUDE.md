@@ -4,7 +4,7 @@ Gate access control for boom-gated sites. A guard scans the driver's SA licence 
 
 The first customer is a **hospital**. The product is built to be reused for **residential estates** next, and later other gated sites (office parks, schools, mines). See Site types and tenancy.
 
-Status (2026-10-28): monorepo scaffolded. The gate app has a design mock-up (home, vehicle entry, vehicle exit with a vehicle-swap block) built on Expo Router, using provisional tokens in `packages/design`, Astra's custom icons and Inter / Inter Tight. All data in it comes from `apps/gate/src/demo/` and is fake. The rules engine in `packages/core` is done and tested. The dashboard has an overview mock-up (KPI tiles, entries by hour, entries by type, open alerts, recent activity) on demo data from `apps/dashboard/src/demo/`, using the same tokens and icons. Next: Phase 0 (scanner) and the `packages/core` decoders, then wire the gate screens to the rules engine.
+Status (2026-10-28): monorepo scaffolded. The gate app has a design mock-up (home, vehicle entry, vehicle exit with a vehicle-swap block) built on Expo Router, using provisional tokens in `packages/design`, Astra's custom icons and Inter / Inter Tight. All data in it comes from `apps/gate/src/demo/` and is fake. The rules engine in `packages/core` is done and tested. The dashboard has an overview mock-up (KPI tiles, entries by hour, entries by type, open alerts, recent activity) on demo data from `apps/dashboard/src/demo/`, using the same tokens and icons. The gate app has guard sign-in (employee number + PIN, lockout, idle lock, switch guard) on seeded demo users. The `scanner` module (Urovo adapter) and a scan-test screen (long-press the logo) are written but untested until the first EAS development build is installed on the DT50. Next: verify scanning on the DT50, the `packages/core` decoders, then wire the gate screens to the rules engine.
 
 ## Non-negotiables
 
@@ -53,6 +53,7 @@ These override convenience, deadlines and "just for now".
 - Upgrade within about a month of each stable release, once our dependencies support it. An upgrade isn't done until the gate app has run on the DT50.
 - Only add libraries that support the current SDK and React Native's New Architecture.
 - React is pinned separately in each app, since Expo and Next.js each require their own version. `packages/core` and `packages/design` don't depend on React, so they never conflict.
+- `expo` is pinned to exactly 58.0.20: 58.0.21 came out only hours before the first native build. Move to `~58.0.21` with `expo install --fix` once it has settled and the DT50 build is verified.
 - Current versions (2026-10-28): Expo SDK 58.0.20, React Native 0.88.0, React 19.3.0, Next.js 16.4.3, TypeScript ~6.0.3 repo-wide, Node 24, pnpm 12.15.0. TypeScript 7 is out, but Expo SDK 58 and typescript-eslint (`<6.1.0`) don't support it yet.
 - Both frameworks change between releases faster than training data. Before touching an Expo or React Native API, read the SDK 58 docs (see `apps/gate/AGENTS.md`). Before touching a Next.js API, read the bundled docs in `node_modules/next/dist/docs/` (see `apps/dashboard/AGENTS.md`).
 
@@ -121,6 +122,9 @@ Visit types come from the site type; see Site types and tenancy.
 - Admins create guards and supervisors in the dashboard: name, employee number, role, sites. No email needed.
 - Gate devices are shared. Each guard signs in with employee number + PIN, so every event records who did it. "Switch guard" handles shift change, and the app locks after a configurable idle time.
 - Sign-in works offline: devices hold the site's user list and PIN hashes from sync. Deactivating a user takes effect on each device at its next sync.
+- PIN hashes are PBKDF2-HMAC-SHA256 (`{ algorithm, iterations, salt, hash }`, 20,000 iterations for now; measure sign-in time on the DT50 before raising it). The app verifies with `@noble/hashes`; `scripts/hash-pin.mjs` and, later, the server produce the same format with platform crypto.
+- Five wrong PINs lock that employee number for five minutes. Until the local database exists (Phase 1), failed-attempt counts live in memory, so an app restart clears them.
+- Until Phase 2, users come from the demo seed list in `apps/gate/src/demo/seed-users.ts`, which must never ship.
 - Each device has its own Supabase credential, issued at registration via a one-time pairing QR shown in the dashboard and scanned with the DT50. Revocable from the dashboard.
 - Dashboard users (`security_manager`, `admin`) sign in with Supabase Auth and MFA. Guards never get dashboard access.
 
@@ -312,6 +316,9 @@ Run from the repo root unless noted.
 | Install | `pnpm install` |
 | Typecheck everything | `pnpm typecheck` |
 | Test everything | `pnpm test` |
+| Gate app in Expo Go on a phone (Wi-Fi) | `pnpm exec expo start --lan --go` in `apps/gate`, then open `exp://<laptop IP>:8081` in Expo Go. `--go` is required now that `expo-dev-client` is installed |
+| Development build (cloud) | `eas build --platform android --profile development` in `apps/gate`. Install the APK on the DT50, then run `pnpm exec expo start` and open it from the dev client |
+| Hash a PIN for the seed list | `node scripts/hash-pin.mjs <6-digit PIN>` in `apps/gate` |
 | Gate app dev server (Expo Go over USB) | `adb reverse tcp:8081 tcp:8081`, then in `apps/gate` with `NODE_OPTIONS=--dns-result-order=ipv4first` set: `pnpm exec expo start --localhost`. Open `exp://127.0.0.1:8081` in Expo Go (or `adb shell am start -a android.intent.action.VIEW -d exp://127.0.0.1:8081 host.exp.exponent`). Without the IPv4 flag, Metro binds only to `::1`, the USB forward can't reach it, and Expo Go shows "Failed to download remote update" |
 | Dashboard dev server | `pnpm dashboard dev` |
 | Dashboard lint | `pnpm dashboard lint` |

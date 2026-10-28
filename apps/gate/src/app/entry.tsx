@@ -11,7 +11,7 @@ import { IconButton } from '@/components/icon-button';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
-import { demoEntry, demoGuard, demoVisitTypes, type DemoVisitType } from '@/demo/gate-demo';
+import { demoEntry, demoPost, demoVisitTypes, type DemoVisitType } from '@/demo/gate-demo';
 
 const FOOTER_HEIGHT = 96;
 
@@ -28,7 +28,7 @@ export default function EntryScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <IconButton icon="close" label="Close" tone="dark" onPress={() => router.back()} />
-          <Chip label={`${demoGuard.gate} · Entry`} icon="entry" />
+          <Chip label={`${demoPost.gate} · Entry`} icon="entry" />
         </View>
 
         <View style={styles.heading}>

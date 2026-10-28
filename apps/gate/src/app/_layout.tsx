@@ -6,6 +6,11 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
+
+import { SessionProvider, useSession } from '@/auth/session';
+import { demoPost } from '@/demo/gate-demo';
+import { seedUsers } from '@/demo/seed-users';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,9 +34,37 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <SessionProvider users={seedUsers} idleLockMinutes={demoPost.idleLockMinutes}>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
-    </>
+      <GuardedStack />
+    </SessionProvider>
   );
 }
+
+function GuardedStack() {
+  const { state, recordActivity } = useSession();
+  const signedIn = state.status === 'active';
+
+  return (
+    <View style={styles.root} onTouchStart={recordActivity}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="entry" />
+          <Stack.Screen name="exit" />
+          <Stack.Screen name="shift" />
+          <Stack.Screen name="scan-test" />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" />
+        </Stack.Protected>
+      </Stack>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});

@@ -8,18 +8,26 @@ type Props = {
   label: string;
   icon?: IconName;
   variant?: 'primary' | 'secondary';
+  disabled?: boolean;
   onPress?: () => void;
 };
 
-export function PillButton({ label, icon, variant = 'primary', onPress }: Props) {
+export function PillButton({ label, icon, variant = 'primary', disabled = false, onPress }: Props) {
   const primary = variant === 'primary';
   const foreground = primary ? colors.inkInverse : colors.ink;
 
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.button, primary ? styles.primary : styles.secondary, pressed && styles.pressed]}>
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => [
+        styles.button,
+        primary ? styles.primary : styles.secondary,
+        pressed && styles.pressed,
+        disabled && styles.disabled,
+      ]}>
       {icon ? <Icon name={icon} size={22} color={foreground} /> : null}
       <Text variant="heading" color={foreground}>
         {label}
@@ -48,5 +56,8 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
+  },
+  disabled: {
+    opacity: 0.35,
   },
 });

@@ -10,12 +10,14 @@ import { LastScanCard } from '@/components/last-scan-card';
 import { Logo } from '@/components/logo';
 import { StatStrip } from '@/components/stat-strip';
 import { Text } from '@/components/text';
-import { demoGuard, demoLastScan, demoSiteStats } from '@/demo/gate-demo';
+import { useCurrentUser } from '@/auth/session';
+import { demoLastScan, demoPost, demoSiteStats } from '@/demo/gate-demo';
 
 const DOCK_HEIGHT = 156;
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const user = useCurrentUser();
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -42,9 +44,9 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.greeting}>
-          <Text variant="display">{`Hi ${demoGuard.firstName},\nwho's at the gate?`}</Text>
+          <Text variant="display">{`Hi ${user?.firstName ?? 'there'},\nwho's at the gate?`}</Text>
           <Text variant="label" color={colors.inkMuted}>
-            {`${demoGuard.gate} · ${demoGuard.lane} · ${demoGuard.shift}`}
+            {`${demoPost.gate} · ${demoPost.lane} · ${demoPost.shift}`}
           </Text>
         </View>
 
@@ -100,9 +102,13 @@ export default function HomeScreen() {
             <View style={[styles.navItem, styles.navItemActive]}>
               <Icon name="overview-filled" size={22} />
             </View>
-            <View style={styles.navItem}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Your shift"
+              onPress={() => router.push('/shift')}
+              style={({ pressed }) => [styles.navItem, pressed && styles.navItemPressed]}>
               <Icon name="guard" size={22} color={colors.inkInverse} />
-            </View>
+            </Pressable>
           </View>
           <IconButton icon="scan" label="Scan" tone="dark" size={64} elevated onPress={() => router.push('/entry')} />
         </View>
@@ -199,5 +205,8 @@ const styles = StyleSheet.create({
   },
   navItemActive: {
     backgroundColor: colors.surface,
+  },
+  navItemPressed: {
+    opacity: 0.7,
   },
 });

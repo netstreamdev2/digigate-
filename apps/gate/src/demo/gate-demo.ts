@@ -1,10 +1,11 @@
 // Made-up people and vehicles for the design mock-up. Phase 1 replaces this with the local database.
 
-export const demoGuard = {
-  firstName: 'Thabo',
+/** This device's post. Comes from site config once Phase 2 syncs it. */
+export const demoPost = {
   gate: 'Main Gate',
   lane: 'Vehicle lane',
   shift: '06:00–18:00',
+  idleLockMinutes: 5,
 } as const;
 
 export const demoSiteStats = {

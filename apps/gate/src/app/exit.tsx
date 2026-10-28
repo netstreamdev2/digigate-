@@ -10,7 +10,7 @@ import { IconButton } from '@/components/icon-button';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
-import { demoExit, demoGuard } from '@/demo/gate-demo';
+import { demoExit, demoPost } from '@/demo/gate-demo';
 
 const FOOTER_HEIGHT = 160;
 
@@ -25,7 +25,7 @@ export default function ExitScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <IconButton icon="close" label="Close" tone="dark" onPress={() => router.back()} />
-          <Chip label={`${demoGuard.gate} · Exit`} icon="exit" />
+          <Chip label={`${demoPost.gate} · Exit`} icon="exit" />
         </View>
 
         <View style={styles.heading}>
