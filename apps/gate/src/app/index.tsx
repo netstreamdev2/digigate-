@@ -23,7 +23,13 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + DOCK_HEIGHT }]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
-          <Logo height={26} />
+          <Pressable
+            onLongPress={() => router.push('/scan-test')}
+            delayLongPress={600}
+            accessibilityRole="button"
+            accessibilityLabel="DigiGate. Long-press to open the scanner test.">
+            <Logo height={26} />
+          </Pressable>
           <View style={styles.topActions}>
             <View style={styles.syncPill}>
               <Icon name="synced" size={16} color={colors.clear} />
