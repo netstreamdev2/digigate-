@@ -262,7 +262,9 @@ A decode failure prompts a rescan. Never guess fields.
 ## Privacy & security
 
 - **No PII in logs**: console, crash reports, analytics, error messages, test output. PII here means names, ID numbers, licence numbers, plates, VINs and photos. Log rule codes and event IDs instead.
-- ID numbers and licence numbers are stored as a keyed HMAC for matching plus an encrypted value for investigations. Never a plain hash: SA ID numbers are structured enough to brute-force. Shown masked unless the role needs the full value.
+- ID numbers and licence numbers are stored as a keyed HMAC for matching plus an encrypted value for investigations. Never a plain hash: SA ID numbers are structured enough to brute-force.
+- On screen: the gate shows the **current scan in full**, because the guard compares it with the physical document. Everywhere else (history, dashboard lists, exports) identifiers are masked unless the role needs the full value.
+- Licence photo: the barcode holds a ~200 × 250 photo in an undocumented proprietary format ("WI"), with no open decoder. barKoder, a commercial SDK, claims to extract it; that's an open decision. The smart ID card's barcode has no photo; it's only on the chip, which needs government keys.
 - The HMAC key is provisioned to devices at registration and held in the Android Keystore.
 - PINs are short, so they're stored as salted slow hashes, with lockout after repeated failures.
 - Enrolment photos exist only for the guard's visual check. No face recognition.

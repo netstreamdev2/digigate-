@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { decodeDocument } from '../src/documents/decode';
-import { isValidSaIdNumber } from '../src/documents/sa-id-number';
+import { checkLicence } from '../src/documents/licence-checks';
 
 const FIXTURES = join(import.meta.dirname, '..', '..', '..', 'fixtures.local');
 const VEHICLE_CODE = /^(A1|A|B|C1|C|EB|EC1|EC)$/;
@@ -30,17 +30,14 @@ describe.skipIf(licences.length === 0)('real driver licence scans', () => {
     if (decoded.kind !== 'driver-licence') return;
     const { licence } = decoded;
 
-    expect(isValidSaIdNumber(licence.idNumber)).toBe(true);
     expect(licence.idNumberType).toBe('02');
     expect(/^[A-Z][A-Z' -]*$/.test(licence.surname)).toBe(true);
     expect(/^[A-Z]{1,6}$/.test(licence.initials)).toBe(true);
     expect(licence.vehicleCodes.length > 0 && licence.vehicleCodes.every((code) => VEHICLE_CODE.test(code))).toBe(true);
-    expect(licence.validFrom !== null && licence.expiresOn !== null && licence.expiresOn > licence.validFrom).toBe(true);
 
-    // The ID number starts with the birth date (YYMMDD) and its 7th digit encodes gender: 5–9 male, 0–4 female.
-    const birthDigits = licence.birthDate?.slice(2).replace(/-/g, '') ?? '';
-    expect(birthDigits.length === 6 && licence.idNumber.startsWith(birthDigits)).toBe(true);
-    expect(licence.gender !== null && (Number(licence.idNumber[6]) >= 5) === (licence.gender === 'male')).toBe(true);
+    // ID check digit, birth date and gender against the ID number, and the validity dates in order.
+    const checks = checkLicence(licence);
+    expect(Object.values(checks).every((result) => result === true)).toBe(true);
   });
 });
 

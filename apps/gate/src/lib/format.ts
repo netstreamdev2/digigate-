@@ -1,6 +1,6 @@
-/** Shows only the last few characters, for identifiers the screen doesn't need in full: "•••• 087". */
-export function maskAllButLast(value: string, visible: number): string {
-  return value.length <= visible ? value : `•••• ${value.slice(-visible)}`;
+/** Groups an SA ID number the way it reads on the card: "8001015009087" → "800101 5009 087". */
+export function formatSaIdNumber(value: string): string {
+  return /^\d{13}$/.test(value) ? `${value.slice(0, 6)} ${value.slice(6, 10)} ${value.slice(10)}` : value;
 }
 
 /** "DLAMINI" → "Dlamini", "VAN DER MERWE" → "Van Der Merwe". For names, which barcodes store in capitals. */

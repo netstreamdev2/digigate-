@@ -1,9 +1,17 @@
+import {
+  checkLicence,
+  isExpired,
+  licencePassesChecks,
+  type DecodedDocument,
+  type DriverLicence,
+  type LicenceChecks,
+  type ParsedLicenceDisc,
+} from '@digigate/core';
 import { colors, radius, space } from '@digigate/design';
-import { englishPart, isExpired, type DecodedDocument, type DriverLicence, type ParsedLicenceDisc } from '@digigate/core';
 import { StyleSheet, View } from 'react-native';
 
 import { demoPost } from '@/demo/gate-demo';
-import { formatDate, formatPlate, maskAllButLast, titleCase } from '@/lib/format';
+import { formatDate, formatPlate, formatSaIdNumber, titleCase } from '@/lib/format';
 
 import { Card } from './card';
 import { Chip } from './chip';
@@ -11,11 +19,24 @@ import { Icon, type IconName } from './icon';
 import { ResultBanner } from './result-banner';
 import { Text } from './text';
 
-const RESTRICTIONS: Record<string, string> = { '1': 'Glasses or contact lenses', '2': 'Artificial limb' };
+// The guard compares these with the physical document, so the current scan shows every value in full.
+// Lists and history mask identifiers instead (CLAUDE.md, Privacy & security).
+
+const DRIVER_RESTRICTIONS: Record<string, string> = { '1': 'Glasses or contact lenses', '2': 'Artificial limb' };
 
 const UNREADABLE_DOCUMENT = { 'licence-disc': 'licence disc', 'driver-licence': "driver's licence" } as const;
 
-type Field = { label: string; value: string };
+const CHECK_LABELS: Record<keyof LicenceChecks, string> = {
+  idNumberValid: 'ID number check digit is valid',
+  birthDateMatchesIdNumber: 'Birth date matches the ID number',
+  genderMatchesIdNumber: 'Gender matches the ID number',
+  datesInOrder: 'Valid-from date is before expiry',
+};
+
+type Field = { label: string; value: string; wide?: boolean };
+
+const orNone = (values: readonly string[]) => (values.length > 0 ? values.join(', ') : 'None');
+const orBlank = (date: string | null) => (date ? formatDate(date) : 'Not on card');
 
 function ExpiryChip({ expiresOn }: { expiresOn: string }) {
   const expired = isExpired(expiresOn, Date.now(), demoPost.utcOffsetMinutes);
@@ -41,17 +62,24 @@ function Header({ icon, tint, caption, title, detail }: { icon: IconName; tint: 
   );
 }
 
-function Fields({ fields }: { fields: readonly Field[] }) {
+function Section({ title, fields }: { title: string; fields: readonly Field[] }) {
   return (
-    <View style={styles.fields}>
-      {fields.map((field) => (
-        <View key={field.label} style={styles.field}>
-          <Text variant="overline" color={colors.inkSubtle}>
-            {field.label}
-          </Text>
-          <Text variant="bodyStrong">{field.value}</Text>
-        </View>
-      ))}
+    <View style={styles.section}>
+      <Text variant="overline" color={colors.brand}>
+        {title}
+      </Text>
+      <View style={styles.fields}>
+        {fields.map((field) => (
+          <View key={field.label} style={[styles.field, field.wide && styles.fieldWide]}>
+            <Text variant="overline" color={colors.inkSubtle}>
+              {field.label}
+            </Text>
+            <Text variant="bodyStrong" selectable>
+              {field.value}
+            </Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -64,7 +92,7 @@ function DiscPreview({ disc }: { disc: ParsedLicenceDisc }) {
         tint={colors.tileSky}
         caption="Licence disc"
         title={`${disc.make} ${disc.model}`}
-        detail={`${englishPart(disc.colour)} · ${englishPart(disc.description)}`}
+        detail={`Expires ${formatDate(disc.expiresOn)}`}
       />
       <View style={styles.plate}>
         <Text variant="title" style={styles.plateText}>
@@ -72,35 +100,59 @@ function DiscPreview({ disc }: { disc: ParsedLicenceDisc }) {
         </Text>
         <ExpiryChip expiresOn={disc.expiresOn} />
       </View>
-      <Fields
+      <Section
+        title="Vehicle"
         fields={[
-          { label: 'Expires', value: formatDate(disc.expiresOn) },
+          { label: 'Make', value: disc.make },
+          { label: 'Model', value: disc.model },
+          { label: 'Colour', value: disc.colour, wide: true },
+          { label: 'Description', value: disc.description, wide: true },
+          { label: 'VIN', value: disc.vin, wide: true },
+          { label: 'Engine number', value: disc.engineNumber, wide: true },
+        ]}
+      />
+      <Section
+        title="Disc"
+        fields={[
+          { label: 'Number plate', value: disc.plate },
           { label: 'Register number', value: disc.registerNumber },
-          { label: 'VIN', value: maskAllButLast(disc.vin, 6) },
-          { label: 'Engine', value: maskAllButLast(disc.engineNumber, 4) },
+          { label: 'Disc number', value: disc.discNumber },
+          { label: 'Expires', value: formatDate(disc.expiresOn) },
         ]}
       />
     </Card>
   );
 }
 
-function LicencePreview({ licence }: { licence: DriverLicence }) {
-  const restrictions = Array.from(licence.driverRestrictionCodes)
-    .map((code) => RESTRICTIONS[code])
-    .filter((label): label is string => label !== undefined);
+function LicenceChecksView({ checks }: { checks: LicenceChecks }) {
+  const applicable = (Object.keys(CHECK_LABELS) as (keyof LicenceChecks)[]).filter((key) => checks[key] !== null);
+  const passed = licencePassesChecks(checks);
 
-  const fields: Field[] = [
-    { label: 'Valid until', value: licence.expiresOn ? formatDate(licence.expiresOn) : 'Not on card' },
-    { label: 'ID number', value: maskAllButLast(licence.idNumber, 3) },
-    { label: 'Licence number', value: maskAllButLast(licence.licenceNumber, 4) },
-    { label: 'Restrictions', value: restrictions.length > 0 ? restrictions.join(', ') : 'None' },
-  ];
-  if (licence.prdpCode) {
-    fields.push({
-      label: 'PrDP',
-      value: `${licence.prdpCode}${licence.prdpExpiresOn ? ` · to ${formatDate(licence.prdpExpiresOn)}` : ''}`,
-    });
-  }
+  return (
+    <View style={styles.section}>
+      <View style={styles.checksHeader}>
+        <Text variant="overline" color={colors.brand}>
+          Barcode checks
+        </Text>
+        <Chip label={passed ? 'All pass' : 'Look closely'} icon={passed ? 'check' : 'result-warning'} tone={passed ? 'clear' : 'blocked'} />
+      </View>
+      {applicable.map((key) => (
+        <View key={key} style={styles.check}>
+          <Icon name={checks[key] ? 'result-clear' : 'result-blocked'} size={20} color={checks[key] ? colors.clear : colors.blocked} />
+          <Text variant="body">{CHECK_LABELS[key]}</Text>
+        </View>
+      ))}
+      <Text variant="label" color={colors.inkMuted}>
+        Passing doesn't prove a card is genuine. Compare the name, ID number and photo on the card itself.
+      </Text>
+    </View>
+  );
+}
+
+function LicencePreview({ licence }: { licence: DriverLicence }) {
+  const driverRestrictions = Array.from(licence.driverRestrictionCodes)
+    .map((code) => DRIVER_RESTRICTIONS[code])
+    .filter((label): label is string => label !== undefined);
 
   return (
     <Card style={styles.card}>
@@ -109,14 +161,45 @@ function LicencePreview({ licence }: { licence: DriverLicence }) {
         tint={colors.tileLilac}
         caption="Driver's licence"
         title={`${licence.initials} ${titleCase(licence.surname)}`}
-        detail={`Codes ${licence.vehicleCodes.join(', ')}`}
+        detail={`Codes ${orNone(licence.vehicleCodes)}`}
       />
       {licence.expiresOn ? (
         <View style={styles.status}>
+          <Text variant="label" color={colors.inkMuted}>
+            {`Valid until ${formatDate(licence.expiresOn)}`}
+          </Text>
           <ExpiryChip expiresOn={licence.expiresOn} />
         </View>
       ) : null}
-      <Fields fields={fields} />
+      <Section
+        title="Holder"
+        fields={[
+          { label: 'Surname', value: licence.surname },
+          { label: 'Initials', value: licence.initials },
+          { label: 'ID number', value: formatSaIdNumber(licence.idNumber), wide: true },
+          { label: 'Birth date', value: orBlank(licence.birthDate) },
+          { label: 'Gender', value: licence.gender ? titleCase(licence.gender) : 'Not on card' },
+          { label: 'ID issued in', value: licence.idCountryOfIssue },
+          { label: 'ID type', value: licence.idNumberType === '02' ? 'South African ID' : `Type ${licence.idNumberType}` },
+        ]}
+      />
+      <Section
+        title="Licence"
+        fields={[
+          { label: 'Licence number', value: licence.licenceNumber, wide: true },
+          { label: 'Vehicle codes', value: orNone(licence.vehicleCodes) },
+          { label: 'Issue number', value: licence.licenceIssueNumber },
+          { label: 'Codes first issued', value: orNone(licence.licenceCodeIssueDates.map(formatDate)), wide: true },
+          { label: 'Valid from', value: orBlank(licence.validFrom) },
+          { label: 'Valid until', value: orBlank(licence.expiresOn) },
+          { label: 'Vehicle restrictions', value: orNone(licence.vehicleRestrictions) },
+          { label: 'Driver restrictions', value: orNone(driverRestrictions) },
+          { label: 'PrDP', value: licence.prdpCode ?? 'None' },
+          { label: 'PrDP expires', value: licence.prdpCode ? orBlank(licence.prdpExpiresOn) : '—' },
+          { label: 'Licence issued in', value: licence.licenceCountryOfIssue },
+        ]}
+      />
+      <LicenceChecksView checks={checkLicence(licence)} />
     </Card>
   );
 }
@@ -149,7 +232,7 @@ export function DocumentPreview({ decoded }: { decoded: DecodedDocument }) {
 
 const styles = StyleSheet.create({
   card: {
-    gap: space.md,
+    gap: space.lg,
   },
   header: {
     flexDirection: 'row',
@@ -181,6 +264,14 @@ const styles = StyleSheet.create({
   },
   status: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  section: {
+    gap: space.sm,
+    paddingTop: space.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   fields: {
     flexDirection: 'row',
@@ -189,6 +280,20 @@ const styles = StyleSheet.create({
   },
   field: {
     width: '50%',
+    paddingRight: space.xs,
     gap: 2,
+  },
+  fieldWide: {
+    width: '100%',
+  },
+  checksHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  check: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
   },
 });

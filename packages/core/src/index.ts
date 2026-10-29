@@ -1,5 +1,6 @@
 export { decodeDocument, type DecodedDocument } from './documents/decode';
 export { decodeDriverLicence, type DriverLicence, type DriverLicenceResult } from './documents/driver-licence';
+export { checkLicence, licencePassesChecks, type LicenceChecks } from './documents/licence-checks';
 export { englishPart, parseLicenceDisc, type LicenceDiscResult, type ParsedLicenceDisc } from './documents/licence-disc';
 export { isValidSaIdNumber } from './documents/sa-id-number';
 export type { GateEvent, GateEventPayload, GateEventType } from './events';
