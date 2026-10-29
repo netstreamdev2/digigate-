@@ -26,7 +26,7 @@ These override convenience, deadlines and "just for now".
 - Scan engine: Honeywell **N5703** 2D imager (`persist.sys.scan.name`), Honeywell `hsmdecoder` service running. `persist.vendor.sys.scan.name` reports `se2030w`. Unresolved, and irrelevant as long as PDF417 decodes.
 - Preinstalled Urovo scanner stack: `com.ubx.datawedge`, `com.ubx.uscanner`, `com.ubx.barcodescanner.tool` (test app), SDK jars `com.ubx.usdk.jar` and `com.ubx.platform.jar`. Key remapping (`com.ubx.keyremap`) and RFID packages are present; UHF RFID hardware unconfirmed.
 - **NFC confirmed** (`android.hardware.nfc`, switched on). Android NFC reads 13.56 MHz cards (MIFARE, NTAG, DESFire). It can't read 125 kHz proximity cards.
-- Confirmed: reads the driver's licence PDF417 (shows as gibberish in wedge mode, as expected). **Not yet tested:** licence disc, smart ID card, green ID book.
+- Confirmed: reads the driver's licence and licence disc PDF417 as raw bytes through the `scanner` module (2026-10-29). **Not yet tested:** smart ID card, green ID book.
 - Scan broadcast: Urovo's default is expected to be action `android.intent.ACTION_DECODE_DATA` with extras `barcode` (byte array), `length`, `barcodeType` and `barcode_string`. **Verify on the device in Phase 0** before relying on any of it.
 - `adb`: `%ANDROID_HOME%\platform-tools\adb.exe`, on the user PATH for new shells. scrcpy bundles its own copy; if the two versions differ, they restart each other's adb server.
 - Urovo draws a floating blue scan button over every app. Whether to hide it on gate devices is a Phase 0 decision.
@@ -235,7 +235,20 @@ How it's built (`apps/gate/src/db`, `apps/gate/src/sync`):
 Verify every format against real scans in Phase 0 and update this section.
 
 - **Driver's licence card**: PDF417, 720 bytes, RSA-encrypted in blocks. Decrypt with the published public keys (two key versions, selected from the header bytes), then parse: surname, initials, ID number and type, licence number, vehicle codes and restrictions, issue and expiry dates, PrDP. The embedded photo uses an obscure format; ignore it.
-- **Licence disc**: PDF417, plain text, `%`-delimited. Expected fields: disc licence number, vehicle register number, plate, description, make, model, colour, VIN, engine number, expiry date. Confirm the order.
+  - Confirmed on the DT50 (2026-10-29): 720 raw bytes, header `01 9b 09 45` (the newer key version). Real scan in `fixtures.local/driver-licence/`.
+- **Licence disc**: PDF417, plain ASCII, wrapped in and separated by `%`. Confirmed on the DT50 (2026-10-29): 141 bytes, 14 fields, in this order:
+  1. disc type and version (`LLLDLLDD`, e.g. `MVL1CC..`); 2. a 4-digit code; 3. an 8-character control code; 4. a single digit (meanings of 2–4 TBC)
+  5. disc licence number (12 characters)
+  6. **number plate** (licence mark, e.g. a Gauteng `LL DD LL GP` plate without spaces)
+  7. **vehicle register number** (`LLLDDDL`)
+  8. description, English / Afrikaans (e.g. `Hatch back / Luikrug`)
+  9. make; 10. model
+  11. colour, English / Afrikaans
+  12. VIN (17 characters)
+  13. engine number
+  14. expiry date, `YYYY-MM-DD`
+  - The plate comes *before* the register number. Real scan in `fixtures.local/licence-disc/`.
+- **Urovo delivery quirks:** the `barcodeType` extra reports PDF417 as `22`, and every scan arrives twice, about 2 ms apart (once per broadcast action). The `scanner` module drops an identical scan inside 250 ms; that fix needs a build after 2026-10-29.
 - **Smart ID card**: PDF417 on the back. Fields TBC.
 - **Green ID book**: barcode carrying the ID number. Symbology TBC.
 
