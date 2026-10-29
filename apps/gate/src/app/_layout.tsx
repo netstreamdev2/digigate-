@@ -112,14 +112,15 @@ function GuardedStack() {
   return (
     <View style={styles.root} onTouchStart={recordActivity}>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Protected guard={signedIn}>
+        {/* Explicit redirects: without them the router falls back to the first open route by name, which was pair. */}
+        <Stack.Protected guard={signedIn} redirectTo="/sign-in">
           <Stack.Screen name="index" />
           <Stack.Screen name="entry" />
           <Stack.Screen name="exit" />
           <Stack.Screen name="shift" />
           <Stack.Screen name="scan-test" />
         </Stack.Protected>
-        <Stack.Protected guard={!signedIn}>
+        <Stack.Protected guard={!signedIn} redirectTo="/">
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
         <Stack.Screen name="pair" />
