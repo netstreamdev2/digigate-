@@ -8,9 +8,10 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.local-tests.json"
   },
   "devDependencies": {
+    "@types/node": "^24",
     "typescript": "~6.0.3",
     "vitest": "^5.0.5"
   }

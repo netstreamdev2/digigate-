@@ -6,6 +6,8 @@ export const demoPost = {
   lane: 'Vehicle lane',
   shift: '06:00–18:00',
   idleLockMinutes: 5,
+  /** SAST. Decides which calendar day it is for document expiry. */
+  utcOffsetMinutes: 120,
 } as const;
 
 export const demoSiteStats = {

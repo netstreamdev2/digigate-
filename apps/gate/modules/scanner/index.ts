@@ -31,3 +31,20 @@ declare class ScannerNativeModule extends NativeModule<ScannerEvents> {
 
 // Null in Expo Go, which can't load custom native code; only the development or release build has it.
 export const Scanner = requireOptionalNativeModule<ScannerNativeModule>('Scanner');
+
+const DUPLICATE_WINDOW_MS = 250;
+
+/**
+ * Listens for scans, dropping an identical one inside 250 ms. Urovo sends every scan twice (once per broadcast
+ * action); the native module filters this from its next build, and this keeps older builds correct too.
+ * Returns null where there is no scanner module.
+ */
+export function subscribeToScans(listener: (event: ScanEvent) => void): { remove(): void } | null {
+  if (!Scanner) return null;
+  let previous: ScanEvent | null = null;
+  return Scanner.addListener('onScan', (event) => {
+    if (previous && previous.bytes === event.bytes && event.receivedAt - previous.receivedAt < DUPLICATE_WINDOW_MS) return;
+    previous = event;
+    listener(event);
+  });
+}

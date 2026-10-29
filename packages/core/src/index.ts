@@ -1,4 +1,9 @@
+export { decodeDocument, type DecodedDocument } from './documents/decode';
+export { decodeDriverLicence, type DriverLicence, type DriverLicenceResult } from './documents/driver-licence';
+export { englishPart, parseLicenceDisc, type LicenceDiscResult, type ParsedLicenceDisc } from './documents/licence-disc';
+export { isValidSaIdNumber } from './documents/sa-id-number';
 export type { GateEvent, GateEventPayload, GateEventType } from './events';
+export { isExpired } from './rules/dates';
 export { normaliseIdentifier } from './identifiers';
 export { uuidv7 } from './ids';
 export { RULE_SEVERITY, type RuleCode, type Severity } from './rules/codes';

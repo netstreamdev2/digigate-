@@ -1,0 +1,8 @@
+{
+  // Tests against real scans need Node's file system; the library code in src stays free of Node types.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src", "local-tests"]
+}

@@ -1,3 +1,4 @@
+import { decodeDocument, type DecodedDocument } from '@digigate/core';
 import { colors, space } from '@digigate/design';
 import { Directory, File, Paths } from 'expo-file-system';
 import { router } from 'expo-router';
@@ -7,31 +8,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
+import { DocumentPreview } from '@/components/document-preview';
 import { IconButton } from '@/components/icon-button';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import { fromBase64 } from '@/lib/bytes';
 
-import { Scanner, type ScanEvent, type ScannerInfo } from '../../modules/scanner';
+import { Scanner, subscribeToScans, type ScanEvent, type ScannerInfo } from '../../modules/scanner';
 
 const MAX_SCANS = 10;
-const LICENCE_BARCODE_LENGTH = 720;
 
 // Private app storage. Saved scans are pulled to the gitignored fixtures.local/ over adb and never committed.
 const fixturesDir = new Directory(Paths.document, 'scan-fixtures');
 
-type ReceivedScan = ScanEvent & { saved: boolean };
+type ReceivedScan = ScanEvent & {
+  decoded: DecodedDocument;
+  /** How long decoding took on this device, against the 300 ms scan-to-result budget. */
+  decodeMs: number;
+  saved: boolean;
+};
 
-// Describes the shape of a scan only. The decoded contents are personal information and stay off screen.
-function describeScan(bytes: Uint8Array): string {
-  if (bytes[0] === 0x25) return "Text starting with '%': looks like a licence disc";
-  if (bytes.length === LICENCE_BARCODE_LENGTH) return "720 bytes of binary: looks like a driver's licence";
-  return 'Unrecognised format';
-}
-
-function hexPreview(bytes: Uint8Array): string {
-  return Array.from(bytes.slice(0, 8), (byte) => byte.toString(16).padStart(2, '0')).join(' ');
+function hexPreview(base64: string): string {
+  return Array.from(fromBase64(base64).slice(0, 8), (byte) => byte.toString(16).padStart(2, '0')).join(' ');
 }
 
 export default function ScanTestScreen() {
@@ -41,11 +40,14 @@ export default function ScanTestScreen() {
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!Scanner) return;
-    const subscription = Scanner.addListener('onScan', (event) => {
-      setScans((current) => [{ ...event, saved: false }, ...current].slice(0, MAX_SCANS));
+    const subscription = subscribeToScans((event) => {
+      // Decode once, as the scan arrives, so re-renders never repeat the RSA work.
+      const started = Date.now();
+      const decoded = decodeDocument(fromBase64(event.bytes));
+      const decodeMs = Date.now() - started;
+      setScans((current) => [{ ...event, decoded, decodeMs, saved: false }, ...current].slice(0, MAX_SCANS));
     });
-    return () => subscription.remove();
+    return () => subscription?.remove();
   }, []);
 
   const switchToAppOutput = () => {
@@ -126,25 +128,22 @@ export default function ScanTestScreen() {
                 Press a scan trigger on the side of the device.
               </Text>
             ) : (
-              scans.map((scan) => {
-                const bytes = fromBase64(scan.bytes);
-                return (
-                  <Card key={scan.receivedAt} style={styles.scan}>
-                    <Text variant="bodyStrong">{describeScan(bytes)}</Text>
-                    <Text variant="label" color={colors.inkMuted}>
-                      {`${scan.length} bytes · symbology ${scan.symbology ?? '?'} · ${new Date(scan.receivedAt).toLocaleTimeString('en-ZA')}`}
+              scans.map((scan) => (
+                <View key={scan.receivedAt} style={styles.scan}>
+                  <DocumentPreview decoded={scan.decoded} />
+                  <View style={styles.meta}>
+                    <Text variant="label" color={colors.inkSubtle} style={styles.metaText}>
+                      {`${scan.length} bytes · decoded in ${scan.decodeMs} ms · ${new Date(scan.receivedAt).toLocaleTimeString('en-ZA')}`}
+                      {scan.decoded.kind === 'unrecognised' ? ` · starts ${hexPreview(scan.bytes)}` : ''}
                     </Text>
-                    <Text variant="label" color={colors.inkSubtle}>{`Starts ${hexPreview(bytes)}`}</Text>
-                    <View style={styles.scanActions}>
-                      {scan.saved ? (
-                        <Chip label="Saved for testing" icon="check" tone="clear" />
-                      ) : (
-                        <Chip label="Save for testing" icon="add" onPress={() => save(scan)} />
-                      )}
-                    </View>
-                  </Card>
-                );
-              })
+                    {scan.saved ? (
+                      <Chip label="Saved" icon="check" tone="clear" />
+                    ) : (
+                      <Chip label="Save for testing" icon="add" onPress={() => save(scan)} />
+                    )}
+                  </View>
+                </View>
+              ))
             )}
           </View>
         ) : null}
@@ -198,13 +197,18 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   scans: {
-    gap: space.sm,
+    gap: space.md,
   },
   scan: {
-    gap: space.xxs,
+    gap: space.xs,
   },
-  scanActions: {
+  meta: {
     flexDirection: 'row',
-    marginTop: space.xs,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.sm,
+  },
+  metaText: {
+    flex: 1,
   },
 });
