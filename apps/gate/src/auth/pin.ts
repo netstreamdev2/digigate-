@@ -1,7 +1,9 @@
-import { pbkdf2Async } from '@noble/hashes/pbkdf2.js';
+import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
 import { fromBase64 } from '@/lib/bytes';
+
+import { SecureHash } from '../../modules/secure-hash';
 
 export const PIN_LENGTH = 6;
 
@@ -36,11 +38,17 @@ function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return difference === 0;
 }
 
+async function derive(pin: string, stored: PinHash, length: number): Promise<Uint8Array> {
+  if (SecureHash) {
+    return fromBase64(await SecureHash.pbkdf2Sha256(pin, stored.salt, stored.iterations, length));
+  }
+  // JavaScript fallback for Expo Go and older builds. It runs in one go: noble's async variant hands control
+  // back every few milliseconds, and on React Native each handover is slow enough to stretch a check to minutes.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return pbkdf2(sha256, new TextEncoder().encode(pin), fromBase64(stored.salt), { c: stored.iterations, dkLen: length });
+}
+
 export async function verifyPin(pin: string, stored: PinHash): Promise<boolean> {
   const expected = fromBase64(stored.hash);
-  const derived = await pbkdf2Async(sha256, new TextEncoder().encode(pin), fromBase64(stored.salt), {
-    c: stored.iterations,
-    dkLen: expected.length,
-  });
-  return constantTimeEqual(derived, expected);
+  return constantTimeEqual(await derive(pin, stored, expected.length), expected);
 }

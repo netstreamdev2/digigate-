@@ -5,14 +5,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.SystemClock
 import android.util.Base64
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
+// Urovo firmware sends every scan under both its current and its legacy broadcast action, about 2 ms apart.
+// A physical re-scan can't happen this fast, so an identical payload inside this window is the same scan.
+private const val DUPLICATE_WINDOW_MS = 250L
+
 class ScannerModule : Module() {
   private val adapter: ScannerAdapter? = adapterFor(Build.MANUFACTURER)
   private var receiver: BroadcastReceiver? = null
+  private var lastScanBytes: ByteArray? = null
+  private var lastScanAt = 0L
 
   private val context: Context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
@@ -48,6 +55,10 @@ class ScannerModule : Module() {
     val scanReceiver = object : BroadcastReceiver() {
       override fun onReceive(context: Context, intent: Intent) {
         val scan = scanner.readScan(intent) ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastScanAt < DUPLICATE_WINDOW_MS && lastScanBytes?.contentEquals(scan.bytes) == true) return
+        lastScanBytes = scan.bytes
+        lastScanAt = now
         sendEvent(
           "onScan",
           mapOf(

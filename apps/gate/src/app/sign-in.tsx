@@ -58,16 +58,20 @@ export default function SignInScreen() {
   const [pin, setPin] = useState('');
   const [checking, setChecking] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
+  // Development builds show how long the PIN check took, to tune hash iterations on real devices.
+  const [lastCheckMs, setLastCheckMs] = useState<number | null>(null);
   const pinStep = lockedUser !== null || enteringPin;
 
   const submit = async (fullPin: string) => {
     setChecking(true);
+    const started = Date.now();
     try {
       const result = lockedUser ? await unlock(fullPin) : await signIn(employeeNumber, fullPin);
       if (!result.ok) setProblem(problemFor(result));
     } catch {
       setProblem({ tone: 'warning', title: 'Try again', message: "Couldn't check the PIN. Enter it again." });
     } finally {
+      if (__DEV__) setLastCheckMs(Date.now() - started);
       setChecking(false);
       setPin('');
     }
@@ -128,7 +132,7 @@ export default function SignInScreen() {
           </Text>
         )}
         <Text variant="label" color={colors.inkMuted}>
-          {checking ? 'Checking…' : ' '}
+          {checking ? 'Checking…' : __DEV__ && lastCheckMs !== null ? `Last PIN check took ${lastCheckMs} ms` : ' '}
         </Text>
       </View>
 
