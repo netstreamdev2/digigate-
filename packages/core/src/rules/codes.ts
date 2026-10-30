@@ -13,6 +13,8 @@ export const RULE_SEVERITY = {
   LICENCE_EXPIRED: 'amber',
   OCCUPANT_COUNT_DROP: 'info',
   OVERSTAY: 'amber',
+  IGNITION_RESTART_FAILED: 'red',
+  BOOT_CHECK_PROBLEM: 'red',
   PEDESTRIAN_DUPLICATE_ENTRY: 'amber',
   PEDESTRIAN_NO_ENTRY: 'amber',
   DRIVER_LEFT_ON_FOOT: 'info',

@@ -12,6 +12,8 @@ function exit(overrides: Partial<VehicleExitScan> = {}): VehicleExitScan {
     disc: carA,
     typedPlate: carA.plate,
     occupants: 2,
+    ignitionRestart: 'done',
+    bootCheck: 'not-needed',
     ...overrides,
   };
 }
@@ -108,6 +110,37 @@ describe('evaluateVehicleExit', () => {
 
     it('does not fire when more people leave', () => {
       expect(evaluateVehicleExit(exit({ occupants: 4 }), gateState({ openVisits: [carAInside] }), config)).toEqual([]);
+    });
+  });
+
+  describe('IGNITION_RESTART_FAILED', () => {
+    it('blocks the boom when the engine would not restart', () => {
+      const hits = evaluateVehicleExit(exit({ ignitionRestart: 'failed' }), gateState({ openVisits: [carAInside] }), config);
+      expect(hits).toEqual([{ code: 'IGNITION_RESTART_FAILED', severity: 'red' }]);
+      expect(outcomeOf(hits)).toBe('blocked');
+    });
+
+    it('does not fire when the driver restarted the engine', () => {
+      expect(evaluateVehicleExit(exit({ ignitionRestart: 'done' }), gateState({ openVisits: [carAInside] }), config)).toEqual([]);
+    });
+
+    it('fires alongside the other rules, not instead of them', () => {
+      const hits = evaluateVehicleExit(exit({ ignitionRestart: 'failed' }), gateState({ openVisits: [] }), config);
+      expect(codes(hits)).toEqual(['NO_ENTRY_RECORD', 'IGNITION_RESTART_FAILED']);
+    });
+  });
+
+  describe('BOOT_CHECK_PROBLEM', () => {
+    it('blocks the boom when the guard found a problem in the boot', () => {
+      const hits = evaluateVehicleExit(exit({ bootCheck: 'problem' }), gateState({ openVisits: [carAInside] }), config);
+      expect(hits).toEqual([{ code: 'BOOT_CHECK_PROBLEM', severity: 'red' }]);
+      expect(outcomeOf(hits)).toBe('blocked');
+    });
+
+    it('does not fire when the boot was clear or not opened', () => {
+      const state = gateState({ openVisits: [carAInside] });
+      expect(evaluateVehicleExit(exit({ bootCheck: 'clear' }), state, config)).toEqual([]);
+      expect(evaluateVehicleExit(exit({ bootCheck: 'not-needed' }), state, config)).toEqual([]);
     });
   });
 

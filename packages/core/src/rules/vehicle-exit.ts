@@ -14,6 +14,12 @@ export function evaluateVehicleExit(scan: VehicleExitScan, state: GateState, con
   if (!visit) {
     hits.push(hit('NO_ENTRY_RECORD'));
   }
+  if (scan.ignitionRestart === 'failed') {
+    hits.push(hit('IGNITION_RESTART_FAILED'));
+  }
+  if (scan.bootCheck === 'problem') {
+    hits.push(hit('BOOT_CHECK_PROBLEM'));
+  }
 
   const driverHit = checkDriver(scan.driver.personKey, visit, state);
   if (driverHit) {
