@@ -9,6 +9,10 @@
     "gate": "pnpm --filter gate",
     "dashboard": "pnpm --filter dashboard",
     "test": "pnpm -r --if-present test",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test:db": "node supabase/tests/database.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14"
   }
 }
