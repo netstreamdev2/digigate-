@@ -21,6 +21,12 @@ apps/gate/ios/
 # Real document scans are PII — never commit
 fixtures.local/
 
+# Astra's working files stay on the PC. The apps ship only the 12 neutral drawings.
+packages/design/assets/vehicles/*
+!packages/design/assets/vehicles/app/
+packages/design/assets/vehicles/app/*
+!packages/design/assets/vehicles/app/generic-*-neutral.webp
+
 # Logs and OS files
 *.log
 .DS_Store

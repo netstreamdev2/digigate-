@@ -5,13 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./icons/*": "./src/icons/*.ts"
+    "./icons/*": "./src/icons/*.ts",
+    "./vehicles/*": "./assets/vehicles/app/*"
   },
   "scripts": {
     "icons": "node scripts/build-icon-modules.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "sharp": "0.35.5",
     "typescript": "~6.0.3"
   }
 }
