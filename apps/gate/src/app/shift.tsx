@@ -1,6 +1,7 @@
 import { colors, radius, space } from '@digigate/design';
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSession } from '@/auth/session';
@@ -9,7 +10,9 @@ import { IconButton } from '@/components/icon-button';
 import { PillButton } from '@/components/pill-button';
 import { Text } from '@/components/text';
 import { useLocalDatabase } from '@/db/database-context';
-import { demoPost } from '@/demo/gate-demo';
+import { ResultBanner } from '@/components/result-banner';
+import { periodHours, postLabel, siteConfig } from '@/site/site-config';
+import { useShift } from '@/shift/shift-context';
 import { useSync, type SyncStatus } from '@/sync/sync-context';
 
 function clockTime(at: number): string {
@@ -37,11 +40,28 @@ export default function ShiftScreen() {
   const { state, lock, signOut } = useSession();
   const { encrypted } = useLocalDatabase();
   const sync = useSync();
-  if (state.status === 'signed-out') return null;
-  const { user, startedAt } = state;
+  const { shift, end } = useShift();
+  const [ending, setEnding] = useState(false);
+  const [endProblem, setEndProblem] = useState<string | null>(null);
+  if (state.status === 'signed-out' || !shift) return null;
+  const { user } = state;
+
+  const endShift = async () => {
+    setEnding(true);
+    setEndProblem(null);
+    try {
+      await end();
+    } catch (cause) {
+      setEndProblem(`Your shift wasn't ended (${cause instanceof Error ? cause.message : 'unknown error'}). Try the switch again.`);
+      setEnding(false);
+    }
+  };
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}
+      showsVerticalScrollIndicator={false}>
       <View style={styles.topBar}>
         <IconButton icon="close" label="Close" tone="dark" onPress={() => router.back()} />
       </View>
@@ -52,6 +72,25 @@ export default function ShiftScreen() {
         </Text>
         <Text variant="display">{`${user.firstName}\n${user.lastName}`}</Text>
       </View>
+
+      {endProblem ? <ResultBanner tone="warning" title="Still on duty" message={endProblem} /> : null}
+
+      <Card style={styles.onDuty}>
+        <View style={styles.onDutyCopy}>
+          <Text variant="bodyStrong">On duty</Text>
+          <Text variant="label" color={colors.inkMuted}>
+            Switch off when your shift ends. You'll be signed out.
+          </Text>
+        </View>
+        <Switch
+          value={!ending}
+          onValueChange={endShift}
+          disabled={ending}
+          trackColor={{ false: colors.border, true: colors.clear }}
+          thumbColor={colors.surface}
+          accessibilityLabel="On duty"
+        />
+      </Card>
 
       <Card style={styles.card}>
         <View style={styles.person}>
@@ -65,9 +104,9 @@ export default function ShiftScreen() {
           </Text>
         </View>
         <Field label="Employee number" value={user.employeeNumber} />
-        <Field label="Signed in" value={clockTime(startedAt)} />
-        <Field label="Post" value={`${demoPost.gate} · ${demoPost.lane}`} />
-        <Field label="Screen locks after" value={`${demoPost.idleLockMinutes} minutes without a touch`} />
+        <Field label="On duty since" value={clockTime(shift.startedAt)} />
+        <Field label="Post" value={`${postLabel(shift.post)} · ${periodHours(shift.period)}`} />
+        <Field label="Screen locks" value={`After ${siteConfig.idleLockMinutes} minutes without a touch or a scan, or when the screen goes off`} />
         <Field label="Sync" value={syncSummary(sync.status, sync.pendingEvents)} />
         <Field label="Device storage" value={encrypted ? 'Encrypted' : 'Not encrypted (Expo Go, demo data only)'} />
       </Card>
@@ -79,7 +118,7 @@ export default function ShiftScreen() {
           <PillButton label="Sync now" icon="syncing" variant="secondary" onPress={() => void sync.syncNow()} />
         ) : null}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -97,9 +136,21 @@ function Field({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    paddingHorizontal: space.lg,
     backgroundColor: colors.background,
+  },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: space.lg,
     gap: space.lg,
+  },
+  onDuty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  onDutyCopy: {
+    flex: 1,
+    gap: 2,
   },
   topBar: {
     height: 56,

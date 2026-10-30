@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LockCover } from '@/auth/lock-cover';
 import { SessionProvider, useSession, type SessionStore } from '@/auth/session';
 import { ResultBanner } from '@/components/result-banner';
 import { openLocalDatabase, type LocalDatabase } from '@/db/database';
@@ -17,11 +18,14 @@ import { countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users'
 import { hasValueWithPrefix } from '@/db/kv';
 import { appendEvent } from '@/db/outbox';
 import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
-import { demoPost } from '@/demo/gate-demo';
+import { siteConfig } from '@/site/site-config';
 import { seedUsers } from '@/demo/seed-users';
 import { newEventId } from '@/lib/ids';
+import { ShiftProvider, useShift } from '@/shift/shift-context';
 import { AUTH_KEY_PREFIX } from '@/sync/supabase';
 import { SyncProvider, useSync } from '@/sync/sync-context';
+
+import { setScansPaused, subscribeToScans } from '../../modules/scanner';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -72,8 +76,10 @@ export default function RootLayout() {
     <LocalDatabaseProvider database={database}>
       <SyncProvider>
         <AppSession>
-          <StatusBar style="dark" />
-          <GuardedStack />
+          <ShiftProvider>
+            <StatusBar style="dark" />
+            <GuardedStack />
+          </ShiftProvider>
         </AppSession>
       </SyncProvider>
     </LocalDatabaseProvider>
@@ -99,7 +105,7 @@ function AppSession({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SessionProvider store={store} idleLockMinutes={demoPost.idleLockMinutes}>
+    <SessionProvider store={store} idleLockMinutes={siteConfig.idleLockMinutes}>
       {children}
     </SessionProvider>
   );
@@ -107,24 +113,44 @@ function AppSession({ children }: { children: ReactNode }) {
 
 function GuardedStack() {
   const { state, recordActivity } = useSession();
-  const signedIn = state.status === 'active';
+  const { shift } = useShift();
+  const user = state.status === 'signed-out' ? null : state.user;
+  // Signed in only counts once the shift is known, so the guard goes straight to the right screen after their PIN.
+  const signedIn = user !== null && shift !== undefined;
+  const onDuty = user !== null && shift?.gateUserId === user.id;
+  const locked = state.status === 'locked';
+
+  useEffect(() => {
+    setScansPaused(locked);
+  }, [locked]);
+
+  // A guard working through cars with the scanner is busy, even without touching the screen.
+  useEffect(() => {
+    const subscription = subscribeToScans(recordActivity);
+    return () => subscription?.remove();
+  }, [recordActivity]);
 
   return (
     <View style={styles.root} onTouchStart={recordActivity}>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         {/* Explicit redirects: without them the router falls back to the first open route by name, which was pair. */}
-        <Stack.Protected guard={signedIn} redirectTo="/sign-in">
+        <Stack.Protected guard={onDuty} redirectTo={signedIn ? '/start-shift' : '/sign-in'}>
           <Stack.Screen name="index" />
           <Stack.Screen name="entry" />
           <Stack.Screen name="exit" />
+          <Stack.Screen name="walk-in" />
           <Stack.Screen name="shift" />
           <Stack.Screen name="scan-test" />
         </Stack.Protected>
-        <Stack.Protected guard={!signedIn} redirectTo="/">
+        <Stack.Protected guard={signedIn && !onDuty} redirectTo={signedIn ? '/' : '/sign-in'}>
+          <Stack.Screen name="start-shift" />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn} redirectTo={onDuty ? '/' : '/start-shift'}>
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
         <Stack.Screen name="pair" />
       </Stack>
+      {locked ? <LockCover /> : null}
     </View>
   );
 }

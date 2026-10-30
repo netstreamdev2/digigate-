@@ -1,4 +1,4 @@
-import { decodeDocument, type DecodedDocument } from '@digigate/core';
+import { decodeDocument, decodeLicencePhoto, type DecodedDocument, type LicencePhotoResult } from '@digigate/core';
 import { colors, space } from '@digigate/design';
 import { Directory, File, Paths } from 'expo-file-system';
 import { router } from 'expo-router';
@@ -9,7 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import { DocumentPreview } from '@/components/document-preview';
+import { DocumentSheet } from '@/components/document-sheet';
 import { IconButton } from '@/components/icon-button';
+import { PersonCard, type PersonDocument } from '@/components/person-card';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
@@ -26,8 +28,17 @@ type ReceivedScan = ScanEvent & {
   decoded: DecodedDocument;
   /** How long decoding took on this device, against the 300 ms scan-to-result budget. */
   decodeMs: number;
+  /** The licence photo, decoded after the result is on screen; null until then. */
+  photo: LicencePhotoResult | null;
+  photoMs: number | null;
   saved: boolean;
 };
+
+function personOf(scan: ReceivedScan): PersonDocument | null {
+  if (scan.decoded.kind === 'driver-licence') return { kind: 'driver-licence', licence: scan.decoded.licence, photo: scan.photo };
+  if (scan.decoded.kind === 'smart-id') return { kind: 'smart-id', card: scan.decoded.card };
+  return null;
+}
 
 function hexPreview(base64: string): string {
   return Array.from(fromBase64(base64).slice(0, 8), (byte) => byte.toString(16).padStart(2, '0')).join(' ');
@@ -38,16 +49,39 @@ export default function ScanTestScreen() {
   const [info, setInfo] = useState<ScannerInfo | null>(() => Scanner?.getScannerInfo() ?? null);
   const [scans, setScans] = useState<readonly ReceivedScan[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
+  // Looked up by time on each render, so the sheet shows the photo once it has decoded.
+  const [detailsFor, setDetailsFor] = useState<number | null>(null);
+  const detailsScan = scans.find((scan) => scan.receivedAt === detailsFor) ?? null;
 
   useEffect(() => {
+    const pending = new Set<ReturnType<typeof setTimeout>>();
     const subscription = subscribeToScans((event) => {
       // Decode once, as the scan arrives, so re-renders never repeat the RSA work.
+      const bytes = fromBase64(event.bytes);
       const started = Date.now();
-      const decoded = decodeDocument(fromBase64(event.bytes));
+      const decoded = decodeDocument(bytes);
       const decodeMs = Date.now() - started;
-      setScans((current) => [{ ...event, decoded, decodeMs, saved: false }, ...current].slice(0, MAX_SCANS));
+      setScans((current) => [{ ...event, decoded, decodeMs, photo: null, photoMs: null, saved: false }, ...current].slice(0, MAX_SCANS));
+      if (decoded.kind !== 'driver-licence') return;
+
+      // The photo never holds up the result: it decodes on the next tick, once the result has rendered.
+      const timer = setTimeout(() => {
+        pending.delete(timer);
+        try {
+          const photoStarted = Date.now();
+          const photo = decodeLicencePhoto(bytes);
+          const photoMs = Date.now() - photoStarted;
+          setScans((current) => current.map((item) => (item.receivedAt === event.receivedAt ? { ...item, photo, photoMs } : item)));
+        } catch (cause) {
+          setProblem(`Couldn't read the licence photo (${cause instanceof Error ? cause.message : 'unknown error'}). Check the photo on the card.`);
+        }
+      }, 0);
+      pending.add(timer);
     });
-    return () => subscription?.remove();
+    return () => {
+      subscription?.remove();
+      for (const timer of pending) clearTimeout(timer);
+    };
   }, []);
 
   const switchToAppOutput = () => {
@@ -128,26 +162,41 @@ export default function ScanTestScreen() {
                 Press a scan trigger on the side of the device.
               </Text>
             ) : (
-              scans.map((scan) => (
-                <View key={scan.receivedAt} style={styles.scan}>
-                  <DocumentPreview decoded={scan.decoded} />
-                  <View style={styles.meta}>
-                    <Text variant="label" color={colors.inkSubtle} style={styles.metaText}>
-                      {`${scan.length} bytes · decoded in ${scan.decodeMs} ms · ${new Date(scan.receivedAt).toLocaleTimeString('en-ZA')}`}
-                      {scan.decoded.kind === 'unrecognised' ? ` · starts ${hexPreview(scan.bytes)}` : ''}
-                    </Text>
-                    {scan.saved ? (
-                      <Chip label="Saved" icon="check" tone="clear" />
+              scans.map((scan) => {
+                const person = personOf(scan);
+                return (
+                  <View key={scan.receivedAt} style={styles.scan}>
+                    {person ? (
+                      <PersonCard document={person} onOpen={() => setDetailsFor(scan.receivedAt)} />
                     ) : (
-                      <Chip label="Save for testing" icon="add" onPress={() => save(scan)} />
+                      <DocumentPreview decoded={scan.decoded} photo={scan.photo} />
                     )}
+                    <View style={styles.meta}>
+                      <Text variant="label" color={colors.inkSubtle} style={styles.metaText}>
+                        {`${scan.length} bytes · decoded in ${scan.decodeMs} ms`}
+                        {scan.photoMs !== null ? ` · photo in ${scan.photoMs} ms` : ''}
+                        {` · ${new Date(scan.receivedAt).toLocaleTimeString('en-ZA')}`}
+                        {scan.decoded.kind === 'unrecognised' ? ` · starts ${hexPreview(scan.bytes)}` : ''}
+                      </Text>
+                      {scan.saved ? (
+                        <Chip label="Saved" icon="check" tone="clear" />
+                      ) : (
+                        <Chip label="Save for testing" icon="add" onPress={() => save(scan)} />
+                      )}
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         ) : null}
       </ScrollView>
+
+      {detailsScan ? (
+        <DocumentSheet onClose={() => setDetailsFor(null)}>
+          <DocumentPreview decoded={detailsScan.decoded} photo={detailsScan.photo} />
+        </DocumentSheet>
+      ) : null}
     </View>
   );
 }

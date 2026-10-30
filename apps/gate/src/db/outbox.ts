@@ -9,12 +9,9 @@ type OutboxRow = {
   payload: string;
 };
 
+// The outbox only ever holds what JSON.stringify wrote, so an object at the top level is all there is to check.
 function isPayload(value: unknown): value is GateEventPayload {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Object.values(value).every((item) => item === null || ['string', 'number', 'boolean'].includes(typeof item))
-  );
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function toEvent(row: OutboxRow): GateEvent {

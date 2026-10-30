@@ -34,6 +34,47 @@ const MIGRATIONS: readonly string[] = [
     value TEXT NOT NULL
   );
   `,
+  // Open visits only: a visit's row goes when it closes, and its full story stays in the events. Identifiers are
+  // stored normalised so the rules compare like with like. person_key is a keyed hash, never an ID number.
+  `
+  CREATE TABLE visits (
+    id TEXT PRIMARY KEY NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('vehicle', 'pedestrian')),
+    person_key TEXT NOT NULL,
+    co_driver_keys TEXT NOT NULL,
+    vin TEXT,
+    plate TEXT,
+    disc_number TEXT,
+    occupants INTEGER,
+    visit_type TEXT NOT NULL,
+    entered_at INTEGER NOT NULL,
+    person_name TEXT NOT NULL,
+    vehicle_description TEXT
+  );
+  CREATE INDEX visits_person_key ON visits (person_key);
+  CREATE INDEX visits_vin ON visits (vin);
+  CREATE INDEX visits_plate ON visits (plate);
+  CREATE INDEX visits_disc_number ON visits (disc_number);
+  CREATE TABLE vehicle_sightings (
+    vin TEXT NOT NULL,
+    plate TEXT NOT NULL,
+    last_seen_at INTEGER NOT NULL,
+    PRIMARY KEY (vin, plate)
+  );
+  CREATE INDEX vehicle_sightings_plate ON vehicle_sightings (plate);
+  `,
+  // Who is on duty on this device. ended_at stays null while a shift is on; its full story stays in the events.
+  `
+  CREATE TABLE shifts (
+    id TEXT PRIMARY KEY NOT NULL,
+    gate_user_id TEXT NOT NULL,
+    post TEXT NOT NULL,
+    period TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
+    ended_at INTEGER
+  );
+  CREATE INDEX shifts_open ON shifts (ended_at);
+  `,
 ];
 
 export type LocalDatabase = {

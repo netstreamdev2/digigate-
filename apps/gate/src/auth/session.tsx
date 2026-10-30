@@ -1,5 +1,6 @@
 import type { GateEventPayload, GateEventType } from '@digigate/core';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
 
 import type { FailureRecord } from '@/db/sign-in-failures';
 
@@ -10,15 +11,22 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MS = 5 * 60_000;
 const IDLE_CHECK_MS = 10_000;
 
+export type LockReason = 'manual' | 'idle' | 'screen-off';
+
 export type SessionState =
   | { status: 'signed-out' }
   | { status: 'active'; user: GateUser; startedAt: number }
-  | { status: 'locked'; user: GateUser; startedAt: number };
+  | { status: 'locked'; user: GateUser; startedAt: number; reason: LockReason };
 
 export type SignInResult =
   | { ok: true }
   | { ok: false; reason: 'wrong-details'; attemptsLeft: number }
   | { ok: false; reason: 'locked-out'; retryAt: number };
+
+export type SupervisorResult =
+  | { ok: true; supervisor: GateUser }
+  | { ok: false; reason: 'not-a-supervisor' }
+  | Exclude<SignInResult, { ok: true }>;
 
 /** Where sign-in reads guards and keeps its records. On the device: the encrypted local database. */
 export type SessionStore = {
@@ -33,6 +41,8 @@ type SessionApi = {
   state: SessionState;
   signIn(employeeNumber: string, pin: string): Promise<SignInResult>;
   unlock(pin: string): Promise<SignInResult>;
+  /** Checks a supervisor's employee number and PIN for an override, with the same lockout and records as sign-in. */
+  confirmSupervisor(employeeNumber: string, pin: string): Promise<SupervisorResult>;
   lock(): void;
   signOut(): void;
   /** Called on every touch, so the idle lock measures real inactivity. */
@@ -119,18 +129,29 @@ export function SessionProvider({ store, idleLockMinutes, children }: Props) {
       if (result.ok) {
         await store.record('unlock', current.user.id);
         lastActivity.current = Date.now();
-        setState({ ...current, status: 'active' });
+        setState({ status: 'active', user: current.user, startedAt: current.startedAt });
       }
       return result;
     },
     [attempt, store],
   );
 
+  const confirmSupervisor = useCallback(
+    async (employeeNumber: string, pin: string): Promise<SupervisorResult> => {
+      const user = await store.findUser(employeeNumber);
+      const result = await attempt(employeeNumber, pin, user);
+      if (!result.ok) return result;
+      if (!user || user.role !== 'supervisor') return { ok: false, reason: 'not-a-supervisor' };
+      return { ok: true, supervisor: user };
+    },
+    [attempt, store],
+  );
+
   const lockWith = useCallback(
-    (reason: 'manual' | 'idle') => {
+    (reason: LockReason) => {
       const current = stateRef.current;
       if (current.status !== 'active') return;
-      setState({ ...current, status: 'locked' });
+      setState({ ...current, status: 'locked', reason });
       recordInBackground('lock', current.user.id, { reason });
     },
     [recordInBackground],
@@ -157,9 +178,18 @@ export function SessionProvider({ store, idleLockMinutes, children }: Props) {
     return () => clearInterval(timer);
   }, [idleLockMinutes, lockWith, state.status]);
 
+  // A shared device that goes dark, or leaves DigiGate, locks at once: whoever picks it up next needs a PIN.
+  useEffect(() => {
+    if (state.status !== 'active') return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'background') lockWith('screen-off');
+    });
+    return () => subscription.remove();
+  }, [lockWith, state.status]);
+
   const api = useMemo<SessionApi>(
-    () => ({ state, signIn, unlock, lock, signOut, recordActivity, storageProblem }),
-    [lock, recordActivity, signIn, signOut, state, storageProblem, unlock],
+    () => ({ state, signIn, unlock, confirmSupervisor, lock, signOut, recordActivity, storageProblem }),
+    [confirmSupervisor, lock, recordActivity, signIn, signOut, state, storageProblem, unlock],
   );
 
   return <SessionContext.Provider value={api}>{children}</SessionContext.Provider>;

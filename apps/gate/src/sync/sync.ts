@@ -1,3 +1,4 @@
+import type { JsonValue } from '@digigate/core';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { isPinHash } from '@/auth/pin';
@@ -5,7 +6,7 @@ import { isGateUserRole, type GateUser } from '@/auth/users';
 import { replaceGateUsers } from '@/db/gate-users';
 import { pendingEvents, removeEvents } from '@/db/outbox';
 
-import type { Database } from './database-types';
+import type { Database, Json } from './database-types';
 import type { GateSupabase } from './supabase';
 
 const UPLOAD_BATCH_SIZE = 100;
@@ -19,6 +20,15 @@ type ServerGateUser = Pick<
   Database['public']['Tables']['gate_users']['Row'],
   'id' | 'employee_number' | 'first_name' | 'last_name' | 'role' | 'pin_hash' | 'active'
 >;
+
+/** Event payloads are read-only; the generated Json type wants mutable arrays, so arrays are copied on the way out. */
+function toJson(value: JsonValue): Json {
+  if (Array.isArray(value)) return value.map(toJson);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, toJson(item)]));
+  }
+  return value;
+}
 
 function toGateUser(row: ServerGateUser): GateUser | null {
   if (!isPinHash(row.pin_hash) || !isGateUserRole(row.role)) return null;
@@ -60,7 +70,7 @@ export async function syncOnce(client: GateSupabase, db: SQLiteDatabase): Promis
         gate_user_id: event.gateUserId,
         type: event.type,
         occurred_at: new Date(event.occurredAt).toISOString(),
-        payload: event.payload,
+        payload: toJson(event.payload),
       })),
       { onConflict: 'id', ignoreDuplicates: true },
     );

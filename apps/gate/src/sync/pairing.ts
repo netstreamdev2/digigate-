@@ -2,6 +2,7 @@ import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { clearOutbox } from '@/db/outbox';
+import { clearVisits } from '@/db/visits';
 
 import type { GateSupabase } from './supabase';
 
@@ -47,5 +48,6 @@ export async function pairDevice(client: GateSupabase, db: SQLiteDatabase, code:
   if (sessionError) return { ok: false, reason: 'server-error' };
 
   await clearOutbox(db);
+  await clearVisits(db);
   return { ok: true };
 }
