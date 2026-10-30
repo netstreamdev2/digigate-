@@ -14,8 +14,14 @@ const fromHex = (hex: string) => Uint8Array.from(hex.match(/../g) ?? [], (pair) 
 
 let secret: Promise<Uint8Array> | null = null;
 
-// Until pairing hands the device its organisation's key, each device makes its own and keeps it in the Keystore.
-// Pairing discards every visit and event from before it, so nothing keyed with this one outlives it.
+/** Pairing hands the device its organisation's key, so a person matches at every gate. */
+export async function setPersonKeySecret(hex: string): Promise<void> {
+  await SecureStore.setItemAsync(SECRET_NAME, hex);
+  secret = Promise.resolve(fromHex(hex));
+}
+
+// Until pairing replaces it, a device makes its own key and keeps it in the Keystore. Pairing discards every visit and
+// event from before it, so nothing keyed with this one outlives it.
 function personKeySecret(): Promise<Uint8Array> {
   secret ??= (async () => {
     const stored = await SecureStore.getItemAsync(SECRET_NAME);

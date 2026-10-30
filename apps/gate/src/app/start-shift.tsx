@@ -11,7 +11,7 @@ import { OptionTile } from '@/components/option-tile';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
-import { shiftPeriodAt, siteConfig } from '@/site/site-config';
+import { currentPosts, shiftPeriodAt, siteConfig } from '@/site/site-config';
 import { useShift } from '@/shift/shift-context';
 
 export default function StartShiftScreen() {
@@ -19,7 +19,8 @@ export default function StartShiftScreen() {
   const user = useCurrentUser();
   const { signOut } = useSession();
   const { start, problem } = useShift();
-  const [post, setPost] = useState<string>(siteConfig.posts[0].code);
+  const [posts] = useState(currentPosts);
+  const [post, setPost] = useState<string>(posts[0]?.code ?? '');
   const [period, setPeriod] = useState<string>(() => shiftPeriodAt(Date.now()).code);
   const [starting, setStarting] = useState(false);
   const [startProblem, setStartProblem] = useState<string | null>(null);
@@ -62,7 +63,7 @@ export default function StartShiftScreen() {
           Your post
         </Text>
         <View style={styles.tiles} accessibilityRole="radiogroup">
-          {siteConfig.posts.map((option) => (
+          {posts.map((option) => (
             <OptionTile
               key={option.code}
               label={option.label}

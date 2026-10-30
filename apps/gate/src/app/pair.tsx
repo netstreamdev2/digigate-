@@ -1,6 +1,6 @@
 import { colors, space } from '@digigate/design';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,8 +9,11 @@ import { Keypad } from '@/components/keypad';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
+import { fromBase64 } from '@/lib/bytes';
 import { PAIRING_CODE_LENGTH, type PairingResult } from '@/sync/pairing';
 import { useSync } from '@/sync/sync-context';
+
+import { subscribeToScans } from '../../modules/scanner';
 
 const problems: Record<Exclude<PairingResult, { ok: true }>['reason'], string> = {
   'invalid-code': `That isn't a pairing code. Codes are ${PAIRING_CODE_LENGTH} digits.`,
@@ -47,6 +50,17 @@ export default function PairScreen() {
     }
   };
 
+  // The QR on the dashboard carries the same code, so a scan saves typing it.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  useEffect(() => {
+    const subscription = subscribeToScans((event) => {
+      const scanned = String.fromCharCode(...fromBase64(event.bytes));
+      if (new RegExp(`^\\d{${PAIRING_CODE_LENGTH}}$`).test(scanned)) void submitRef.current(scanned);
+    });
+    return () => subscription?.remove();
+  }, []);
+
   const onDigit = (digit: string) => {
     setProblem(null);
     if (code.length >= PAIRING_CODE_LENGTH) return;
@@ -67,7 +81,7 @@ export default function PairScreen() {
         </Text>
         <Text variant="display">Pair this device</Text>
         <Text variant="label" color={colors.inkMuted}>
-          {`Enter the ${PAIRING_CODE_LENGTH}-digit code from the DigiGate dashboard.`}
+          {`Scan the QR on the DigiGate dashboard, or type its ${PAIRING_CODE_LENGTH}-digit code.`}
         </Text>
       </View>
 
@@ -84,7 +98,7 @@ export default function PairScreen() {
         <ResultBanner
           tone="warning"
           title="Can't pair this build"
-          message="It was built without Supabase settings. Add them to apps/gate/.env and restart the dev server."
+          message="It was built without server settings. Add them to apps/gate/.env and restart the dev server."
         />
       ) : null}
       {problem ? <ResultBanner tone="warning" title="Not paired" message={problem} /> : null}

@@ -4,15 +4,15 @@ import { AppState } from 'react-native';
 import { useLocalDatabase } from '@/db/database-context';
 import { countPendingEvents } from '@/db/outbox';
 
+import { serverConfigured } from './device-api';
 import { pairDevice, type PairingResult } from './pairing';
-import { createGateSupabase } from './supabase';
 import { syncOnce } from './sync';
 
 const SYNC_INTERVAL_MS = 60_000;
 const UPLOAD_DELAY_MS = 2_000;
 
 export type SyncStatus =
-  /** Built without Supabase settings: everything stays on this device. */
+  /** Built without server settings: everything stays on this device. */
   | { state: 'local-only' }
   | { state: 'not-paired' }
   | { state: 'syncing'; lastSyncedAt: number | null }
@@ -32,10 +32,7 @@ const SyncContext = createContext<SyncApi | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const { db } = useLocalDatabase();
-  const client = useMemo(() => createGateSupabase(db), [db]);
-  const [status, setStatus] = useState<SyncStatus>(
-    client ? { state: 'syncing', lastSyncedAt: null } : { state: 'local-only' },
-  );
+  const [status, setStatus] = useState<SyncStatus>(serverConfigured ? { state: 'syncing', lastSyncedAt: null } : { state: 'local-only' });
   const [pendingEvents, setPendingEvents] = useState(0);
   const running = useRef(false);
   const lastSyncedAt = useRef<number | null>(null);
@@ -46,14 +43,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [db]);
 
   const syncNow = useCallback(async () => {
-    if (!client || running.current) {
+    if (!serverConfigured || running.current) {
       await refreshPending();
       return;
     }
     running.current = true;
     setStatus({ state: 'syncing', lastSyncedAt: lastSyncedAt.current });
     try {
-      const outcome = await syncOnce(client, db);
+      const outcome = await syncOnce(db);
       if (outcome.status === 'synced') {
         lastSyncedAt.current = outcome.at;
         setStatus({ state: 'synced', lastSyncedAt: outcome.at });
@@ -70,7 +67,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       running.current = false;
       await refreshPending();
     }
-  }, [client, db, refreshPending]);
+  }, [db, refreshPending]);
 
   const eventRecorded = useCallback(() => {
     void refreshPending();
@@ -80,31 +77,26 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const pair = useCallback(
     async (code: string): Promise<PairingResult> => {
-      if (!client) return { ok: false, reason: 'server-error' };
-      const result = await pairDevice(client, db, code);
+      if (!serverConfigured) return { ok: false, reason: 'server-error' };
+      const result = await pairDevice(db, code);
       if (result.ok) await syncNow();
       return result;
     },
-    [client, db, syncNow],
+    [db, syncNow],
   );
 
   useEffect(() => {
     void syncNow();
     const timer = setInterval(() => void syncNow(), SYNC_INTERVAL_MS);
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        if (client) void client.auth.startAutoRefresh();
-        void syncNow();
-      } else if (client) {
-        void client.auth.stopAutoRefresh();
-      }
+      if (state === 'active') void syncNow();
     });
     return () => {
       clearInterval(timer);
       subscription.remove();
       if (uploadTimer.current) clearTimeout(uploadTimer.current);
     };
-  }, [client, syncNow]);
+  }, [syncNow]);
 
   const api = useMemo<SyncApi>(
     () => ({ status, pendingEvents, syncNow, pair, eventRecorded }),

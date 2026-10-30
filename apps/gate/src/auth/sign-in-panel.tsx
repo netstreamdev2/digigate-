@@ -143,12 +143,10 @@ export function SignInPanel() {
         />
       ) : null}
       {guardCount === 0 && !lockedUser ? (
-        <View style={styles.noGuards}>
-          <ResultBanner tone="warning" title="No guards on this device yet" message={noGuardsMessage(sync.status)} />
-          {sync.status.state === 'not-paired' ? (
-            <PillButton label="Pair this device" variant="secondary" onPress={() => router.push('/pair')} />
-          ) : null}
-        </View>
+        <ResultBanner tone="warning" title="No guards on this device yet" message={noGuardsMessage(sync.status)} />
+      ) : null}
+      {sync.status.state === 'not-paired' && !pinStep ? (
+        <PillButton label="Pair this device" variant="secondary" onPress={() => router.push('/pair')} />
       ) : null}
 
       <View style={styles.controls}>
@@ -199,8 +197,5 @@ const styles = StyleSheet.create({
   },
   controls: {
     gap: space.md,
-  },
-  noGuards: {
-    gap: space.sm,
   },
 });

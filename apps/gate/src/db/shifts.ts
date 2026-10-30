@@ -47,6 +47,10 @@ export async function closeShift(db: SQLiteDatabase, shift: Shift, at: number, r
   await db.withTransactionAsync(() => writeEnd(db, shift, at, reason));
 }
 
+export async function clearShifts(db: SQLiteDatabase): Promise<void> {
+  await db.runAsync('DELETE FROM shifts');
+}
+
 /** Puts a guard on duty, ending the shift of whoever the device was still on. */
 export async function beginShift(db: SQLiteDatabase, shift: Shift): Promise<void> {
   await db.withTransactionAsync(async () => {

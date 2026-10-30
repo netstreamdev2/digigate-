@@ -15,14 +15,14 @@ import { ResultBanner } from '@/components/result-banner';
 import { openLocalDatabase, type LocalDatabase } from '@/db/database';
 import { LocalDatabaseProvider, useLocalDatabase } from '@/db/database-context';
 import { countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users';
-import { hasValueWithPrefix } from '@/db/kv';
 import { appendEvent } from '@/db/outbox';
 import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
+import { loadSyncedPosts } from '@/db/site-posts';
 import { siteConfig } from '@/site/site-config';
 import { seedUsers } from '@/demo/seed-users';
 import { newEventId } from '@/lib/ids';
 import { ShiftProvider, useShift } from '@/shift/shift-context';
-import { AUTH_KEY_PREFIX } from '@/sync/supabase';
+import { deviceToken } from '@/sync/device-api';
 import { SyncProvider, useSync } from '@/sync/sync-context';
 
 import { setScansPaused, subscribeToScans } from '../../modules/scanner';
@@ -32,9 +32,10 @@ SplashScreen.preventAutoHideAsync();
 async function prepareDatabase(): Promise<LocalDatabase> {
   const local = await openLocalDatabase();
   // Development builds start with the demo guards until the device is paired and syncs real ones.
-  if (__DEV__ && (await countGateUsers(local.db)) === 0 && !(await hasValueWithPrefix(local.db, AUTH_KEY_PREFIX))) {
+  if (__DEV__ && (await countGateUsers(local.db)) === 0 && !(await deviceToken())) {
     await replaceGateUsers(local.db, seedUsers);
   }
+  await loadSyncedPosts(local.db);
   return local;
 }
 

@@ -16,6 +16,21 @@ export type PostOption = {
   tint: keyof typeof colors;
 };
 
+/** A post as the dashboard sends it. The app adds its own icon and colour. */
+export type SyncedPost = Pick<PostOption, 'code' | 'label' | 'lanes'>;
+
+export function isSyncedPost(value: unknown): value is SyncedPost {
+  if (typeof value !== 'object' || value === null) return false;
+  const { code, label, lanes } = value as Record<string, unknown>;
+  return (
+    typeof code === 'string' &&
+    typeof label === 'string' &&
+    Array.isArray(lanes) &&
+    lanes.length > 0 &&
+    lanes.every((lane) => lane === 'vehicle' || lane === 'pedestrian')
+  );
+}
+
 export type ShiftPeriodOption = Omit<PostOption, 'lanes'> & {
   hours: string;
   /** Hour of the day at the site it starts. */
@@ -66,7 +81,25 @@ export const siteConfig = {
   } satisfies RuleConfig,
 } as const;
 
-const postOf = (code: string): PostOption | undefined => siteConfig.posts.find((post) => post.code === code);
+const POST_TINTS = ['tileSky', 'tileLilac', 'tileMint', 'tileButter'] as const;
+
+let syncedPosts: readonly PostOption[] = [];
+
+/** The site's posts from the dashboard. Any number of them works: every screen reads this list. */
+export function applySyncedPosts(posts: readonly SyncedPost[]): void {
+  syncedPosts = posts.map((post, index) => ({
+    ...post,
+    icon: post.lanes.includes('vehicle') ? 'vehicle' : 'pedestrian',
+    tint: POST_TINTS[index % POST_TINTS.length] ?? 'tileSky',
+  }));
+}
+
+/** The dashboard's posts once they've synced; until then this build's defaults. */
+export function currentPosts(): readonly PostOption[] {
+  return syncedPosts.length > 0 ? syncedPosts : siteConfig.posts;
+}
+
+const postOf = (code: string): PostOption | undefined => currentPosts().find((post) => post.code === code);
 
 export function postLabel(code: string): string {
   return postOf(code)?.label ?? code;
