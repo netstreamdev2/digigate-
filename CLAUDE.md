@@ -4,7 +4,7 @@ Gate access control for boom-gated sites. A guard scans the driver's SA licence 
 
 The first customer is a **hospital**. The product is built to be reused for **residential estates** next, and later other gated sites (office parks, schools, mines). See Site types and tenancy.
 
-Status (2026-10-30): the gate app runs live on the DT50, offline, with no demo data in the gate flows: guard sign-in, shifts, car entry and exit, walk-ins, every rule, supervisor override and an encrypted local database. Licence (including the photo), disc, smart ID and ID-number barcodes all decode in `packages/core`. The dashboard's four role pages are design mock-ups on demo data. Supabase isn't connected yet. Next: the `digigate` schema on photo-fix, sync, onboarding, then the dashboards on real data. The selfie, tones and geofence wait for the next native build.
+Status (2026-10-30): the gate app runs live on the DT50, offline, with no demo data in the gate flows: guard sign-in, shifts, car entry and exit, walk-ins, every rule, supervisor override and an encrypted local database. Licence (including the photo), disc, smart ID and ID-number barcodes all decode in `packages/core`. The dashboard's four role pages are design mock-ups on demo data. The database, device functions and app sync are written and tested locally; next they go onto DigiGate's own Supabase project, then dashboard sign-in, onboarding and the control room on real data. The selfie, tones and geofence wait for the next native build.
 
 ## Non-negotiables
 
@@ -40,7 +40,7 @@ These override convenience, deadlines and "just for now".
 | Native | Local Expo module `scanner` in Kotlin: receives the vendor's scan broadcast and emits raw bytes (base64) plus symbology to JS through one vendor-neutral interface. Keep it thin, no parsing in Kotlin |
 | Local DB | `expo-sqlite` with SQLCipher; key held in the Android Keystore (`expo-secure-store`) |
 | Builds | EAS Build in the cloud, for development builds and release APKs (EAS internal distribution, no Play Store). No local Android builds and no emulator: the dev PC is low on RAM (see Environment) |
-| Backend | Supabase: Postgres, Auth, Realtime, Edge Functions, inside the live **Digilog360** project (London, eu-west-2) in an isolated `digigate` schema. Everything runs first on its **photo-fix** preview branch (`lrtbiydcqlnvewiwlukc`); never rename it, and never change digilog360's own tables, policies or functions |
+| Backend | Supabase: Postgres, Auth, Realtime, Edge Functions, in **DigiGate's own project**, separate from Digilog360, so a problem on one side never takes the other down. Now a free project (`fgtuednylvrknqeyxizz`, Ireland) holding test data only. Before any real site, create a clean Pro project and run the same migrations on it. A unified dashboard over both products comes later; each side must keep its own login, or an outage on one side would lock people out of the other. Tables live in the `digigate` schema |
 | Dashboard | Next.js, latest stable (App Router), on Vercel |
 | Shared | `packages/core`: decoders, rules engine, domain types. Used by the app, the dashboard and server-side re-validation |
 | Monorepo | pnpm 12 workspaces with hoisted `node_modules`. pnpm's supply-chain settings (`allowBuilds`, `minimumReleaseAgeExclude`) live in `pnpm-workspace.yaml` |
@@ -86,7 +86,8 @@ supabase/
 
 ## Site types and tenancy
 
-- **Multi-tenant from day one.** Organisation → Site → Gate → Device. Every table carries `org_id` (and `site_id` where it applies), and every RLS policy scopes by organisation. One Supabase project serves all customers; a customer that demands isolation gets its own project running the same code and migrations.
+- **Who's who.** DigiGate rents the system to a **security company** (an organisation), and the company's **clients** (a hospital, an estate) hire it. Guards, devices and billing belong to the company; the sites and their records belong to the client. If a client changes company, the records stay with the client: the old company loses access at once, and the new one sees only what it recorded itself. `digigate.transfer_client` does this, and the rule is enforced in row level security. `client_viewer` gives a client read-only access to its own sites. Who is legally responsible for the data across these three parties is for the lawyer to confirm.
+- **Multi-tenant from day one.** Organisation → Client → Site → Post → Device. Every table carries `org_id` (and `site_id` where it applies), and every RLS policy scopes by organisation. One Supabase project serves all DigiGate customers, separate from Digilog360; a customer that demands isolation gets its own project running the same code and migrations.
 - **Site type is configuration, not code.** Each site has a type (`hospital`, `estate`) that supplies defaults: visit types, registered-person categories, whether a host is captured, which rules are enabled, rule limits and UI labels. A site can override its defaults.
 - No `if (siteType === 'hospital')` in components or rules. Behaviour differs only through config values the code reads.
 - UI copy that differs by site type ("Staff" vs "Resident") comes from config label keys, never literals.
@@ -222,10 +223,10 @@ An authorised co-driver was scanned in with the car, so leaving on foot raises n
 
 How it's built (`apps/gate/src/db`, `apps/gate/src/sync`):
 - Local database: `expo-sqlite` with SQLCipher, keyed with a random 256-bit key held in `expo-secure-store`. Expo Go has no SQLCipher, so there the file is unencrypted. The app detects this (`PRAGMA cipher_version`), and the shift screen shows it. Local schema changes go in `MIGRATIONS` in `db/database.ts` (append only, tracked by `PRAGMA user_version`).
-- Pairing: an admin issues a one-time 10-digit code for a device row. The app sends it to the `pair-device` Edge Function, which creates the device's own auth user and returns a session. The session is stored in the encrypted database, never in plain storage. Pairing discards outbox events from before pairing, since they belong to no site.
+- Pairing: an admin issues a one-time 10-digit code for a device, shown as a QR and as digits. The app sends it to the `digigate-pair` Edge Function, which creates the device and returns its secret token and its organisation's person key, both kept in the Android Keystore. Devices are not login accounts; every later call goes to `digigate-sync` with the token. The server keeps only a SHA-256 hash of the token, and revoking a device in the dashboard ends its access at the next sync.
 - Sync runs on start, every 60 s, when the app returns to the foreground, and 2 s after any new event. One round uploads the outbox oldest first (idempotent upserts on the UUIDv7 id), deletes acknowledged events, then replaces the local guard list with the site's.
 - `gate_events.gate_user_id` has no foreign key on purpose: the log must never reject an event and leave the outbox stuck behind it.
-- `apps/gate/src/sync/database-types.ts` is hand-written. Replace it with `supabase gen types typescript` once the project is linked.
+- Edge Functions reach the database with the `SUPABASE_DB_URL` connection they are given and call functions such as `digigate.ingest_events`. Each runs as one transaction, so a dropped connection can't leave half an upload saved. Devices never touch the database or its API directly.
 
 ## Performance
 
@@ -279,7 +280,7 @@ A decode failure prompts a rescan. Never guess fields.
 - Audit events are append-only. No update or delete grants for anyone. So the server splits each event on arrival: a permanent part with no identifiers (time, gate, device, rule codes) and a separate erasable part (names, ID details, plates, VINs, photo, person key). One logged function is the only thing allowed to delete from the erasable part.
 - Retention: day 0 to 365 everything is shown in full; year 1 to 3 it's kept but masked, with full values only through the super user or a site admin they grant, all logged; **3 years after a visit's exit it is permanently erased**, including the keyed person hash. There is no hold, even for an open police case. Staff lose old visits one at a time but keep their staff record. Anonymous counts survive for the KPI charts. After 3 years an empty search proves nothing, so the dashboard must say so.
 - Demographics: sex and an age band (never an exact age) are read from the documents of scanned people only, so reports cover drivers and walk-ins. Passengers are a head count and guards never guess at them.
-- Schema changes live in `supabase/migrations/`, never made through the Supabase dashboard UI. DigiGate shares digilog360's project and digilog360 deploys with `supabase db push`, so **never run `supabase db push` against it**: one shared migration history would break digilog360's next deploy. Our SQL is applied through the SQL Editor with our own version table, and our Edge Functions are prefixed `digigate-`.
+- Schema changes live in `supabase/migrations/`, never made through the Supabase dashboard UI. Everything is in the `digigate` schema: nothing there is reachable unless a migration grants it.
 - Secrets live in env vars, EAS secrets and Vercel env. Never committed.
 
 ## Quality bar
@@ -345,7 +346,7 @@ Templates: `apps/gate/.env.example`, `apps/dashboard/.env.example`. Real values 
 
 | Name | Where | Notes |
 |---|---|---|
-| `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Gate app | Built into the app, which is safe for these two. Without them the app runs on local data only |
+| `EXPO_PUBLIC_SUPABASE_URL` | Gate app | Built into the app, which is safe. Without it the app runs on local data only |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Dashboard | Browser-safe |
 | `SUPABASE_SECRET_KEY` | Dashboard server code only | Bypasses RLS. Never `NEXT_PUBLIC_`, never in the app |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` | Edge Functions | Provided by Supabase automatically; nothing to set |
@@ -359,13 +360,14 @@ Run from the repo root unless noted.
 | Install | `pnpm install` |
 | Typecheck everything | `pnpm typecheck` |
 | Test everything | `pnpm test` |
+| Test the database | `pnpm test:db` runs every migration on a real Postgres engine and checks who can reach what |
 | Gate app in Expo Go on a phone (Wi-Fi) | `pnpm exec expo start --lan --go` in `apps/gate`, then open `exp://<laptop IP>:8081` in Expo Go. `--go` is required now that `expo-dev-client` is installed |
 | Development build (cloud) | `eas build --platform android --profile development` in `apps/gate`. Install the APK on the DT50, then run `pnpm exec expo start --localhost --dev-client` (with the IPv4 `NODE_OPTIONS` below) and open it from the dev client |
 | DT50 says "There was a problem loading the project" | Unplugging or a USB reset clears the port forward. Run `adb reverse tcp:8081 tcp:8081`, then tap **Reload** |
 | Hash a PIN for the seed list | `node scripts/hash-pin.mjs <6-digit PIN>` in `apps/gate` |
 | Link the Supabase project (once) | From the repo root: `pnpm dlx supabase init` (creates `supabase/config.toml`, keeps the existing migrations), `pnpm dlx supabase login`, then `pnpm dlx supabase link --project-ref <ref>` |
-| Apply database migrations | `pnpm dlx supabase db push` (add `--include-seed` for the demo data, development projects only) |
-| Deploy the pairing function | `pnpm dlx supabase functions deploy pair-device --no-verify-jwt` |
+| Apply database migrations | Paste each new file from `supabase/migrations/`, in order, into the SQL Editor of the DigiGate project. `digigate.schema_version` shows what has run |
+| Deploy the device functions | `pnpm dlx supabase functions deploy digigate-pair digigate-sync --project-ref fgtuednylvrknqeyxizz --no-verify-jwt`. They have no user login: pairing proves itself with the code, sync with the device token |
 | Gate app dev server (Expo Go over USB) | `adb reverse tcp:8081 tcp:8081`, then in `apps/gate` with `NODE_OPTIONS=--dns-result-order=ipv4first` set: `pnpm exec expo start --localhost`. Open `exp://127.0.0.1:8081` in Expo Go (or `adb shell am start -a android.intent.action.VIEW -d exp://127.0.0.1:8081 host.exp.exponent`). Without the IPv4 flag, Metro binds only to `::1`, the USB forward can't reach it, and Expo Go shows "Failed to download remote update" |
 | Dashboard dev server | `pnpm dashboard dev` |
 | Dashboard lint | `pnpm dashboard lint` |
