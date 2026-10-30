@@ -4,7 +4,7 @@ Gate access control for boom-gated sites. A guard scans the driver's SA licence 
 
 The first customer is a **hospital**. The product is built to be reused for **residential estates** next, and later other gated sites (office parks, schools, mines). See Site types and tenancy.
 
-Status (2026-10-28): monorepo scaffolded. The gate app has a design mock-up (home, vehicle entry, vehicle exit with a vehicle-swap block) built on Expo Router, using provisional tokens in `packages/design`, Astra's custom icons and Inter / Inter Tight. All data in it comes from `apps/gate/src/demo/` and is fake. The rules engine in `packages/core` is done and tested. The dashboard has an overview mock-up (KPI tiles, entries by hour, entries by type, open alerts, recent activity) on demo data from `apps/dashboard/src/demo/`, using the same tokens and icons. The gate app has guard sign-in (employee number + PIN, lockout, idle lock, switch guard) that works offline against an encrypted local database, an outbox of sign-in events, and Supabase sync and device pairing. The Supabase schema, RLS, `pair-device` Edge Function and demo seed are written but not yet applied: no Supabase project exists yet. The `scanner` module (Urovo adapter) and a scan-test screen (long-press the logo) are untested until the EAS development build is on the DT50. Next: create the Supabase project and apply the schema, verify scanning on the DT50, the `packages/core` decoders, then wire the gate screens to the rules engine.
+Status (2026-10-30): the gate app runs live on the DT50, offline, with no demo data in the gate flows: guard sign-in, shifts, car entry and exit, walk-ins, every rule, supervisor override and an encrypted local database. Licence (including the photo), disc, smart ID and ID-number barcodes all decode in `packages/core`. The dashboard's four role pages are design mock-ups on demo data. Supabase isn't connected yet. Next: the `digigate` schema on photo-fix, sync, onboarding, then the dashboards on real data. The selfie, tones and geofence wait for the next native build.
 
 ## Non-negotiables
 
@@ -26,7 +26,7 @@ These override convenience, deadlines and "just for now".
 - Scan engine: Honeywell **N5703** 2D imager (`persist.sys.scan.name`), Honeywell `hsmdecoder` service running. `persist.vendor.sys.scan.name` reports `se2030w`. Unresolved, and irrelevant as long as PDF417 decodes.
 - Preinstalled Urovo scanner stack: `com.ubx.datawedge`, `com.ubx.uscanner`, `com.ubx.barcodescanner.tool` (test app), SDK jars `com.ubx.usdk.jar` and `com.ubx.platform.jar`. Key remapping (`com.ubx.keyremap`) and RFID packages are present; UHF RFID hardware unconfirmed.
 - **NFC confirmed** (`android.hardware.nfc`, switched on). Android NFC reads 13.56 MHz cards (MIFARE, NTAG, DESFire). It can't read 125 kHz proximity cards.
-- Confirmed: reads the driver's licence and licence disc PDF417 as raw bytes through the `scanner` module (2026-10-29). **Not yet tested:** smart ID card, green ID book.
+- Confirmed: reads the driver's licence, licence disc and smart ID card PDF417 as raw bytes through the `scanner` module (2026-10-29). **Not yet tested:** green ID book.
 - Scan broadcast: Urovo's default is expected to be action `android.intent.ACTION_DECODE_DATA` with extras `barcode` (byte array), `length`, `barcodeType` and `barcode_string`. **Verify on the device in Phase 0** before relying on any of it.
 - `adb`: `%ANDROID_HOME%\platform-tools\adb.exe`, on the user PATH for new shells. scrcpy bundles its own copy; if the two versions differ, they restart each other's adb server.
 - Urovo draws a floating blue scan button over every app. Whether to hide it on gate devices is a Phase 0 decision.
@@ -40,7 +40,7 @@ These override convenience, deadlines and "just for now".
 | Native | Local Expo module `scanner` in Kotlin: receives the vendor's scan broadcast and emits raw bytes (base64) plus symbology to JS through one vendor-neutral interface. Keep it thin, no parsing in Kotlin |
 | Local DB | `expo-sqlite` with SQLCipher; key held in the Android Keystore (`expo-secure-store`) |
 | Builds | EAS Build in the cloud, for development builds and release APKs (EAS internal distribution, no Play Store). No local Android builds and no emulator: the dev PC is low on RAM (see Environment) |
-| Backend | Supabase: Postgres, Auth, Realtime, Edge Functions. Region: EU (Ireland) |
+| Backend | Supabase: Postgres, Auth, Realtime, Edge Functions, inside the live **Digilog360** project (London, eu-west-2) in an isolated `digigate` schema. Everything runs first on its **photo-fix** preview branch (`lrtbiydcqlnvewiwlukc`); never rename it, and never change digilog360's own tables, policies or functions |
 | Dashboard | Next.js, latest stable (App Router), on Vercel |
 | Shared | `packages/core`: decoders, rules engine, domain types. Used by the app, the dashboard and server-side re-validation |
 | Monorepo | pnpm 12 workspaces with hoisted `node_modules`. pnpm's supply-chain settings (`allowBuilds`, `minimumReleaseAgeExclude`) live in `pnpm-workspace.yaml` |
@@ -120,7 +120,9 @@ Visit types come from the site type; see Site types and tenancy.
 ## Users and sign-in
 
 - Admins create guards and supervisors in the dashboard: name, employee number, role, sites. No email needed.
-- Gate devices are shared. Each guard signs in with employee number + PIN, so every event records who did it. "Switch guard" handles shift change, and the app locks after a configurable idle time.
+- Gate devices are shared. Each guard signs in with employee number + 6-digit PIN, so every event records who did it. "Switch guard" handles shift change.
+- The app locks after `idleLockMinutes` (3) without a touch or a scan, or as soon as the screen goes off. The lock is a cover over the current screen, not a route change, so a car waiting on a supervisor keeps its result and decision. Scans are paused while it's up.
+- **Shifts.** After sign-in a guard with no open shift picks their post and shift period and flips a switch to go on duty (`shift_start`). Signing back in during the shift carries on with it; signing in over another guard's shift and starting one ends theirs (`handover`); a shift nobody ended runs out after `maxShiftHours` (14). The selfie that proves who was really on duty, so one guard can't work on another's login, comes with the next native build (it needs `expo-camera`). It is evidence for people to look at, never face recognition.
 - Sign-in works offline: devices hold the site's user list and PIN hashes from sync. Deactivating a user takes effect on each device at its next sync.
 - PIN hashes are PBKDF2-HMAC-SHA256 (`{ algorithm, iterations, salt, hash }`, 20,000 iterations for now; measure sign-in time on the DT50 before raising it). The app verifies with `@noble/hashes`; `scripts/hash-pin.mjs` and, later, the server produce the same format with platform crypto.
 - Five wrong PINs lock that employee number for five minutes. The count lives in the local database, so restarting the app doesn't clear it.
@@ -178,10 +180,13 @@ Plates are compared after normalising: uppercase, all non-alphanumerics stripped
 | `LICENCE_EXPIRED` | Driver's licence past expiry | AMBER |
 | `OCCUPANT_COUNT_DROP` | Fewer occupants out than in | INFO |
 | `OVERSTAY` | Open visit longer than the limit for its visit type | AMBER |
+| `IGNITION_RESTART_FAILED` | The driver couldn't stop the engine and start it again at the exit | RED |
+| `BOOT_CHECK_PROBLEM` | The guard opened the boot and found a problem | RED |
 
+- Every vehicle exit requires the ignition check: someone who took a car without its key can't restart it. The guard answers before Check is enabled. The boot check is optional, for when something looks suspicious.
 - The three driver rules are mutually exclusive; the most specific one wins, in table order.
 - `PLATE_VIN_HISTORY_CONFLICT` is AMBER, not RED: plates legitimately change on a provincial transfer, and personalised plates move between vehicles.
-- Checked at entry only: `DISC_EXPIRED`, `LICENCE_EXPIRED`, `PLATE_VIN_HISTORY_CONFLICT`, `UNFAMILIAR_VEHICLE`. Checked at exit only: the three driver rules, `NO_ENTRY_RECORD`, `OCCUPANT_COUNT_DROP`, `OVERSTAY`. Both: `PLATE_DISC_MISMATCH`, `DISC_CLONE_ON_SITE`.
+- Checked at entry only: `DISC_EXPIRED`, `LICENCE_EXPIRED`, `PLATE_VIN_HISTORY_CONFLICT`, `UNFAMILIAR_VEHICLE`. Checked at exit only: the three driver rules, `NO_ENTRY_RECORD`, `OCCUPANT_COUNT_DROP`, `OVERSTAY`, `IGNITION_RESTART_FAILED`, `BOOT_CHECK_PROBLEM`. Both: `PLATE_DISC_MISMATCH`, `DISC_CLONE_ON_SITE`.
 - A car flagged `DISC_CLONE_ON_SITE` isn't also reported as `DUPLICATE_ENTRY`, and a clone on site suppresses `PLATE_VIN_HISTORY_CONFLICT` for the same evidence.
 - Without an entry record there's no entry driver, so `UNKNOWN_DRIVER` doesn't fire alongside `NO_ENTRY_RECORD`. `DRIVER_VEHICLE_MISMATCH` and `WALKED_IN_DRIVING_OUT` still do.
 - Documents are valid through their whole expiry date, judged by the calendar day at the site (`RuleConfig.utcOffsetMinutes`).
@@ -249,8 +254,8 @@ Verify every format against real scans in Phase 0 and update this section.
   14. expiry date, `YYYY-MM-DD`
   - The plate comes *before* the register number. Real scan in `fixtures.local/licence-disc/`.
 - **Urovo delivery quirks:** the `barcodeType` extra reports PDF417 as `22`, and every scan arrives twice, about 2 ms apart (once per broadcast action). The `scanner` module drops an identical scan inside 250 ms; that fix needs a build after 2026-10-29.
-- **Smart ID card**: PDF417 on the back. Fields TBC.
-- **Green ID book**: barcode carrying the ID number. Symbology TBC.
+- **Smart ID card**: PDF417 on the back, plain ASCII, 12 fields separated by `|` (checked on a real card 2026-10-29): surname, names, sex (`M`/`F`), nationality, ID number, birth date (`DD MMM YYYY`), country of birth, status (e.g. `CITIZEN`), issue date, a 5-digit security number, then a 9-digit and a 104-digit number whose meaning isn't documented (shape-checked, not read). No photo: it is only on the chip. Checks: ID check digit, birth date, gender and citizenship (11th ID digit) against the ID number, issued after birth.
+- **Green ID book**: a barcode carrying only the 13-digit ID number (to confirm on a real book). The small barcode beside the PDF417 on a smart ID carries the same. A scan that is only a valid ID number asks the guard which it is: a smart ID gets a rescan of its large barcode; an ID book gets its name and sex typed in, and the record is marked `green-id-book` and `manual`. Birth date, gender and citizenship come from the ID number.
 
 A decode failure prompts a rescan. Never guess fields.
 
@@ -264,16 +269,17 @@ A decode failure prompts a rescan. Never guess fields.
 - **No PII in logs**: console, crash reports, analytics, error messages, test output. PII here means names, ID numbers, licence numbers, plates, VINs and photos. Log rule codes and event IDs instead.
 - ID numbers and licence numbers are stored as a keyed HMAC for matching plus an encrypted value for investigations. Never a plain hash: SA ID numbers are structured enough to brute-force.
 - On screen: the gate shows the **current scan in full**, because the guard compares it with the physical document. Everywhere else (history, dashboard lists, exports) identifiers are masked unless the role needs the full value.
-- Licence photo: the barcode holds a ~200 × 250 photo in an undocumented proprietary format ("WI"), with no open decoder. barKoder, a commercial SDK, claims to extract it; that's an open decision. The smart ID card's barcode has no photo; it's only on the chip, which needs government keys.
+- Licence photo: the barcode holds a 200 × 250 greyscale photo of about 620 bytes in Summus Wavelet Image format (header `57 49 04`, then big-endian height and width; Corel's `.wi`), checked on a real card 2026-10-29. There is no spec; the only original decoder is Summus's 32-bit Windows `swi32.dll`, and the community ports are decompiled from it. With the user's lawyer's approval (2026-10-29), `packages/core/src/documents/licence-photo/` is our own TypeScript port of the community decoder's greyscale path. It matches that decoder byte for byte on a real card (local test), runs offline, refuses damaged or unverified variants, and showed the photo on the DT50 on 2026-10-29. `decodeLicencePhoto` runs after the scan result is on screen, never in the scan path. The photo is shown for the current scan only: never cached, stored or synced. barKoder is ruled out. The smart ID card's barcode has no photo; it's only on the chip, which needs government keys.
 - The HMAC key is provisioned to devices at registration and held in the Android Keystore.
 - PINs are short, so they're stored as salted slow hashes, with lockout after repeated failures.
 - Enrolment photos exist only for the guard's visual check. No face recognition.
 - Device: SQLCipher-encrypted database, kiosk (lock-task) mode, and the guard sees only the current transaction, with no history browsing.
 - Supabase: RLS on every table, deny by default, scoped by `org_id`, policies in the same migration as the table. The `service_role` key exists only in Edge Functions and Vercel server code, never in the app or a browser bundle.
 - Dashboard: Supabase Auth with MFA required for every role. PII is fetched server-side only.
-- Audit events are append-only. No update or delete grants for anyone.
-- Retention: visitor PII is purged after a period configured per site (default 90 days, to be confirmed with each customer); anonymised aggregates are kept.
-- Schema changes go through `supabase/migrations/` only, never through the Supabase dashboard UI.
+- Audit events are append-only. No update or delete grants for anyone. So the server splits each event on arrival: a permanent part with no identifiers (time, gate, device, rule codes) and a separate erasable part (names, ID details, plates, VINs, photo, person key). One logged function is the only thing allowed to delete from the erasable part.
+- Retention: day 0 to 365 everything is shown in full; year 1 to 3 it's kept but masked, with full values only through the super user or a site admin they grant, all logged; **3 years after a visit's exit it is permanently erased**, including the keyed person hash. There is no hold, even for an open police case. Staff lose old visits one at a time but keep their staff record. Anonymous counts survive for the KPI charts. After 3 years an empty search proves nothing, so the dashboard must say so.
+- Demographics: sex and an age band (never an exact age) are read from the documents of scanned people only, so reports cover drivers and walk-ins. Passengers are a head count and guards never guess at them.
+- Schema changes live in `supabase/migrations/`, never made through the Supabase dashboard UI. DigiGate shares digilog360's project and digilog360 deploys with `supabase db push`, so **never run `supabase db push` against it**: one shared migration history would break digilog360's next deploy. Our SQL is applied through the SQL Editor with our own version table, and our Edge Functions are prefixed `digigate-`.
 - Secrets live in env vars, EAS secrets and Vercel env. Never committed.
 
 ## Quality bar
@@ -310,14 +316,17 @@ A decode failure prompts a rescan. Never guess fields.
 
 **Phase 4: Estates.** `estate` site type and its config; residents, domestic workers and their vehicles; host (unit and resident) on visits; visitor pre-registration by residents (invite code or QR sent by WhatsApp/SMS); arrival notifications to the host; worker permits with allowed days and times; `resident` role and a resident-facing app or portal.
 
-**Backlog (not until the user asks):** NFC staff cards (see Registered people), fake-licence detection, "Not me" exit alert for staff and residents, silent panic key, lockdown mode, incident pack for SAPS, scout detection, banned persons and protection orders, remote override approval, guard scorecard, device health, shift handover, paid parking, contractor pre-registration, plate camera OCR, parking occupancy, daily digest, plain-English search, cross-site watchlist, boom relay, ANPR, phone-camera scanning fallback (the camera library must expose raw bytes, not just text).
+**SOS (after sync exists).** The guard long-presses SOS and nothing changes on their own device: no sound, no vibration, nothing an attacker can see. The control room dashboard sounds a siren, and on-duty devices at other gates alarm. A device at the same gate only flashes, silently: a siren beside an attacker would give the guard away. It must also work from the lock screen. It needs a working connection, so don't ship the button until it has been proven end to end: a guard must never believe help is coming when it isn't.
+
+**Geofence (with the next native build).** Each post can have a location and a radius (50 m by default) set in the dashboard. On duty, a guard who walks out of their post's radius gets a warning on the device (a flashing screen edge and vibration) and the control room gets an alert. It works from the device's own GPS, so the check needs no connection; only the control room alert has to wait for a signal. The GPS watch runs apart from the scan path and never touches it. GPS drifts, so judge a fix by its accuracy and how long it lasts, never one reading. It tracks the device, not the person, and stores only leaving and returning, never a trail of where a guard walked. Toilet breaks and patrols are legitimate, so a **Stepping away** button takes a reason and pauses the geofence for about 10 minutes; the control room sees it, and it is logged.
+
+**Backlog (not until the user asks):** NFC staff cards (see Registered people), fake-licence detection, "Not me" exit alert for staff and residents, lockdown mode, incident pack for SAPS, scout detection, banned persons and protection orders, remote override approval, guard scorecard, device health, shift handover, paid parking, contractor pre-registration, plate camera OCR, parking occupancy, daily digest, plain-English search, cross-site watchlist, boom relay, ANPR, phone-camera scanning fallback (the camera library must expose raw bytes, not just text).
 
 ## Open decisions
 
 - Gate layout: one lane or separate entry and exit lanes? Devices per gate? Is the pedestrian gate a separate device?
-- Connectivity at the gate (Wi-Fi, LTE, none). Shapes sync intervals.
+- Connectivity at the gate (Wi-Fi, LTE, none). Shapes sync intervals, and SOS can't work without it.
 - Staff cards (for NFC, later): does the hospital already issue them, and are they 13.56 MHz (reusable) or 125 kHz (we issue our own)?
-- Visitor PII retention period.
 - Overstay limits per visit type; visiting hours.
 - Design tokens: pending from the user.
 - Android application ID: currently `com.digigate.gate`. Settle it before the first real install, because changing it later means reinstalling the app on every device.
@@ -351,7 +360,8 @@ Run from the repo root unless noted.
 | Typecheck everything | `pnpm typecheck` |
 | Test everything | `pnpm test` |
 | Gate app in Expo Go on a phone (Wi-Fi) | `pnpm exec expo start --lan --go` in `apps/gate`, then open `exp://<laptop IP>:8081` in Expo Go. `--go` is required now that `expo-dev-client` is installed |
-| Development build (cloud) | `eas build --platform android --profile development` in `apps/gate`. Install the APK on the DT50, then run `pnpm exec expo start` and open it from the dev client |
+| Development build (cloud) | `eas build --platform android --profile development` in `apps/gate`. Install the APK on the DT50, then run `pnpm exec expo start --localhost --dev-client` (with the IPv4 `NODE_OPTIONS` below) and open it from the dev client |
+| DT50 says "There was a problem loading the project" | Unplugging or a USB reset clears the port forward. Run `adb reverse tcp:8081 tcp:8081`, then tap **Reload** |
 | Hash a PIN for the seed list | `node scripts/hash-pin.mjs <6-digit PIN>` in `apps/gate` |
 | Link the Supabase project (once) | From the repo root: `pnpm dlx supabase init` (creates `supabase/config.toml`, keeps the existing migrations), `pnpm dlx supabase login`, then `pnpm dlx supabase link --project-ref <ref>` |
 | Apply database migrations | `pnpm dlx supabase db push` (add `--include-seed` for the demo data, development projects only) |
