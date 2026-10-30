@@ -17,8 +17,8 @@ type Field = {
 
 type Props = {
   alerts: readonly DemoAlert[];
-  /** The visit behind the first alert, shown expanded. */
-  expanded: {
+  /** The visit behind the first alert, shown expanded. Leave out for a plain list. */
+  expanded?: {
     initials: string;
     name: string;
     visitType: string;
@@ -45,7 +45,7 @@ export function AlertsPanel({ alerts, expanded }: Props) {
             <Icon name="chevron-right" className="mt-1 size-5 shrink-0 text-ink-subtle" />
           </div>
 
-          {index === 0 ? (
+          {index === 0 && expanded ? (
             <div className="mt-4 rounded-md bg-surface-muted p-4">
               <div className="flex items-center gap-3">
                 <span className="grid size-11 place-items-center rounded-pill bg-tile-lilac font-display font-semibold text-brand">

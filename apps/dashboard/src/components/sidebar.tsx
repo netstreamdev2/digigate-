@@ -2,33 +2,20 @@ import Image from "next/image";
 
 import { Icon, type IconName } from "./icon";
 
-type NavItem = {
+export type NavItem = {
   label: string;
   icon: IconName;
   badge?: number;
   active?: boolean;
 };
 
-const items: readonly NavItem[] = [
-  { label: "Overview", icon: "overview-filled", active: true },
-  { label: "Live on site", icon: "on-site" },
-  { label: "Visits", icon: "visits" },
-  { label: "Alerts", icon: "alerts", badge: 3 },
-  { label: "People", icon: "people" },
-  { label: "Approvals", icon: "approvals", badge: 2 },
-  { label: "Users", icon: "users" },
-  { label: "Sites & gates", icon: "sites" },
-  { label: "Reports", icon: "reports" },
-  { label: "Audit log", icon: "audit-log" },
-  { label: "Settings", icon: "settings" },
-];
-
 type Props = {
+  items: readonly NavItem[];
   userName: string;
   userRole: string;
 };
 
-export function Sidebar({ userName, userRole }: Props) {
+export function Sidebar({ items, userName, userRole }: Props) {
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-6 lg:flex">
       <div className="px-3">

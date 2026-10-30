@@ -14,6 +14,8 @@ export const ruleTitles: Record<RuleCode, string> = {
   LICENCE_EXPIRED: "Driver's licence expired",
   OCCUPANT_COUNT_DROP: "Fewer people leaving",
   OVERSTAY: "Overstay",
+  IGNITION_RESTART_FAILED: "Engine didn't restart",
+  BOOT_CHECK_PROBLEM: "Problem found in the boot",
   PEDESTRIAN_DUPLICATE_ENTRY: "Already on site",
   PEDESTRIAN_NO_ENTRY: "No entry record",
   DRIVER_LEFT_ON_FOOT: "Driver left on foot",
