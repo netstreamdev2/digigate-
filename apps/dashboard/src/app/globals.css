@@ -45,3 +45,147 @@ body {
   background: var(--color-surface-muted);
   color: var(--color-ink);
 }
+
+/* Sign-in motion. The dashboard is the only place with animation: the gate app never has any. */
+:root {
+  --dg-enter: 0ms;
+}
+
+.dg-after-welcome {
+  --dg-enter: 2100ms;
+}
+
+/* A white version of the logo for the navy panel; the logo file itself stays as supplied. */
+.dg-logo-reversed {
+  filter: brightness(0) invert(1);
+}
+
+.dg-rise {
+  opacity: 0;
+  animation: dg-rise 600ms cubic-bezier(0.22, 1, 0.36, 1) var(--dg-enter) forwards;
+}
+
+@keyframes dg-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dg-splash {
+  animation: dg-splash-leave 500ms ease-in 1800ms forwards;
+}
+
+@keyframes dg-splash-leave {
+  to {
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(1.04);
+  }
+}
+
+.dg-splash-logo {
+  animation: dg-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dg-boom-arm {
+  transform-box: view-box;
+  transform-origin: 20px 122px;
+  animation: dg-boom-lift 850ms cubic-bezier(0.65, 0, 0.35, 1) 750ms forwards;
+}
+
+@keyframes dg-boom-lift {
+  to {
+    transform: rotate(-84deg);
+  }
+}
+
+.dg-boom-light {
+  fill: var(--dg-color-blocked);
+  animation: dg-boom-go 1ms linear 750ms forwards;
+}
+
+@keyframes dg-boom-go {
+  to {
+    fill: var(--dg-color-clear);
+  }
+}
+
+.dg-ring {
+  width: 34rem;
+  height: 34rem;
+  border-radius: 9999px;
+  border: 1px solid var(--dg-color-tile-sky);
+  opacity: 0;
+  animation: dg-ring 9s linear infinite;
+}
+
+@keyframes dg-ring {
+  from {
+    opacity: 0.3;
+    transform: scale(0.35);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+.dg-slogan {
+  animation: dg-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes dg-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dg-fade-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* Many office PCs have Windows animations off, which browsers report as this. Nothing moves, but the welcome still
+   fades through, so those people get a greeting rather than nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .dg-after-welcome {
+    --dg-enter: 1100ms;
+  }
+
+  .dg-splash {
+    animation: dg-fade-out 400ms ease 800ms forwards;
+  }
+
+  .dg-splash-logo {
+    animation: none;
+  }
+
+  .dg-boom-arm {
+    animation: none;
+    transform: rotate(-84deg);
+  }
+
+  .dg-boom-light {
+    animation: none;
+    fill: var(--dg-color-clear);
+  }
+
+  .dg-rise,
+  .dg-slogan {
+    animation-name: dg-fade-in;
+  }
+
+  .dg-ring {
+    display: none;
+  }
+}

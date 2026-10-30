@@ -12,11 +12,13 @@ type Props = {
   /** Chips under the title, e.g. the time range and live status. */
   chips?: ReactNode;
   alertCount?: number;
+  /** Leaves out search and alerts, for pages that aren't about the live gate. */
+  plain?: boolean;
   children: ReactNode;
 };
 
 /** The frame every dashboard page shares: sidebar, page title, search and alerts. */
-export function AppShell({ nav, user, eyebrow, title, chips, alertCount, children }: Props) {
+export function AppShell({ nav, user, eyebrow, title, chips, alertCount, plain = false, children }: Props) {
   return (
     <div className="flex min-h-screen">
       <Sidebar items={nav} userName={user.name} userRole={user.role} />
@@ -29,7 +31,7 @@ export function AppShell({ nav, user, eyebrow, title, chips, alertCount, childre
             <p className="text-sm font-medium text-ink-muted">{eyebrow}</p>
             <h1 className="mt-1 font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
           </div>
-          <div className="flex w-full items-center gap-2 sm:w-auto">
+          <div className={plain ? "hidden" : "flex w-full items-center gap-2 sm:w-auto"}>
             <label className="flex h-11 flex-1 items-center gap-2 rounded-pill border border-border bg-surface px-4 sm:w-80 sm:flex-none">
               <Icon name="search" className="size-5 shrink-0 text-ink-subtle" />
               <span className="sr-only">Search</span>

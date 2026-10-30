@@ -1,10 +1,13 @@
 import Image from "next/image";
 
+import { signOut } from "@/app/login/actions";
+
 import { Icon, type IconName } from "./icon";
 
 export type NavItem = {
   label: string;
   icon: IconName;
+  href?: string;
   badge?: number;
   active?: boolean;
 };
@@ -26,7 +29,7 @@ export function Sidebar({ items, userName, userRole }: Props) {
         {items.map((item) => (
           <a
             key={item.label}
-            href="#"
+            href={item.href ?? "#"}
             aria-current={item.active ? "page" : undefined}
             className={`flex h-11 items-center gap-3 rounded-pill px-3 text-sm font-medium transition-colors ${
               item.active ? "bg-ink text-ink-inverse" : "text-ink-muted hover:bg-surface-muted hover:text-ink"
@@ -51,6 +54,11 @@ export function Sidebar({ items, userName, userRole }: Props) {
           <p className="truncate text-sm font-semibold">{userName}</p>
           <p className="truncate text-xs text-ink-muted">{userRole}</p>
         </div>
+        <form action={signOut} className="ml-auto">
+          <button type="submit" className="text-xs font-semibold text-ink-muted hover:text-ink">
+            Sign out
+          </button>
+        </form>
       </div>
     </aside>
   );
