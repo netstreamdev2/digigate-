@@ -113,8 +113,9 @@ function AppSession({ children }: { children: ReactNode }) {
 }
 
 function GuardedStack() {
-  const { state, recordActivity } = useSession();
+  const { state, recordActivity, signOut } = useSession();
   const { shift } = useShift();
+  const { status: syncStatus } = useSync();
   const user = state.status === 'signed-out' ? null : state.user;
   // Signed in only counts once the shift is known, so the guard goes straight to the right screen after their PIN.
   const signedIn = user !== null && shift !== undefined;
@@ -124,6 +125,11 @@ function GuardedStack() {
   useEffect(() => {
     setScansPaused(locked);
   }, [locked]);
+
+  // The device has just cleared itself, so nobody can carry on working on it.
+  useEffect(() => {
+    if (syncStatus.state === 'revoked') signOut();
+  }, [signOut, syncStatus.state]);
 
   // A guard working through cars with the scanner is busy, even without touching the screen.
   useEffect(() => {

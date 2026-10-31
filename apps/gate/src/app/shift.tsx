@@ -26,6 +26,8 @@ function syncSummary(status: SyncStatus, pending: number): string {
       return 'Not set up in this build. Records stay on this device.';
     case 'not-paired':
       return `Not paired · ${waiting}`;
+    case 'revoked':
+      return `Removed from the site · ${waiting}`;
     case 'syncing':
       return 'Syncing now';
     case 'synced':

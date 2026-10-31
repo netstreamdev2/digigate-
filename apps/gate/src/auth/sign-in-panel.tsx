@@ -23,6 +23,7 @@ const EMPLOYEE_NUMBER_MIN_LENGTH = 3;
 const EMPLOYEE_NUMBER_MAX_LENGTH = 8;
 
 function noGuardsMessage(status: SyncStatus): string {
+  if (status.state === 'revoked') return 'This device was removed from the site. Ask an admin for a new pairing code.';
   if (status.state === 'not-paired') return 'Pair it with the dashboard so the guard list can sync.';
   if (status.state === 'local-only') return 'This build has no Supabase settings and no demo guards.';
   return 'Waiting for the guard list to sync. Check the connection.';
@@ -145,7 +146,7 @@ export function SignInPanel() {
       {guardCount === 0 && !lockedUser ? (
         <ResultBanner tone="warning" title="No guards on this device yet" message={noGuardsMessage(sync.status)} />
       ) : null}
-      {sync.status.state === 'not-paired' && !pinStep ? (
+      {(sync.status.state === 'not-paired' || sync.status.state === 'revoked') && !pinStep ? (
         <PillButton label="Pair this device" variant="secondary" onPress={() => router.push('/pair')} />
       ) : null}
 

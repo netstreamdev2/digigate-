@@ -5,6 +5,7 @@ import { isGateUserRole, type GateUser } from '@/auth/users';
 import { replaceGateUsers } from '@/db/gate-users';
 import { pendingEvents, removeEvents } from '@/db/outbox';
 import { saveSyncedPosts } from '@/db/site-posts';
+import { wipeRevokedDevice } from '@/db/wipe';
 import { isSyncedPost, type SyncedPost } from '@/site/site-config';
 
 import { callFunction, deviceToken } from './device-api';
@@ -13,6 +14,7 @@ const UPLOAD_BATCH_SIZE = 100;
 
 export type SyncOutcome =
   | { status: 'not-paired' }
+  | { status: 'revoked' }
   | { status: 'synced'; at: number; uploaded: number; users: number }
   | { status: 'failed'; reason: string };
 
@@ -56,7 +58,10 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
   let uploaded = 0;
   for (let batch = await pendingEvents(db, UPLOAD_BATCH_SIZE); batch.length > 0; batch = await pendingEvents(db, UPLOAD_BATCH_SIZE)) {
     const response = await callFunction('digigate-sync', { events: batch }, token);
-    // A revoked device stops here and keeps its outbox.
+    if (response.status === 410) {
+      await wipeRevokedDevice(db);
+      return { status: 'revoked' };
+    }
     if (response.status === 401) return { status: 'not-paired' };
     if (!response.ok) return { status: 'failed', reason: `The server answered ${response.status}.` };
     const accepted = acceptedIds(await response.json());
@@ -66,6 +71,10 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
   }
 
   const response = await callFunction('digigate-sync', { pull: true }, token);
+  if (response.status === 410) {
+    await wipeRevokedDevice(db);
+    return { status: 'revoked' };
+  }
   if (response.status === 401) return { status: 'not-paired' };
   if (!response.ok) return { status: 'failed', reason: `The server answered ${response.status}.` };
 

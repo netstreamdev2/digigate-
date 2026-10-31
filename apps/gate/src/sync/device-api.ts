@@ -15,6 +15,10 @@ export function saveDeviceToken(token: string): Promise<void> {
   return SecureStore.setItemAsync(TOKEN_NAME, token);
 }
 
+export function forgetDeviceToken(): Promise<void> {
+  return SecureStore.deleteItemAsync(TOKEN_NAME);
+}
+
 /** Calls one of DigiGate's Edge Functions. Devices never touch the database or its API directly. */
 export function callFunction(name: string, body: unknown, token?: string): Promise<Response> {
   return fetch(`${url}/functions/v1/${name}`, {

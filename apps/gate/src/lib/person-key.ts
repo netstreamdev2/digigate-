@@ -20,6 +20,11 @@ export async function setPersonKeySecret(hex: string): Promise<void> {
   secret = Promise.resolve(fromHex(hex));
 }
 
+export async function forgetPersonKeySecret(): Promise<void> {
+  await SecureStore.deleteItemAsync(SECRET_NAME);
+  secret = null;
+}
+
 // Until pairing replaces it, a device makes its own key and keeps it in the Keystore. Pairing discards every visit and
 // event from before it, so nothing keyed with this one outlives it.
 function personKeySecret(): Promise<Uint8Array> {

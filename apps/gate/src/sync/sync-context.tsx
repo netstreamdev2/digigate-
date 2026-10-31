@@ -15,6 +15,8 @@ export type SyncStatus =
   /** Built without server settings: everything stays on this device. */
   | { state: 'local-only' }
   | { state: 'not-paired' }
+  /** The server said this device was removed. It has already cleared itself. */
+  | { state: 'revoked' }
   | { state: 'syncing'; lastSyncedAt: number | null }
   | { state: 'synced'; lastSyncedAt: number }
   | { state: 'offline'; lastSyncedAt: number | null; problem: string };
@@ -55,7 +57,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         lastSyncedAt.current = outcome.at;
         setStatus({ state: 'synced', lastSyncedAt: outcome.at });
       } else if (outcome.status === 'not-paired') {
-        setStatus({ state: 'not-paired' });
+        // Stays on revoked until paired again, so the reason stays on screen.
+        setStatus((current) => (current.state === 'revoked' ? current : { state: 'not-paired' }));
+      } else if (outcome.status === 'revoked') {
+        setStatus({ state: 'revoked' });
       } else {
         setStatus({ state: 'offline', lastSyncedAt: lastSyncedAt.current, problem: outcome.reason });
       }
@@ -79,7 +84,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     async (code: string): Promise<PairingResult> => {
       if (!serverConfigured) return { ok: false, reason: 'server-error' };
       const result = await pairDevice(db, code);
-      if (result.ok) await syncNow();
+      if (result.ok) {
+        setStatus({ state: 'syncing', lastSyncedAt: null });
+        await syncNow();
+      }
       return result;
     },
     [db, syncNow],
