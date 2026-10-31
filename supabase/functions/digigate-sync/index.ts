@@ -23,8 +23,13 @@ Deno.serve(async (request) => {
   if (!Array.isArray(events) || events.length > MAX_BATCH) return json({ error: 'Invalid batch' }, 400);
 
   try {
-    const [{ device_id: deviceId }] = await sql`select digigate.device_for_token(${await sha256Hex(token)}) as device_id`;
-    if (!deviceId) return json({ error: 'Not paired' }, 401);
+    const tokenHash = await sha256Hex(token);
+    const [{ device_id: deviceId }] = await sql`select digigate.device_for_token(${tokenHash}) as device_id`;
+    if (!deviceId) {
+      // 410 tells the handheld to clear itself, so it's only ever sent for a device known to be revoked.
+      const [{ revoked }] = await sql`select digigate.token_is_revoked(${tokenHash}) as revoked`;
+      return revoked ? json({ error: 'Revoked' }, 410) : json({ error: 'Not paired' }, 401);
+    }
 
     let accepted: string[] = [];
     if (events.length > 0) {

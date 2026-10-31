@@ -57,13 +57,13 @@ await db.exec(`
   insert into digigate.clients (id, org_id, name) values ('${CLIENT_A}','${ORG_A}','Hospital A'), ('${CLIENT_B}','${ORG_B}','Estate B');
   insert into digigate.sites (id, org_id, client_id, name, site_type) values
     ('${SITE_A}','${ORG_A}','${CLIENT_A}','A1','hospital'), ('${SITE_A2}','${ORG_A}','${CLIENT_A}','A2','hospital'), ('${SITE_B}','${ORG_B}','${CLIENT_B}','B1','estate');
-  insert into digigate.profiles (id, org_id, full_name, roles, site_ids, is_active) values
-    ('${SUPER}', null, 'Super', '{super_user}', '{}', true),
-    ('${ADMIN_A}', '${ORG_A}', 'Admin A', '{admin}', '{}', true),
-    ('${ROOM_A}', '${ORG_A}', 'Room', '{control_room}', '{${SITE_A}}', true),
-    ('${SUP_A2}', '${ORG_A}', 'Sup', '{supervisor}', '{${SITE_A2}}', true),
-    ('${ADMIN_B}', '${ORG_B}', 'Admin B', '{admin}', '{}', true),
-    ('${OFF}', '${ORG_A}', 'Left', '{admin}', '{}', false);
+  insert into digigate.profiles (id, org_id, full_name, login, roles, site_ids, is_active) values
+    ('${SUPER}', null, 'Super', 'super', '{super_user}', '{}', true),
+    ('${ADMIN_A}', '${ORG_A}', 'Admin A', 'admin-a', '{admin}', '{}', true),
+    ('${ROOM_A}', '${ORG_A}', 'Room', 'room', '{control_room}', '{${SITE_A}}', true),
+    ('${SUP_A2}', '${ORG_A}', 'Sup', 'sup', '{supervisor}', '{${SITE_A2}}', true),
+    ('${ADMIN_B}', '${ORG_B}', 'Admin B', 'admin-b', '{admin}', '{}', true),
+    ('${OFF}', '${ORG_A}', 'Left', 'left', '{admin}', '{}', false);
   insert into digigate.gate_users (id, org_id, site_ids, employee_number, first_name, last_name, role, pin, is_active) values
     ('${GUARD}','${ORG_A}','{${SITE_A}}','1001','Thabo','Khumalo','guard',${PIN},true),
     ('${SUPERVISOR}','${ORG_A}','{${SITE_A},${SITE_A2}}','2001','Kagiso','Mokoena','supervisor',${PIN},true),
@@ -278,8 +278,11 @@ check('an erased visit stays as a bare row, marked erased', erased?.details_eras
 const VIEWER = u(17);
 await db.exec(`
   insert into auth.users (id) values ('${VIEWER}');
-  insert into digigate.profiles (id, client_id, full_name, roles) values ('${VIEWER}','${CLIENT_A}','Hospital viewer','{client_viewer}');
+  insert into digigate.profiles (id, client_id, full_name, login, roles) values ('${VIEWER}','${CLIENT_A}','Hospital viewer','viewer','{client_viewer}');
 `);
+check('an admin sees their own client\'s view-only login', (await as('authenticated', ADMIN_A, 'aal2', `select id from digigate.profiles where id = '${VIEWER}'`)).rows.length === 1);
+check('another company\'s admin does not', (await as('authenticated', ADMIN_B, 'aal2', `select id from digigate.profiles where id = '${VIEWER}'`)).rows.length === 0);
+check('login names are unique', await db.exec(`insert into digigate.profiles (id, org_id, full_name, login, roles) values ('${NOBODY}','${ORG_A}','Copy','room','{manager}')`).then(() => false, () => true));
 const seen = async (profile) => (await visits(profile, 'aal2')).rows.map((row) => row.id);
 const OLD_ROOM_VISITS = (await seen(ROOM_A)).length;
 check('client viewer sees the client\'s visits', (await seen(VIEWER)).length === OLD_ROOM_VISITS && OLD_ROOM_VISITS > 0);
@@ -324,6 +327,9 @@ check('the new company\'s handheld gets only its own guards', newList.join() ===
 await db.exec(`update digigate.devices set revoked_at = now()`);
 check('a revoked token finds nothing', (await service('select digigate.device_for_token($1) as id', ['t1'])).rows[0].id === null);
 check('a revoked device cannot upload', (await ingest([event('lock', {})])).error);
+check('a revoked token is reported as revoked', (await service('select digigate.token_is_revoked($1) as r', ['t1'])).rows[0].r === true);
+check('a token nobody knows is not', (await service('select digigate.token_is_revoked($1) as r', ['zz'])).rows[0].r === false);
+check('dashboard users cannot ask', (await as('authenticated', ADMIN_A, 'aal2', `select digigate.token_is_revoked('t1')`)).error);
 check('a revoked device gets no guard list', (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.users.length === 0);
 for (const fn of ['ingest_events(uuid, jsonb)', 'device_snapshot(uuid)', 'claim_pairing_code(text, text, text)', 'device_for_token(text)']) {
   const access = await one(`select has_function_privilege('authenticated', 'digigate.${fn}', 'execute') a, has_function_privilege('anon', 'digigate.${fn}', 'execute') b`);
