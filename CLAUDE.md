@@ -285,6 +285,14 @@ A decode failure prompts a rescan. Never guess fields.
 
 ## Quality bar
 
+- **Built for scale, every screen.** Design as if there are 60 security companies holding 80 hospitals and estates each, because there will be. No screen loads or renders an unbounded list, and nobody scrolls two kilometres:
+  - Hierarchies are drilled into (company, client, site) with breadcrumbs back up, never shown all at once.
+  - Every list is searched, filtered and paged on the server, 25 rows at a time. The database only ever sends the current page, with counts for the headings.
+  - Forms open in popups, so a list page stays a list. Dropdowns fetch only what the current choice needs, never a whole table.
+  - A page shows one thing at a time: use tabs for the sections of one site.
+  - Use the shared pieces: `components/list.tsx`, `search-box.tsx`, `form-dialog.tsx` and `lib/paging.ts`.
+- **Anything that can't be undone with a click asks first** in a popup that says what will happen, with Cancel as the safe default.
+
 - TypeScript `strict`. No `any`, no `!` to silence the compiler, no `@ts-ignore` / `@ts-expect-error` without a one-line reason.
 - `packages/core` is fully tested with Vitest. Every rule has tests for firing, not firing, and the edge cases in its table row. Decoders are tested against fixtures.
 - No placeholder logic, mock data or TODOs in shipping code paths. No commented-out code. No stray `console.log`.
