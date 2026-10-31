@@ -3,10 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const MFA_PATH = "/mfa";
 const LOGIN_PATH = "/login";
+const PASSWORD_PATH = "/password";
 
 /**
  * Keeps the session fresh and sends people to the right door: no session goes to sign-in, and a session that hasn't
- * passed MFA goes to the code screen. The database enforces the same rule, so this is the guide, not the lock.
+ * passed MFA goes to the code screen. The database enforces the same rule, so this is the guide, not the lock. Someone
+ * on a temporary password has to replace it before they go anywhere else.
  */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -32,7 +34,8 @@ export async function proxy(request: NextRequest) {
   const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const passedMfa = level?.currentLevel === "aal2";
   if (!passedMfa) return path === MFA_PATH ? response : redirectTo(MFA_PATH);
-  return path === LOGIN_PATH || path === MFA_PATH ? redirectTo("/setup") : response;
+  if (user.app_metadata.must_change_password === true) return path === PASSWORD_PATH ? response : redirectTo(PASSWORD_PATH);
+  return [LOGIN_PATH, MFA_PATH, PASSWORD_PATH].includes(path) ? redirectTo("/setup") : response;
 }
 
 export const config = {

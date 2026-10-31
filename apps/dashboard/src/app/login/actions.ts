@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { callPeople } from "@/lib/people-api";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export type FormState = { problem: string | null };
@@ -49,6 +50,21 @@ export async function confirmCode(_previous: FormState, form: FormData): Promise
     code: String(form.get("code") ?? ""),
   });
   if (error) return { problem: "That code didn't work. Check the app and enter the current one." };
+  redirect("/setup");
+}
+
+/** Replaces a temporary password. The flag is cleared only after the new password has saved. */
+export async function changePassword(_previous: FormState, form: FormData): Promise<FormState> {
+  const password = String(form.get("password") ?? "");
+  if (password.length < 12) return { problem: "Use at least 12 characters." };
+  if (password !== form.get("confirm")) return { problem: "Those two passwords don't match." };
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { problem: "That password can't be used. Try a different one." };
+
+  const { status } = await callPeople({ action: "password-changed" });
+  if (status !== 200) return { problem: "Your password saved, but something else failed. Try again." };
   redirect("/setup");
 }
 

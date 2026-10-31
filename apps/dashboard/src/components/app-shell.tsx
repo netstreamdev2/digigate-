@@ -7,7 +7,8 @@ import { Sidebar, type NavItem } from "./sidebar";
 type Props = {
   nav: readonly NavItem[];
   user: { name: string; role: string };
-  eyebrow: string;
+  /** A short line above the title, or breadcrumbs. */
+  eyebrow: ReactNode;
   title: string;
   /** Chips under the title, e.g. the time range and live status. */
   chips?: ReactNode;
@@ -28,7 +29,7 @@ export function AppShell({ nav, user, eyebrow, title, chips, alertCount, plain =
 
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-ink-muted">{eyebrow}</p>
+            <div className="text-sm font-medium text-ink-muted">{eyebrow}</div>
             <h1 className="mt-1 font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
           </div>
           <div className={plain ? "hidden" : "flex w-full items-center gap-2 sm:w-auto"}>

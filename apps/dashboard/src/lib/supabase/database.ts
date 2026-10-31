@@ -521,6 +521,7 @@ export type Database = {
           full_name: string
           id: string
           is_active: boolean
+          login: string
           org_id: string | null
           roles: Database["digigate"]["Enums"]["dashboard_role"][]
           site_ids: string[]
@@ -531,6 +532,7 @@ export type Database = {
           full_name: string
           id: string
           is_active?: boolean
+          login: string
           org_id?: string | null
           roles: Database["digigate"]["Enums"]["dashboard_role"][]
           site_ids?: string[]
@@ -541,6 +543,7 @@ export type Database = {
           full_name?: string
           id?: string
           is_active?: boolean
+          login?: string
           org_id?: string | null
           roles?: Database["digigate"]["Enums"]["dashboard_role"][]
           site_ids?: string[]
@@ -856,6 +859,7 @@ export type Database = {
       mask: { Args: { _value: string }; Returns: string }
       mfa_passed: { Args: never; Returns: boolean }
       to_uuid: { Args: { _value: string }; Returns: string }
+      token_is_revoked: { Args: { _token_hash: string }; Returns: boolean }
       transfer_client: {
         Args: { _client: string; _new_org: string }
         Returns: undefined

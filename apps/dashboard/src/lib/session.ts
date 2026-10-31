@@ -20,7 +20,9 @@ const ROLE_LABELS: Record<string, string> = {
   client_viewer: "Client viewer",
 };
 
-export const roleLabel = (user: CurrentUser) => ROLE_LABELS[user.roles[0] ?? ""] ?? "";
+export const roleName = (role: string) => ROLE_LABELS[role] ?? role;
+
+export const roleLabel = (user: CurrentUser) => roleName(user.roles[0] ?? "");
 
 /** Who is signed in. Null when they have an account but no dashboard profile yet. */
 export async function currentUser(): Promise<CurrentUser | null> {
