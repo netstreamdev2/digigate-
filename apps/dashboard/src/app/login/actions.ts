@@ -50,6 +50,7 @@ export async function confirmCode(_previous: FormState, form: FormData): Promise
     code: String(form.get("code") ?? ""),
   });
   if (error) return { problem: "That code didn't work. Check the app and enter the current one." };
+  await supabase.rpc("note_sign_in");
   redirect("/setup");
 }
 

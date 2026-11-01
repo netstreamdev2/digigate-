@@ -215,3 +215,125 @@ body {
     animation-name: dg-fade-in;
   }
 }
+
+/* Frosted glass, for the report pages: see-through panels over a slow wash of colour. Anyone who has asked for less
+   transparency still gets the frost, with far less showing through, and a browser that can't blur gets solid panels. */
+.dg-wash {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+.dg-wash i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  animation: dg-drift 26s ease-in-out infinite alternate;
+}
+
+.dg-wash i:nth-child(1) {
+  top: -14%;
+  right: -6%;
+  width: 56vw;
+  height: 56vw;
+  background: var(--dg-glass-wash-sky);
+}
+
+.dg-wash i:nth-child(2) {
+  bottom: -22%;
+  left: 8%;
+  width: 50vw;
+  height: 50vw;
+  background: var(--dg-glass-wash-lilac);
+  animation-duration: 32s;
+  animation-delay: -8s;
+}
+
+.dg-wash i:nth-child(3) {
+  top: 28%;
+  left: 38%;
+  width: 34vw;
+  height: 34vw;
+  background: var(--dg-glass-wash-mint);
+  animation-duration: 38s;
+  animation-delay: -14s;
+}
+
+@keyframes dg-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-5vw, 4vh, 0) scale(1.12);
+  }
+}
+
+@layer components {
+  .dg-glass {
+    background: var(--dg-glass-fill);
+    border: 1px solid var(--dg-glass-edge);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--dg-glass-shadow);
+    -webkit-backdrop-filter: blur(var(--dg-glass-blur)) saturate(170%);
+    backdrop-filter: blur(var(--dg-glass-blur)) saturate(170%);
+  }
+
+  .dg-glass-soft {
+    background: var(--dg-glass-fill-soft);
+    border: 1px solid var(--dg-glass-edge);
+  }
+
+  .dg-glass-bar {
+    background: var(--dg-glass-fill-strong);
+    border-right: 1px solid var(--dg-glass-edge);
+    -webkit-backdrop-filter: blur(var(--dg-glass-blur)) saturate(170%);
+    backdrop-filter: blur(var(--dg-glass-blur)) saturate(170%);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .dg-glass,
+    .dg-glass-bar {
+      background: var(--color-surface);
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .dg-glass,
+    .dg-glass-bar {
+      background: var(--dg-glass-fill-strong);
+    }
+  }
+}
+
+/* Charts rise into place once, then stay still. */
+.dg-grow-up {
+  transform-origin: bottom;
+  animation: dg-grow-up 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dg-grow-across {
+  transform-origin: left;
+  animation: dg-grow-across 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes dg-grow-up {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes dg-grow-across {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dg-wash i,
+  .dg-grow-up,
+  .dg-grow-across {
+    animation: none;
+  }
+}

@@ -26,6 +26,7 @@ export function BrandPanel() {
     try {
       const next = (Number(localStorage.getItem(SEEN_KEY) ?? -1) + 1) % SLOGANS.length;
       localStorage.setItem(SEEN_KEY, String(next));
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- storage only exists in the browser, after hydration
       setIndex(next);
     } catch {
       return;

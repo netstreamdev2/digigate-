@@ -1,16 +1,23 @@
 import alerts from "@digigate/design/icons/alerts";
+import add from "@digigate/design/icons/add";
 import approvals from "@digigate/design/icons/approvals";
 import auditLog from "@digigate/design/icons/audit-log";
+import back from "@digigate/design/icons/back";
 import bell from "@digigate/design/icons/bell";
+import calendar from "@digigate/design/icons/calendar";
 import check from "@digigate/design/icons/check";
 import chevronRight from "@digigate/design/icons/chevron-right";
+import close from "@digigate/design/icons/close";
+import remove from "@digigate/design/icons/delete";
 import device from "@digigate/design/icons/device";
 import download from "@digigate/design/icons/download";
 import duration from "@digigate/design/icons/duration";
 import entry from "@digigate/design/icons/entry";
 import exit from "@digigate/design/icons/exit";
+import exportIcon from "@digigate/design/icons/export";
 import guard from "@digigate/design/icons/guard";
 import info from "@digigate/design/icons/info";
+import lock from "@digigate/design/icons/lock";
 import offline from "@digigate/design/icons/offline";
 import onSite from "@digigate/design/icons/on-site";
 import overviewFilled from "@digigate/design/icons/overview-filled";
@@ -32,19 +39,26 @@ import visits from "@digigate/design/icons/visits";
 
 // Only the icons the dashboard uses, so the rest of the set stays out of the bundle.
 const icons = {
+  add,
   alerts,
   approvals,
   "audit-log": auditLog,
+  back,
   bell,
+  calendar,
   check,
   "chevron-right": chevronRight,
+  close,
+  delete: remove,
   device,
   download,
   duration,
   entry,
   exit,
+  export: exportIcon,
   guard,
   info,
+  lock,
   offline,
   "on-site": onSite,
   "overview-filled": overviewFilled,

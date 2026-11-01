@@ -1,7 +1,6 @@
-import { RULE_SEVERITY, type Severity } from "@digigate/core";
+import { RULE_SEVERITY, ruleTitle, type Severity } from "@digigate/core";
 
 import type { DemoAlert } from "@/demo/dashboard-demo";
-import { ruleTitles } from "@/rule-titles";
 
 import { Icon } from "./icon";
 import { StatusChip, type Status } from "./status-chip";
@@ -35,7 +34,7 @@ export function AlertsPanel({ alerts, expanded }: Props) {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusChip status={statusBySeverity[RULE_SEVERITY[alert.code]]} />
-                <p className="font-display text-base font-semibold tracking-tight">{ruleTitles[alert.code]}</p>
+                <p className="font-display text-base font-semibold tracking-tight">{ruleTitle(alert.code)}</p>
               </div>
               <p className="mt-2 text-sm text-ink-muted">{alert.summary}</p>
               <p className="mt-1 text-xs tabular-nums text-ink-subtle">

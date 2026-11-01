@@ -1,8 +1,9 @@
 import { AlertsPanel } from "@/components/alerts-panel";
-import { AppShell, LiveChip, RangeChip } from "@/components/app-shell";
+import { AppShell, RangeChip } from "@/components/app-shell";
 import { Card } from "@/components/card";
 import { DataTable, TwoLine } from "@/components/data-table";
 import { EntriesByType } from "@/components/entries-by-type";
+import { LiveChip } from "@/components/live-status";
 import { Icon } from "@/components/icon";
 import { StatTile } from "@/components/stat-tile";
 import { StatusChip } from "@/components/status-chip";

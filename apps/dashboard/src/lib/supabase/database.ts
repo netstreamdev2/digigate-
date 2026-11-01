@@ -65,6 +65,13 @@ export type Database = {
             foreignKeyName: "alerts_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
+            referencedRelation: "check_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
           },
@@ -76,6 +83,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_name: string | null
+          at: string
+          category: string
+          detail: string | null
+          device_id: string | null
+          id: string
+          org_id: string | null
+          site_id: string | null
+          target: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_name?: string | null
+          at?: string
+          category: string
+          detail?: string | null
+          device_id?: string | null
+          id?: string
+          org_id?: string | null
+          site_id?: string | null
+          target?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_name?: string | null
+          at?: string
+          category?: string
+          detail?: string | null
+          device_id?: string | null
+          id?: string
+          org_id?: string | null
+          site_id?: string | null
+          target?: string | null
+        }
+        Relationships: []
       }
       clients: {
         Row: {
@@ -105,6 +154,71 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_activity: {
+        Row: {
+          acknowledged: number
+          blocked: number
+          checks: number
+          day: string
+          exits: number
+          hours: number[]
+          org_id: string
+          overrides: number
+          people_in: number
+          rules: Json
+          site_id: string
+          stay_minutes: number
+          turned_away: number
+          vehicles_in: number
+          visit_types: Json
+          warnings: number
+        }
+        Insert: {
+          acknowledged?: number
+          blocked?: number
+          checks?: number
+          day: string
+          exits?: number
+          hours?: number[]
+          org_id: string
+          overrides?: number
+          people_in?: number
+          rules?: Json
+          site_id: string
+          stay_minutes?: number
+          turned_away?: number
+          vehicles_in?: number
+          visit_types?: Json
+          warnings?: number
+        }
+        Update: {
+          acknowledged?: number
+          blocked?: number
+          checks?: number
+          day?: string
+          exits?: number
+          hours?: number[]
+          org_id?: string
+          overrides?: number
+          people_in?: number
+          rules?: Json
+          site_id?: string
+          stay_minutes?: number
+          turned_away?: number
+          vehicles_in?: number
+          visit_types?: Json
+          warnings?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_activity_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
         ]
@@ -262,6 +376,13 @@ export type Database = {
           visit_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "event_details_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "check_records"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "event_details_event_id_fkey"
             columns: ["event_id"]
@@ -565,6 +686,154 @@ export type Database = {
           },
         ]
       }
+      report_schedules: {
+        Row: {
+          bcc: string[]
+          cc: string[]
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          frequency: string
+          id: string
+          is_active: boolean
+          last_run_at: string | null
+          message: string
+          name: string
+          next_run_at: string
+          org_id: string
+          recipients: string[]
+          send_at: string
+        }
+        Insert: {
+          bcc?: string[]
+          cc?: string[]
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          frequency: string
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          message?: string
+          name: string
+          next_run_at?: string
+          org_id: string
+          recipients: string[]
+          send_at: string
+        }
+        Update: {
+          bcc?: string[]
+          cc?: string[]
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          message?: string
+          name?: string
+          next_run_at?: string
+          org_id?: string
+          recipients?: string[]
+          send_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_schedules_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_schedules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      report_sends: {
+        Row: {
+          bcc: string[]
+          cc: string[]
+          client_id: string | null
+          frequency: string
+          id: string
+          org_id: string
+          period_from: string
+          period_to: string
+          problem: string | null
+          provider_id: string | null
+          recipients: string[]
+          schedule_id: string | null
+          sent_at: string
+          sent_by: string | null
+          status: string
+          subject: string
+        }
+        Insert: {
+          bcc?: string[]
+          cc?: string[]
+          client_id?: string | null
+          frequency: string
+          id?: string
+          org_id: string
+          period_from: string
+          period_to: string
+          problem?: string | null
+          provider_id?: string | null
+          recipients: string[]
+          schedule_id?: string | null
+          sent_at?: string
+          sent_by?: string | null
+          status: string
+          subject: string
+        }
+        Update: {
+          bcc?: string[]
+          cc?: string[]
+          client_id?: string | null
+          frequency?: string
+          id?: string
+          org_id?: string
+          period_from?: string
+          period_to?: string
+          problem?: string | null
+          provider_id?: string | null
+          recipients?: string[]
+          schedule_id?: string | null
+          sent_at?: string
+          sent_by?: string | null
+          status?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_sends_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_sends_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_sends_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "report_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schema_version: {
         Row: {
           applied_at: string
@@ -791,6 +1060,36 @@ export type Database = {
       }
     }
     Views: {
+      check_records: {
+        Row: {
+          details_erased: boolean | null
+          id: string | null
+          in_full: boolean | null
+          occurred_at: string | null
+          org_id: string | null
+          outcome: string | null
+          person_name: string | null
+          plate: string | null
+          post: string | null
+          rule_codes: string[] | null
+          site_id: string | null
+          type: string | null
+          typed_plate: string | null
+          vehicle_description: string | null
+          visit_entered_at: string | null
+          visit_id: string | null
+          visit_type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       visit_records: {
         Row: {
           details_erased: boolean | null
@@ -823,6 +1122,8 @@ export type Database = {
       }
     }
     Functions: {
+      add_counts: { Args: { _a: Json; _b: Json }; Returns: Json }
+      admin_org: { Args: never; Returns: string }
       apply_passage: {
         Args: {
           _at: string
@@ -833,6 +1134,25 @@ export type Database = {
           _type: string
         }
         Returns: undefined
+      }
+      audit_gate_event: {
+        Args: {
+          _at: string
+          _device: string
+          _gate_user: string
+          _org: string
+          _payload: Json
+          _site: string
+          _type: string
+        }
+        Returns: undefined
+      }
+      audit_summary: {
+        Args: { _from: string; _org?: string; _to: string }
+        Returns: {
+          category: string
+          entries: number
+        }[]
       }
       can_manage_org: { Args: { _org: string }; Returns: boolean }
       claim_pairing_code: {
@@ -848,8 +1168,103 @@ export type Database = {
           site_id: string
         }[]
       }
+      device_board: {
+        Args: {
+          _limit: number
+          _offset: number
+          _org?: string
+          _search: string
+          _status: string
+        }
+        Returns: {
+          checks_today: number
+          client_name: string
+          guard: string
+          id: string
+          last_check_at: string
+          last_seen_at: string
+          name: string
+          org_name: string
+          paired_at: string
+          post: string
+          site_id: string
+          site_name: string
+          status: string
+          total: number
+        }[]
+      }
       device_for_token: { Args: { _token_hash: string }; Returns: string }
       device_snapshot: { Args: { _device_id: string }; Returns: Json }
+      device_summary: {
+        Args: { _org?: string; _search: string }
+        Returns: {
+          devices: number
+          status: string
+        }[]
+      }
+      fleet: {
+        Args: { _org: string; _search: string }
+        Returns: {
+          client_name: string
+          guard: string
+          id: string
+          last_seen_at: string
+          name: string
+          org_name: string
+          paired_at: string
+          post: string
+          site_id: string
+          site_name: string
+          status: string
+        }[]
+      }
+      gate_board: {
+        Args: { _site: string }
+        Returns: {
+          device: string
+          device_seen_at: string
+          guard: string
+          label: string
+          lanes: string[]
+          last_check_at: string
+          on_duty_since: string
+          period: string
+          post: string
+        }[]
+      }
+      gate_staff_board: {
+        Args: {
+          _limit: number
+          _newest: boolean
+          _offset: number
+          _org?: string
+          _role: string
+          _search: string
+          _status: string
+        }
+        Returns: {
+          company: string
+          created_at: string
+          employee_number: string
+          first_name: string
+          id: string
+          is_active: boolean
+          last_name: string
+          on_duty_at: string
+          role: string
+          site_count: number
+          total: number
+        }[]
+      }
+      gate_staff_counts: {
+        Args: { _org?: string; _search: string }
+        Returns: {
+          is_active: boolean
+          on_duty: number
+          people: number
+          role: string
+        }[]
+      }
       in_org: { Args: { _org: string }; Returns: boolean }
       ingest_events: {
         Args: { _device_id: string; _events: Json }
@@ -858,6 +1273,129 @@ export type Database = {
       is_super_user: { Args: never; Returns: boolean }
       mask: { Args: { _value: string }; Returns: string }
       mfa_passed: { Args: never; Returns: boolean }
+      next_report_run: {
+        Args: { _after: string; _frequency: string; _send_at: string }
+        Returns: string
+      }
+      note_sign_in: { Args: never; Returns: undefined }
+      people_board: {
+        Args: {
+          _limit: number
+          _newest: boolean
+          _offset: number
+          _org?: string
+          _role: string
+          _search: string
+          _status: string
+        }
+        Returns: {
+          client: string
+          company: string
+          created_at: string
+          full_name: string
+          id: string
+          is_active: boolean
+          login: string
+          role: string
+          site_count: number
+          total: number
+        }[]
+      }
+      people_counts: {
+        Args: { _org?: string; _search: string }
+        Returns: {
+          is_active: boolean
+          people: number
+          role: string
+        }[]
+      }
+      report_board: {
+        Args: { _day: string; _limit: number; _offset: number; _search: string }
+        Returns: {
+          active_sites: number
+          blocked: number
+          checks: number
+          company: string
+          entries: number
+          exits: number
+          org_id: string
+          overrides: number
+          sites: number
+          total: number
+          trend: number[]
+          warnings: number
+        }[]
+      }
+      report_data: {
+        Args: {
+          _client: string
+          _day: string
+          _frequency: string
+          _org: string
+        }
+        Returns: Json
+      }
+      report_day_totals: {
+        Args: { _day: string }
+        Returns: {
+          blocked: number
+          checks: number
+          companies: number
+          day: string
+          entries: number
+          warnings: number
+        }[]
+      }
+      report_period: {
+        Args: { _day: string; _frequency: string }
+        Returns: {
+          from_day: string
+          to_day: string
+        }[]
+      }
+      report_summary: {
+        Args: {
+          _client?: string
+          _day: string
+          _frequency: string
+          _org: string
+        }
+        Returns: Json
+      }
+      site_board: {
+        Args: { _limit: number; _offset: number; _search: string }
+        Returns: {
+          amber: number
+          client_name: string
+          on_duty: number
+          on_site: number
+          red: number
+          site_id: string
+          site_name: string
+          total: number
+        }[]
+      }
+      tally_event: {
+        Args: {
+          _at: string
+          _org: string
+          _payload: Json
+          _site: string
+          _type: string
+        }
+        Returns: undefined
+      }
+      tally_passage: {
+        Args: {
+          _at: string
+          _entered: string
+          _kind: string
+          _org: string
+          _site: string
+          _visit_type: string
+        }
+        Returns: undefined
+      }
       to_uuid: { Args: { _value: string }; Returns: string }
       token_is_revoked: { Args: { _token_hash: string }; Returns: boolean }
       transfer_client: {
@@ -867,6 +1405,21 @@ export type Database = {
       viewer_client: { Args: never; Returns: string }
       viewer_org: { Args: never; Returns: string }
       visible_site_ids: { Args: never; Returns: string[] }
+      write_audit: {
+        Args: {
+          _action: string
+          _actor: string
+          _actor_name: string
+          _at?: string
+          _category: string
+          _detail: string
+          _device: string
+          _org: string
+          _site: string
+          _target: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       dashboard_role:

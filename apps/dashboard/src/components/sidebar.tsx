@@ -16,11 +16,13 @@ type Props = {
   items: readonly NavItem[];
   userName: string;
   userRole: string;
+  /** Frosted over the page's wash of colour, on the report pages. */
+  glass?: boolean;
 };
 
-export function Sidebar({ items, userName, userRole }: Props) {
+export function Sidebar({ items, userName, userRole, glass = false }: Props) {
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-6 lg:flex">
+    <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col px-4 py-6 lg:flex ${glass ? "dg-glass-bar" : "border-r border-border bg-surface"}`}>
       <div className="px-3">
         <Image src="/logo.svg" alt="DigiGate" width={116} height={37} unoptimized priority />
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { useFormStatus } from "react-dom";
 
 import { Icon } from "./icon";
@@ -15,6 +15,17 @@ export function Field({ label, className = "", ...input }: FieldProps) {
     <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">
       {label}
       <input {...input} className={`${CONTROL} ${className}`} />
+    </label>
+  );
+}
+
+type TextAreaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string };
+
+export function TextAreaField({ label, ...input }: TextAreaProps) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium">
+      {label}
+      <textarea {...input} className="min-h-28 w-full resize-y rounded-md border border-border bg-surface px-4 py-3 text-sm outline-none transition-shadow focus:border-brand focus:ring-4 focus:ring-tile-sky" />
     </label>
   );
 }

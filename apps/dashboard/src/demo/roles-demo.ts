@@ -2,7 +2,9 @@
 import type { NavItem } from "@/components/sidebar";
 import type { Status } from "@/components/status-chip";
 
-import type { DemoAlert, Kpi } from "./dashboard-demo";
+import type { Kpi } from "@/components/stat-tile";
+
+import type { DemoAlert } from "./dashboard-demo";
 
 export const navSecurityManager: readonly NavItem[] = [
   { label: "Overview", icon: "overview-filled", active: true },
@@ -116,31 +118,6 @@ export const deviceRows = [
   { id: "d1", name: "Main Gate DT50", gate: "Main Gate · Vehicle lane", sync: "Synced 1 min ago", status: "clear" as Status },
   { id: "d2", name: "Staff Gate DT50", gate: "Staff Gate · Vehicle lane", sync: "Synced 2 min ago", status: "clear" as Status },
   { id: "d3", name: "Pedestrian Gate DT50", gate: "Pedestrian Gate", sync: "Offline 14 min · 3 records waiting", status: "warning" as Status },
-] as const;
-
-// Control room: watches the gates live.
-
-export const navControlRoom: readonly NavItem[] = [
-  { label: "Live", icon: "on-site", active: true },
-  { label: "Alerts", icon: "alerts", badge: 3 },
-  { label: "Visits", icon: "visits" },
-  { label: "Gates", icon: "sites" },
-  { label: "People on site", icon: "people" },
-];
-
-export const controlRoomUser = { name: "Kagiso M.", role: "Control room, Demo Hospital" };
-
-export const controlRoomKpis: readonly Kpi[] = [
-  { label: "People on site", value: "118", icon: "people", detail: "+14 in the last hour" },
-  { label: "Cars on site", value: "64", icon: "vehicle", detail: "Capacity 220" },
-  { label: "Gates online", value: "2 of 3", icon: "device", detail: "Pedestrian Gate offline" },
-  { label: "Open alerts", value: "3", icon: "alerts", detail: "1 blocked at the gate", tone: "blocked" },
-];
-
-export const gateRows = [
-  { id: "gt1", gate: "Main Gate", lane: "Vehicle lane", guard: "Thabo K.", lastScan: "12:07", status: "clear" as Status, statusLabel: "Online" },
-  { id: "gt2", gate: "Staff Gate", lane: "Vehicle lane", guard: "Zanele M.", lastScan: "11:58", status: "clear" as Status, statusLabel: "Online" },
-  { id: "gt3", gate: "Pedestrian Gate", lane: "On foot", guard: "Lwazi D.", lastScan: "11:53", status: "warning" as Status, statusLabel: "Offline" },
 ] as const;
 
 // KPI supervisor: how well the gates are run over time.

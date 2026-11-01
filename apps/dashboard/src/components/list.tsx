@@ -57,10 +57,10 @@ export function ListCard({ empty, isEmpty, footer, children }: { empty: string; 
 
 const PAGE_LINK = "inline-flex h-9 items-center rounded-pill bg-surface-muted px-4 text-sm font-semibold transition hover:bg-border";
 
-export function Pagination({ page, total, hrefFor }: { page: number; total: number; hrefFor: (page: number) => string }) {
-  if (total <= PAGE_SIZE) return null;
-  const first = (page - 1) * PAGE_SIZE + 1;
-  const last = Math.min(page * PAGE_SIZE, total);
+export function Pagination({ page, total, hrefFor, pageSize = PAGE_SIZE }: { page: number; total: number; hrefFor: (page: number) => string; pageSize?: number }) {
+  if (total <= pageSize) return null;
+  const first = (page - 1) * pageSize + 1;
+  const last = Math.min(page * pageSize, total);
   return (
     <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
       <p className="text-sm text-ink-muted">{`${first}–${last} of ${total}`}</p>

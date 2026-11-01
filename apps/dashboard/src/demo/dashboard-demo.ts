@@ -2,7 +2,8 @@
 // with Supabase queries. Names are shortened and plates masked, as the real dashboard will show them.
 import type { RuleCode } from "@digigate/core";
 
-import type { IconName } from "@/components/icon";
+import type { ActivityRow } from "@/components/activity-table";
+import type { Kpi } from "@/components/stat-tile";
 
 export const demoSite = {
   name: "Demo Hospital",
@@ -11,14 +12,6 @@ export const demoSite = {
   date: "Wednesday 28 October",
   updatedAt: "12:08",
 } as const;
-
-export type Kpi = {
-  label: string;
-  value: string;
-  icon: IconName;
-  detail?: string;
-  tone?: "neutral" | "blocked";
-};
 
 export const demoKpis: readonly Kpi[] = [
   { label: "People on site", value: "118", icon: "people", detail: "+14 in the last hour" },
@@ -90,20 +83,7 @@ export const demoBlockedVisit = {
   ],
 } as const;
 
-export type DemoActivity = {
-  id: string;
-  time: string;
-  person: string;
-  visitType: string;
-  direction: "in" | "out";
-  vehicle: string;
-  plate: string;
-  gate: string;
-  stay: string;
-  result: "clear" | "warning" | "blocked";
-};
-
-export const demoActivity: readonly DemoActivity[] = [
+export const demoActivity: readonly ActivityRow[] = [
   { id: "a1", time: "12:01", person: "Sipho D.", visitType: "Visitor", direction: "out", vehicle: "Toyota Corolla", plate: "CA ***-456", gate: "Main Gate", stay: "1h 49m", result: "blocked" },
   { id: "a2", time: "11:58", person: "Dr A. Naidoo", visitType: "Staff", direction: "in", vehicle: "BMW 3 Series", plate: "ND ***-112", gate: "Staff Gate", stay: "—", result: "clear" },
   { id: "a3", time: "11:55", person: "Ayesha P.", visitType: "Visitor", direction: "in", vehicle: "On foot", plate: "—", gate: "Pedestrian Gate", stay: "—", result: "clear" },

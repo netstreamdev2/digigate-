@@ -12,17 +12,28 @@ type Props = {
   title: string;
   /** Chips under the title, e.g. the time range and live status. */
   chips?: ReactNode;
+  /** The page's main buttons, level with the title. */
+  actions?: ReactNode;
   alertCount?: number;
   /** Leaves out search and alerts, for pages that aren't about the live gate. */
   plain?: boolean;
+  /** Frosted panels over a wash of colour, for the report pages. */
+  glass?: boolean;
   children: ReactNode;
 };
 
 /** The frame every dashboard page shares: sidebar, page title, search and alerts. */
-export function AppShell({ nav, user, eyebrow, title, chips, alertCount, plain = false, children }: Props) {
+export function AppShell({ nav, user, eyebrow, title, chips, actions, alertCount, plain = false, glass = false, children }: Props) {
   return (
     <div className="flex min-h-screen">
-      <Sidebar items={nav} userName={user.name} userRole={user.role} />
+      {glass ? (
+        <div className="dg-wash" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+      ) : null}
+      <Sidebar items={nav} userName={user.name} userRole={user.role} glass={glass} />
 
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-10 lg:py-8">
         <Image src="/logo.svg" alt="DigiGate" width={104} height={33} unoptimized className="mb-6 lg:hidden" />
@@ -32,6 +43,7 @@ export function AppShell({ nav, user, eyebrow, title, chips, alertCount, plain =
             <div className="text-sm font-medium text-ink-muted">{eyebrow}</div>
             <h1 className="mt-1 font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
           </div>
+          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
           <div className={plain ? "hidden" : "flex w-full items-center gap-2 sm:w-auto"}>
             <label className="flex h-11 flex-1 items-center gap-2 rounded-pill border border-border bg-surface px-4 sm:w-80 sm:flex-none">
               <Icon name="search" className="size-5 shrink-0 text-ink-subtle" />
@@ -68,14 +80,5 @@ export function AppShell({ nav, user, eyebrow, title, chips, alertCount, plain =
 export function RangeChip({ label }: { label: string }) {
   return (
     <span className="inline-flex h-9 items-center rounded-pill bg-ink px-4 text-sm font-semibold text-ink-inverse">{label}</span>
-  );
-}
-
-export function LiveChip({ updatedAt }: { updatedAt: string }) {
-  return (
-    <span className="inline-flex h-9 items-center gap-2 rounded-pill bg-clear-soft px-4 text-sm font-semibold text-clear">
-      <span className="size-2 rounded-pill bg-clear" aria-hidden="true" />
-      Live · updated {updatedAt}
-    </span>
   );
 }

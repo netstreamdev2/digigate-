@@ -25,7 +25,7 @@ export function useDialog() {
 }
 
 /** A popup in the browser's own dialog, which handles focus, the Escape key and the page behind it. */
-export function Dialog({ dialogRef, onClose, children }: { dialogRef: RefObject<HTMLDialogElement | null>; onClose?: () => void; children: ReactNode }) {
+export function Dialog({ dialogRef, onClose, wide = false, children }: { dialogRef: RefObject<HTMLDialogElement | null>; onClose?: () => void; wide?: boolean; children: ReactNode }) {
   return (
     <dialog
       ref={dialogRef}
@@ -33,7 +33,7 @@ export function Dialog({ dialogRef, onClose, children }: { dialogRef: RefObject<
       onClick={(event) => {
         if (event.target === event.currentTarget) event.currentTarget.close();
       }}
-      className="dg-dialog m-auto w-[calc(100%-2rem)] max-w-md rounded-lg bg-surface p-0 text-ink shadow-floating backdrop:bg-ink/50"
+      className={`dg-dialog m-auto w-[calc(100%-2rem)] rounded-lg bg-surface p-0 text-ink shadow-floating backdrop:bg-ink/50 ${wide ? "max-w-5xl" : "max-w-md"}`}
     >
       <div className="p-6 sm:p-7">{children}</div>
     </dialog>

@@ -8,7 +8,7 @@ import { ListCard, ListRow, Pagination } from "@/components/list";
 import { NoAccess } from "@/components/no-access";
 import { SearchBox } from "@/components/search-box";
 import { StatusChip } from "@/components/status-chip";
-import { adminNav } from "@/lib/nav";
+import { appNav } from "@/lib/nav";
 import { likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
 import { currentUser, roleLabel } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -22,7 +22,7 @@ async function Companies({ searchParams }: { searchParams: Promise<Query> }) {
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
   if (!user.roles.includes("super_user")) {
     if (user.roles.includes("admin") && user.orgId) redirect(`/setup/${user.orgId}`);
-    return <NoAccess message="Setting up gates needs an administrator. Your own dashboard is on the way." />;
+    redirect("/control-room");
   }
 
   const query = await searchParams;
@@ -41,7 +41,7 @@ async function Companies({ searchParams }: { searchParams: Promise<Query> }) {
 
   return (
     <AppShell
-      nav={adminNav("setup")}
+      nav={appNav(user, "setup")}
       user={{ name: user.fullName, role: roleLabel(user) }}
       eyebrow="Everyone renting DigiGate"
       title="Security companies"

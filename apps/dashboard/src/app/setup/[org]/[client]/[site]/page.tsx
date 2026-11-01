@@ -9,7 +9,7 @@ import { Breadcrumbs, ListCard, Pagination, Tabs } from "@/components/list";
 import { NoAccess } from "@/components/no-access";
 import { SearchBox } from "@/components/search-box";
 import { StatusChip } from "@/components/status-chip";
-import { adminNav } from "@/lib/nav";
+import { appNav } from "@/lib/nav";
 import { anyColumnLike, likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
 import { currentUser, roleLabel } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -192,7 +192,7 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
 
   return (
     <AppShell
-      nav={adminNav("setup")}
+      nav={appNav(user, "setup")}
       user={{ name: user.fullName, role: roleLabel(user) }}
       eyebrow={<Breadcrumbs items={user.roles.includes("super_user") ? [{ label: "Security companies", href: "/setup" }, ...crumbs] : crumbs} />}
       title={site.name}

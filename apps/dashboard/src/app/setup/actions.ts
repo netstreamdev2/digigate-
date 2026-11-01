@@ -110,6 +110,7 @@ export async function setGateUserActive(form: FormData): Promise<void> {
   const supabase = await supabaseServer();
   await supabase.from("gate_users").update({ is_active: text(form, "active") === "true" }).eq("id", text(form, "id"));
   revalidatePath("/setup", "layout");
+  revalidatePath("/people");
 }
 
 /** A one-time code, shown once as a QR and as digits. Only its hash is stored. */
@@ -137,4 +138,5 @@ export async function revokeDevice(form: FormData): Promise<void> {
   const supabase = await supabaseServer();
   await supabase.from("devices").update({ revoked_at: new Date().toISOString(), revoked_by: user?.id ?? null }).eq("id", text(form, "id"));
   revalidatePath("/setup", "layout");
+  revalidatePath("/devices");
 }

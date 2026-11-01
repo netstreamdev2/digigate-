@@ -8,6 +8,9 @@ import { CancelButton, ConfirmButton, Dialog, DialogHeading, useDialog } from ".
 import { FormProblem } from "./form";
 import type { IconName } from "./icon";
 
+const BUTTON = "inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink";
+const COMPACT_BUTTON = "shrink-0 rounded-pill bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-border";
+
 type Props = {
   /** The button on the page. */
   label: string;
@@ -18,12 +21,14 @@ type Props = {
   action: (previous: FormState, form: FormData) => Promise<FormState>;
   /** Sent with the form, such as the company a new client belongs to. */
   fields?: Record<string, string>;
+  /** A small button, for use inside a row. */
+  compact?: boolean;
   /** The inputs. */
   children: ReactNode;
 };
 
 /** A form that opens in a popup, so a list page stays a list however much can be added to it. */
-export function FormDialog({ label, title, icon, submitLabel, pendingLabel, action, fields = {}, children }: Props) {
+export function FormDialog({ label, title, icon, submitLabel, pendingLabel, action, fields = {}, compact = false, children }: Props) {
   const dialog = useDialog();
   const { ref } = dialog;
   const [state, formAction] = useActionState(action, FORM_START);
@@ -37,7 +42,7 @@ export function FormDialog({ label, title, icon, submitLabel, pendingLabel, acti
       <button
         type="button"
         onClick={dialog.open}
-        className="inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink"
+        className={compact ? COMPACT_BUTTON : BUTTON}
       >
         {label}
       </button>

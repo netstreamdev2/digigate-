@@ -32,7 +32,9 @@ export async function currentUser(): Promise<CurrentUser | null> {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("full_name, roles, org_id, is_active").eq("id", user.id).maybeSingle();
+  // A read that failed must not look like an account with no profile: that sends a working user to the wrong message.
+  const { data: profile, error } = await supabase.from("profiles").select("full_name, roles, org_id, is_active").eq("id", user.id).maybeSingle();
+  if (error) throw new Error("The signed-in profile couldn't be read.");
   if (!profile?.is_active) return null;
   return { id: user.id, fullName: profile.full_name, roles: profile.roles, orgId: profile.org_id };
 }
