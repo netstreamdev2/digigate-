@@ -257,6 +257,269 @@ check('person key is never shown', !('person_key' in recent));
 check('dashboard cannot read visit details directly', (await as('authenticated', ADMIN_A, 'aal2', 'select * from digigate.visit_details')).error);
 check('dashboard cannot read event details', (await as('authenticated', ADMIN_A, 'aal2', 'select * from digigate.event_details')).error);
 
+// The control room.
+const OLD_CHECK = u(65);
+await db.exec(`
+  insert into digigate.events (id, org_id, site_id, device_id, type, occurred_at, visit_id) values ('${OLD_CHECK}','${ORG_A}','${SITE_A}','${DEVICE}','vehicle_entry',now() - interval '500 days','${OLD}');
+  insert into digigate.event_details (event_id, org_id, site_id, visit_id, payload) values ('${OLD_CHECK}','${ORG_A}','${SITE_A}','${OLD}','{"driver":{"initials":"O","surname":"PERSON"},"vehicle":{"plate":"CA123456"}}');
+`);
+const SHIFT_NOW = u(51);
+const V5 = u(66);
+await ingest([event('shift_start', { shift_id: SHIFT_NOW, post: 'back-gate', period: 'day' })]);
+await db.exec(`update digigate.shifts set started_at = now() - interval '1 hour' where id = '${SHIFT_NOW}'`);
+const waiting = event('vehicle_entry', { visit_id: V5, outcome: 'blocked', hits: [{ code: 'PLATE_DISC_MISMATCH', severity: 'red', related_visit_id: null }], vehicle, typed_plate: 'TT00TTGX', driver, occupants: 1, visit_type: 'visitor' });
+await ingest([waiting]);
+
+const checks = (profile, aal = 'aal2') => as('authenticated', profile, aal, 'select * from digigate.check_records');
+const checkRows = (await checks(ROOM_A)).rows;
+const carWaiting = checkRows.find((row) => row.id === waiting.id);
+check('a car waiting at the boom has no visit but can still be named', carWaiting.person_name === 'T KHUMALO' && carWaiting.plate === 'TT00TTGP' && (await count(`digigate.visits where id = '${V5}'`)) === 0);
+check('what the guard typed is shown beside the disc', carWaiting.typed_plate === 'TT00TTGX');
+check('the check knows its car and its gate', carWaiting.vehicle_description === 'TOYOTA COROLLA · White' && carWaiting.post === 'back-gate');
+check('a walk-in is named in full', checkRows.find((row) => row.id === refused.id).person_name === 'ZANELE DLAMINI');
+check('only gate checks are listed', !checkRows.some((row) => row.id === failed.id));
+check('neither the key nor the payload comes out', !('person_key' in carWaiting) && !('payload' in carWaiting));
+const oldCheck = checkRows.find((row) => row.id === OLD_CHECK);
+check('a check older than a year is masked', oldCheck.person_name === '*****SON' && oldCheck.plate === '*****456');
+check('no MFA sees no checks', (await checks(ADMIN_A, 'aal1')).rows.length === 0);
+check('a site they were not given sees no checks', (await checks(SUP_A2)).rows.length === 0);
+check('another company sees no checks', (await checks(ADMIN_B)).rows.length === 0);
+check('anon cannot read checks', (await as('anon', '', '', 'select * from digigate.check_records')).error);
+
+const board = (profile, search = '', aal = 'aal2') => as('authenticated', profile, aal, 'select * from digigate.site_board($1, 25, 0)', [search]);
+const adminBoard = (await board(ADMIN_A)).rows;
+const companySites = await count(`digigate.sites where org_id = '${ORG_A}'`);
+check('the board lists the company\'s sites, trouble first', adminBoard.length === companySites && adminBoard[0].site_id === SITE_A && Number(adminBoard[0].red) === 1);
+check('it counts who is inside and on duty', Number(adminBoard[0].on_site) === 1 && Number(adminBoard[0].on_duty) === 1);
+check('and how many sites there are in all', Number(adminBoard[0].total) === companySites);
+check('the board can be searched', (await board(ADMIN_A, '%A2%')).rows.length === 1);
+check('a control room user sees only their sites', (await board(ROOM_A)).rows.length === 1);
+check('another company sees its own alone', (await board(ADMIN_B)).rows.every((row) => row.site_id === SITE_B));
+check('no MFA sees an empty board', (await board(ADMIN_A, '', 'aal1')).rows.length === 0);
+check('anon cannot call the board', (await as('anon', '', '', `select * from digigate.site_board('', 25, 0)`)).error);
+
+const gates = (profile, site = SITE_A, aal = 'aal2') => as('authenticated', profile, aal, 'select * from digigate.gate_board($1)', [site]);
+const gateRows = (await gates(ROOM_A)).rows;
+const backGate = gateRows.find((row) => row.post === 'back-gate');
+check('the control room sees every post', gateRows.length === 2);
+check('and who is on duty, though the guard list is closed to it', backGate.guard === 'Thabo Khumalo' && backGate.period === 'day');
+check('the post nobody is on stays empty', gateRows.find((row) => row.post !== 'back-gate').guard === null);
+check('the last check is shown', backGate.last_check_at !== null);
+check('another site gets no gates', (await gates(SUP_A2)).rows.length === 0);
+check('another company gets no gates', (await gates(ADMIN_B)).rows.length === 0);
+check('no MFA gets no gates', (await gates(ROOM_A, SITE_A, 'aal1')).rows.length === 0);
+check('anon cannot call the gates', (await as('anon', '', '', `select * from digigate.gate_board('${SITE_A}')`)).error);
+await db.exec(`update digigate.shifts set started_at = now() - interval '15 hours' where id = '${SHIFT_NOW}'`);
+check('a shift left open past the limit is not on duty', (await gates(ROOM_A)).rows.every((row) => row.guard === null));
+await db.exec(`update digigate.shifts set started_at = now() - interval '1 hour' where id = '${SHIFT_NOW}'`);
+
+// The device view.
+const SECOND_DEVICE = second.rows[0].device_id;
+const fleet = (profile, search = '', status = '', org = null, aal = 'aal2') => as('authenticated', profile, aal, 'select * from digigate.device_board($1, $2, 25, 0, $3::uuid)', [search, status, org]);
+const fleetRow = async (id) => (await fleet(ADMIN_A)).rows.find((row) => row.id === id);
+await db.exec(`update digigate.devices set last_seen_at = now() where id = '${DEVICE}'`);
+const online = await fleetRow(DEVICE);
+check('a device seen just now is online', online.status === 'online');
+check('it shows where it is and who is on it', online.site_name === 'A1' && online.client_name === 'Hospital A' && online.guard === 'Thabo Khumalo' && online.post !== null);
+check('it shows its activity', online.last_check_at !== null);
+await db.exec(`update digigate.devices set last_seen_at = now() - interval '10 minutes' where id = '${DEVICE}'`);
+check('a quiet device with a guard on it is not responding', (await fleetRow(DEVICE)).status === 'quiet');
+check('and comes first', (await fleet(ADMIN_A)).rows[0].id === DEVICE);
+check('a device that never connected is only offline', (await fleetRow(SECOND_DEVICE)).status === 'offline' && (await fleetRow(SECOND_DEVICE)).last_seen_at === null);
+await db.exec(`update digigate.shifts set started_at = now() - interval '15 hours' where id = '${SHIFT_NOW}'`);
+check('a shift past the limit leaves it only offline', (await fleetRow(DEVICE)).status === 'offline');
+await db.exec(`update digigate.shifts set started_at = now() - interval '1 hour' where id = '${SHIFT_NOW}'`);
+check('the fleet can be filtered by state', (await fleet(ADMIN_A, '', 'quiet')).rows.length === 1 && (await fleet(ADMIN_A, '', 'online')).rows.length === 0);
+check('searched by device', (await fleet(ADMIN_A, '%second%')).rows.length === 1);
+check('searched by client', (await fleet(ADMIN_A, '%hospital a%')).rows.length === 2);
+check('and narrowed to a company', (await fleet(SUPER, '', '', ORG_B)).rows.length === 0 && (await fleet(SUPER, '', '', ORG_A)).rows.length === 2);
+check('the total is on every row', Number((await fleet(ADMIN_A)).rows[0].total) === 2);
+const summary = Object.fromEntries((await as('authenticated', ADMIN_A, 'aal2', `select * from digigate.device_summary('')`)).rows.map((row) => [row.status, Number(row.devices)]));
+check('the summary counts each state', summary.quiet === 1 && summary.offline === 1);
+check('the token hash never comes out', !('token_hash' in online));
+check('another company sees no devices', (await fleet(ADMIN_B)).rows.length === 0);
+check('a site they were not given shows no devices', (await fleet(SUP_A2)).rows.length === 0);
+check('no MFA sees no devices', (await fleet(ADMIN_A, '', '', null, 'aal1')).rows.length === 0);
+check('anon cannot call the fleet', (await as('anon', '', '', `select * from digigate.device_board('', '', 25, 0)`)).error);
+check('anon cannot call the summary', (await as('anon', '', '', `select * from digigate.device_summary('')`)).error);
+check('a deactivated user sees no devices', (await fleet(OFF)).rows.length === 0);
+check('someone with no profile sees no devices', (await fleet(NOBODY)).rows.length === 0);
+check('nobody can call the inner list directly', (await as('authenticated', SUPER, 'aal2', `select * from digigate.fleet('', null)`)).error);
+
+// Daily totals for reports.
+const OCT_30 = '2026-10-30';
+const activity = await one(`select * from digigate.daily_activity where site_id = '${SITE_A}' and day = '${OCT_30}'`);
+check('every gate check is counted once, retries included', activity.checks === 7);
+check('blocked and warning checks are counted', activity.blocked === 2 && activity.warnings === 2);
+check('decisions are counted', activity.overrides === 1 && activity.turned_away === 1 && activity.acknowledged === 1);
+check('entries count only those let in', activity.vehicles_in === 2 && activity.people_in === 1);
+check('exits and stays are counted', activity.exits === 2 && Number(activity.stay_minutes) > 0);
+check('the hours add up to the checks', activity.hours.length === 24 && activity.hours.reduce((sum, value) => sum + value, 0) === 7);
+check('checks land in the hour on the site clock', activity.hours[10] > 0);
+check('rules are counted by code', activity.rules.DISC_EXPIRED === 1 && activity.rules.PLATE_DISC_MISMATCH === 1);
+check('visit types are counted', activity.visit_types.visitor === 2 && activity.visit_types.delivery === 1);
+check('the totals name nobody', !/KHUMALO|DLAMINI|TT00TTGP|TESTVIN|key-a/.test(JSON.stringify(activity)));
+check('totals are closed to dashboard writes', (await as('authenticated', ADMIN_A, 'aal2', 'update digigate.daily_activity set checks = 0')).error);
+check('another company sees no totals', (await as('authenticated', ADMIN_B, 'aal2', 'select * from digigate.daily_activity')).rows.length === 0);
+check('no MFA sees no totals', (await as('authenticated', ADMIN_A, 'aal1', 'select * from digigate.daily_activity')).rows.length === 0);
+
+// Report periods and when schedules run.
+const period = async (frequency, day) => {
+  const row = await one(`select from_day::text, to_day::text from digigate.report_period('${frequency}', '${day}')`);
+  return `${row.from_day} ${row.to_day}`;
+};
+check('a daily period is that day', (await period('daily', OCT_30)) === '2026-10-30 2026-10-30');
+check('a week runs Monday to Sunday', (await period('weekly', OCT_30)) === '2026-10-26 2026-11-01');
+check('a month runs to its last day', (await period('monthly', '2026-02-10')) === '2026-02-01 2026-02-28');
+check('a quarter is three months', (await period('quarterly', OCT_30)) === '2026-10-01 2026-12-31');
+check('a year is the calendar year', (await period('yearly', OCT_30)) === '2026-01-01 2026-12-31');
+const nextRun = async (frequency, at, after) => (await one(`select to_char(digigate.next_report_run('${frequency}', '${at}', '${after}') at time zone 'Africa/Johannesburg', 'YYYY-MM-DD HH24:MI') r`)).r;
+check('a daily report still to come today runs today', (await nextRun('daily', '18:00', '2026-10-30T10:00:00Z')) === '2026-10-30 18:00');
+check('one already past runs tomorrow', (await nextRun('daily', '07:00', '2026-10-30T10:00:00Z')) === '2026-10-31 07:00');
+check('a weekly report runs on Monday', (await nextRun('weekly', '07:00', '2026-10-30T10:00:00Z')) === '2026-11-02 07:00');
+check('a monthly report runs on the 1st', (await nextRun('monthly', '07:00', '2026-10-30T10:00:00Z')) === '2026-11-01 07:00');
+check('a quarterly report runs on the first day of the quarter', (await nextRun('quarterly', '07:00', '2026-10-30T10:00:00Z')) === '2027-01-01 07:00');
+check('a yearly report runs on 1 January', (await nextRun('yearly', '07:00', '2026-10-30T10:00:00Z')) === '2027-01-01 07:00');
+
+// Reading reports.
+const reportOf = (profile, client = null, aal = 'aal2') => as('authenticated', profile, aal, 'select digigate.report_summary($1, $2, $3, $4::uuid) as r', [ORG_A, 'monthly', OCT_30, client]);
+const report = (await reportOf(ADMIN_A)).rows[0].r;
+check('a report covers its period', report.from === '2026-10-01' && report.to === '2026-10-31' && report.days.length === 31);
+check('and the one before it', report.prior_from === '2026-09-01' && report.prior_to === '2026-09-30');
+check('a report totals the period', report.totals.checks === 7 && report.totals.blocked === 2 && report.totals.active_sites === 1);
+check('a report names its company', report.company === 'A');
+check('a report has its hours, rules, types and sites', report.hours.length === 24 && report.rules.length > 0 && report.visit_types[0].type === 'visitor' && report.sites[0].client === 'Hospital A');
+check('a report holds no person or vehicle', !/KHUMALO|DLAMINI|TT00TTGP|TESTVIN|key-a|person_key/.test(JSON.stringify(report)));
+check('a client report narrows to that client', (await reportOf(ADMIN_A, CLIENT_A)).rows[0].r.client === 'Hospital A');
+check('a client with nothing is empty, not an error', (await reportOf(ADMIN_A, CLIENT_B)).rows[0].r.totals.checks === undefined);
+check('a super user can read any company report', (await reportOf(SUPER)).rows[0].r.totals.checks === 7);
+check('another company gets nothing', (await reportOf(ADMIN_B)).rows[0].r === null);
+check('a control room login gets nothing', (await reportOf(ROOM_A)).rows[0].r === null);
+check('no MFA gets nothing', (await reportOf(ADMIN_A, null, 'aal1')).rows[0].r === null);
+check('anon cannot read a report', (await as('anon', '', '', `select digigate.report_summary('${ORG_A}', 'daily', '${OCT_30}')`)).error);
+check('nobody can call the inner report directly', (await as('authenticated', SUPER, 'aal2', `select digigate.report_data('${ORG_A}', null, 'daily', '${OCT_30}')`)).error);
+const today = (await one(`select (now() at time zone 'Africa/Johannesburg')::date::text as d`)).d;
+const finished = (await service(`select digigate.report_data('${ORG_A}', null, 'monthly', '${OCT_30}') as r`)).rows[0].r;
+check('a finished period is marked finished', finished.in_progress === false && finished.prior_to === '2026-09-30');
+const running = (await service(`select digigate.report_data('${ORG_A}', null, 'yearly', '${today}') as r`)).rows[0].r;
+const daysSoFar = Math.round((Date.parse(today) - Date.parse(running.from)) / 86_400_000);
+const compareEnd = new Date(Date.parse(running.prior_from) + daysSoFar * 86_400_000).toISOString().slice(0, 10);
+check('a period still running is marked', running.in_progress === true);
+check('and compares with the same days of the one before', running.prior_to === compareEnd);
+const reportBoard = (profile, search = '', aal = 'aal2') => as('authenticated', profile, aal, 'select * from digigate.report_board($1, $2, 25, 0)', [OCT_30, search]);
+const superBoard = (await reportBoard(SUPER)).rows;
+check('the report board shows every company, busiest first', superBoard.length === (await count('digigate.organisations')) && superBoard[0].org_id === ORG_A && Number(superBoard[0].checks) === 7);
+check('with a week of trend', superBoard[0].trend.length === 7 && superBoard[0].trend[6] === 7);
+check('and can be searched', (await reportBoard(SUPER, '%zz-no-such-company%')).rows.length === 0 && (await reportBoard(SUPER, 'A')).rows.length === 1);
+check('an admin sees only their company', (await reportBoard(ADMIN_A)).rows.length === 1);
+check('a control room login sees no companies', (await reportBoard(ROOM_A)).rows.length === 0);
+check('no MFA sees no companies', (await reportBoard(SUPER, '', 'aal1')).rows.length === 0);
+check('anon cannot read the report board', (await as('anon', '', '', `select * from digigate.report_board('${OCT_30}', '', 25, 0)`)).error);
+const dayTotals = (await as('authenticated', SUPER, 'aal2', `select * from digigate.report_day_totals('${OCT_30}')`)).rows;
+check('the day totals come with the day before', dayTotals.length === 2 && Number(dayTotals[0].checks) === 7 && Number(dayTotals[1].checks) === 0);
+check('another company stays out of the day totals', Number((await as('authenticated', ADMIN_B, 'aal2', `select * from digigate.report_day_totals('${OCT_30}')`)).rows[0].checks) === 0);
+
+// Report schedules and sends.
+const addSchedule = (profile, org = ORG_A, client = 'null', recipients = "'{a@example.com}'") => as('authenticated', profile, 'aal2', `insert into digigate.report_schedules (org_id, client_id, name, frequency, send_at, recipients) values ('${org}', ${client}, 'Daily', 'daily', '07:00', ${recipients}) returning id, next_run_at`);
+const schedule = await addSchedule(ADMIN_A);
+check('an admin can automate a report, and it knows when it runs next', schedule.rows.length === 1 && schedule.rows[0].next_run_at !== null);
+check('a schedule needs someone to send to', (await addSchedule(ADMIN_A, ORG_A, 'null', "'{}'")).error);
+check('it can be paused', (await as('authenticated', ADMIN_A, 'aal2', `update digigate.report_schedules set is_active = false where id = '${schedule.rows[0].id}' returning id`)).rows.length === 1);
+check('its run times cannot be set by hand', (await as('authenticated', ADMIN_A, 'aal2', 'update digigate.report_schedules set next_run_at = now()')).error);
+check('another admin cannot add one for this company', (await addSchedule(ADMIN_B)).error);
+check('nor point one at the client of another company', (await addSchedule(ADMIN_A, ORG_A, `'${CLIENT_B}'`)).error);
+check('another company cannot see it', (await as('authenticated', ADMIN_B, 'aal2', 'select id from digigate.report_schedules')).rows.length === 0);
+check('nor can a control room login', (await as('authenticated', ROOM_A, 'aal2', 'select id from digigate.report_schedules')).rows.length === 0);
+check('the send history cannot be written from the dashboard', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.report_sends (org_id, frequency, period_from, period_to, subject, recipients, status) values ('${ORG_A}', 'daily', now(), now(), 's', '{a}', 'sent')`)).error);
+
+// The audit log.
+const auditFor = (where) => one(`select * from digigate.audit_log where ${where} order by at desc limit 1`);
+await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}', 'Audited Client')`);
+const added = await auditFor(`action = 'client.added' and target = 'Audited Client'`);
+check('a dashboard change is logged with who did it', added?.actor_id === ADMIN_A && added.category === 'setup' && added.org_id === ORG_A);
+check('the audit names them', added?.actor_name?.length > 0);
+const seenBefore = await count(`digigate.audit_log where device_id = '${DEVICE}'`);
+await service('select digigate.device_for_token($1) as id', ['t1']);
+check('a device checking in adds nothing to the log', (await count(`digigate.audit_log where device_id = '${DEVICE}'`)) === seenBefore);
+const overrideLog = await auditFor(`action = 'gate.override'`);
+check('a gate override is logged under the supervisor', overrideLog?.actor_name?.length > 0 && overrideLog.detail === 'IGNITION_RESTART_FAILED');
+check('but never its free-text reason', !JSON.stringify(overrideLog).includes('Flat battery'));
+const failedLog = await auditFor(`action = 'gate.sign_in_failed'`);
+check('a failed sign-in is logged without the employee number', failedLog !== undefined && !JSON.stringify(failedLog).includes('1001'));
+check('a shift is logged with its post', (await auditFor(`action = 'gate.shift_start'`))?.detail?.includes('back-gate'));
+await as('authenticated', ADMIN_A, 'aal2', 'select digigate.note_sign_in()');
+check('a dashboard sign-in is logged', (await auditFor(`action = 'dashboard.signed_in'`))?.actor_id === ADMIN_A);
+await as('authenticated', ADMIN_A, 'aal1', 'select digigate.note_sign_in()');
+check('but not before MFA', (await count(`digigate.audit_log where action = 'dashboard.signed_in'`)) === 1);
+const unchanged = await as('authenticated', ADMIN_A, 'aal2', `update digigate.gate_users set first_name = 'Thabo' where employee_number = '1001' returning id`);
+check('saving no real change logs nothing', unchanged.rows.length === 1 && (await count(`digigate.audit_log where action = 'gate_user.changed'`)) === 0);
+const auditRows = (profile, aal = 'aal2') => as('authenticated', profile, aal, 'select id, org_id from digigate.audit_log');
+check('an admin reads the log of their company', (await auditRows(ADMIN_A)).rows.length > 0 && (await auditRows(ADMIN_A)).rows.every((row) => row.org_id === ORG_A));
+check('another company sees none of it', (await auditRows(ADMIN_B)).rows.every((row) => row.org_id === ORG_B));
+check('a super user reads every company', (await auditRows(SUPER)).rows.length >= (await auditRows(ADMIN_A)).rows.length);
+check('a control room login reads none', (await auditRows(ROOM_A)).rows.length === 0);
+check('no MFA reads none', (await auditRows(SUPER, 'aal1')).rows.length === 0);
+check('anon cannot read the log', (await as('anon', '', '', 'select * from digigate.audit_log')).error);
+check('nobody can write to the log directly', (await as('authenticated', SUPER, 'aal2', `insert into digigate.audit_log (category, action) values ('setup', 'x')`)).error);
+check('nobody can change the log', (await service(`update digigate.audit_log set action = 'x'`)).error);
+check('nobody can delete from the log', (await service('delete from digigate.audit_log')).error);
+const auditCounts = (profile) => as('authenticated', profile, 'aal2', `select * from digigate.audit_summary(now() - interval '10 years', now() + interval '1 day')`);
+check('the log counts its categories', (await auditCounts(SUPER)).rows.some((row) => row.category === 'gate' && Number(row.entries) > 0));
+check('a control room login counts nothing', (await auditCounts(ROOM_A)).rows.length === 0);
+let auditOwnerBlocked = false;
+try {
+  await db.exec('delete from digigate.audit_log');
+} catch {
+  auditOwnerBlocked = true;
+}
+check('not even the owner', auditOwnerBlocked);
+
+// The People page.
+const logins = (profile, { search = '', role = '', status = '', newest = false, org = null } = {}, aal = 'aal2') =>
+  as('authenticated', profile, aal, 'select * from digigate.people_board($1, $2, $3, $4, 25, 0, $5::uuid)', [search, role, status, newest, org]);
+const staff = (profile, { search = '', role = '', status = '', org = null } = {}, aal = 'aal2') =>
+  as('authenticated', profile, aal, 'select * from digigate.gate_staff_board($1, $2, $3, false, 25, 0, $4::uuid)', [search, role, status, org]);
+
+const everyone = (await logins(SUPER)).rows;
+check('a super user sees every login', everyone.length === (await count('digigate.profiles')));
+check('with its role and company', everyone.some((row) => row.id === ADMIN_A && row.role === 'admin' && row.company === 'A'));
+check('the total is on every row', Number(everyone[0].total) === everyone.length);
+check('no password or PIN comes back', !everyone.some((row) => 'pin' in row || 'password' in row));
+const ownLogins = (await logins(ADMIN_A)).rows;
+check('an admin sees only their company', ownLogins.length > 0 && ownLogins.every((row) => row.company === 'A'));
+check('and never a super user', !ownLogins.some((row) => row.role === 'super_user'));
+check('another company sees none of them', !(await logins(ADMIN_B)).rows.some((row) => row.company === 'A'));
+check('a control room login sees nobody', (await logins(ROOM_A)).rows.length === 0);
+check('no MFA sees nobody', (await logins(SUPER, {}, 'aal1')).rows.length === 0);
+check('someone with no profile sees nobody', (await logins(NOBODY)).rows.length === 0);
+check('anon cannot read logins', (await as('anon', '', '', `select * from digigate.people_board('', '', '', false, 25, 0)`)).error);
+check('logins filter by role', (await logins(SUPER, { role: 'admin' })).rows.every((row) => row.role === 'admin'));
+check('and by status', (await logins(SUPER, { status: 'inactive' })).rows.every((row) => row.is_active === false));
+check('and by company', (await logins(SUPER, { org: ORG_B })).rows.every((row) => row.company === 'B'));
+check('a search finds a login by company', (await logins(SUPER, { search: 'B' })).rows.some((row) => row.company === 'B'));
+check('a search that matches nothing finds nobody', (await logins(SUPER, { search: '%zz-nobody%' })).rows.length === 0);
+const loginCounts = (await as('authenticated', ADMIN_A, 'aal2', `select * from digigate.people_counts('')`)).rows;
+check('the counts add up to the list', loginCounts.reduce((sum, row) => sum + Number(row.people), 0) === ownLogins.length);
+check('a control room login counts nobody', (await as('authenticated', ROOM_A, 'aal2', `select * from digigate.people_counts('')`)).rows.length === 0);
+
+const ownStaff = (await staff(ADMIN_A)).rows;
+check('an admin sees their gate staff', ownStaff.length > 0 && ownStaff.every((row) => row.company === 'A'));
+check('the PIN never comes back', !ownStaff.some((row) => 'pin' in row));
+check('another company sees none of them', !(await staff(ADMIN_B)).rows.some((row) => row.company === 'A'));
+check('a super user sees every company', (await staff(SUPER)).rows.length >= ownStaff.length);
+check('a control room login sees no staff', (await staff(ROOM_A)).rows.length === 0);
+check('no MFA sees no staff', (await staff(SUPER, {}, 'aal1')).rows.length === 0);
+check('anon cannot read staff', (await as('anon', '', '', `select * from digigate.gate_staff_board('', '', '', false, 25, 0)`)).error);
+check('staff are found by employee number', (await staff(ADMIN_A, { search: '1001' })).rows.length === 1);
+check('and by full name', (await staff(ADMIN_A, { search: '%Thabo Khumalo%' })).rows.length === 1);
+check('and filtered by role', (await staff(ADMIN_A, { role: 'supervisor' })).rows.every((row) => row.role === 'supervisor'));
+check('and by status', (await staff(ADMIN_A, { status: 'inactive' })).rows.every((row) => row.is_active === false));
+check('someone on a shift shows where', ownStaff.find((row) => row.employee_number === '1001')?.on_duty_at !== null);
+check('someone off shift shows nowhere', ownStaff.find((row) => row.employee_number === '2001')?.on_duty_at === null);
+const staffCounts = (await as('authenticated', ADMIN_A, 'aal2', `select * from digigate.gate_staff_counts('')`)).rows;
+check('the staff counts add up', staffCounts.reduce((sum, row) => sum + Number(row.people), 0) === ownStaff.length);
+check('and count who is on duty', staffCounts.reduce((sum, row) => sum + Number(row.on_duty), 0) === 1);
+
 // Append-only and erasure.
 const change = async (sql) => (await service(sql)).error;
 check('service role cannot change an event', await change(`update digigate.events set type = 'x'`));
@@ -289,6 +552,11 @@ check('client viewer sees the client\'s visits', (await seen(VIEWER)).length ===
 check('client viewer needs MFA too', (await visits(VIEWER, 'aal1')).rows.length === 0);
 check('client viewer sees their client only', (await as('authenticated', VIEWER, 'aal2', 'select id from digigate.clients')).rows.length === 1);
 check('client viewer sees no guard list', (await as('authenticated', VIEWER, 'aal2', 'select id from digigate.gate_users')).rows.length === 0);
+const viewerGate = (await as('authenticated', VIEWER, 'aal2', 'select * from digigate.gate_board($1)', [SITE_A])).rows.find((row) => row.post === 'back-gate');
+check('client viewer sees a gate is staffed, not by whom', viewerGate?.on_duty_since !== null && viewerGate?.guard === null);
+check('client viewer reads the checks at their site', (await as('authenticated', VIEWER, 'aal2', 'select id from digigate.check_records')).rows.length > 0);
+const viewerDevices = (await as('authenticated', VIEWER, 'aal2', `select * from digigate.device_board('', '', 25, 0)`)).rows;
+check('client viewer sees the devices at their site, with no guard names', viewerDevices.length > 0 && viewerDevices.every((row) => row.guard === null));
 const viewerResolves = await as('authenticated', VIEWER, 'aal2', `update digigate.alerts set status = 'open' returning id`);
 check('client viewer cannot change alerts', viewerResolves.rows.length === 0);
 check('client viewer cannot add a post', (await as('authenticated', VIEWER, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_A}','v','V','{vehicle}')`)).error);

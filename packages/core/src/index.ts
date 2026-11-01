@@ -20,6 +20,7 @@ export { isExpired } from './rules/dates';
 export { normaliseIdentifier } from './identifiers';
 export { sameVin, vehicleVisits } from './rules/vehicles';
 export { uuidv7 } from './ids';
+export * from './reports';
 export { RULE_SEVERITY, type RuleCode, type Severity } from './rules/codes';
 export { outcomeOf } from './rules/hits';
 export { findOverstays } from './rules/overstay';
