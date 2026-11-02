@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { carA, carB, codes, config, gateState, identity, MINUTE, NOW, registered, vehicleVisit } from './test-builders';
+import { outcomeOf } from './hits';
+import { carA, carB, codes, config, gateState, identity, MINUTE, NOW, pedestrianVisit, registered, vehicleVisit } from './test-builders';
 import type { VehicleEntryScan } from './types';
 import { evaluateVehicleEntry } from './vehicle-entry';
 
@@ -38,7 +39,7 @@ describe('evaluateVehicleEntry', () => {
     });
 
     it('does not fire for a different car inside', () => {
-      const state = gateState({ openVisits: [vehicleVisit({ id: 'visit-car-b', vehicle: identity(carB) })] });
+      const state = gateState({ openVisits: [vehicleVisit({ id: 'visit-car-b', driverKey: 'person-b', vehicle: identity(carB) })] });
       expect(evaluateVehicleEntry(entry(), state, config)).toEqual([]);
     });
   });
@@ -53,14 +54,14 @@ describe('evaluateVehicleEntry', () => {
 
     it('fires when a car inside has this disc number under another plate', () => {
       const state = gateState({
-        openVisits: [vehicleVisit({ id: 'visit-car-b', vehicle: { ...identity(carB), discNumber: carA.discNumber } })],
+        openVisits: [vehicleVisit({ id: 'visit-car-b', driverKey: 'person-b', vehicle: { ...identity(carB), discNumber: carA.discNumber } })],
       });
       expect(codes(evaluateVehicleEntry(entry(), state, config))).toEqual(['DISC_CLONE_ON_SITE']);
     });
 
     it('fires when a car inside has this plate under another VIN', () => {
       const state = gateState({
-        openVisits: [vehicleVisit({ id: 'visit-car-b', vehicle: { ...identity(carB), plate: carA.plate } })],
+        openVisits: [vehicleVisit({ id: 'visit-car-b', driverKey: 'person-b', vehicle: { ...identity(carB), plate: carA.plate } })],
       });
       expect(codes(evaluateVehicleEntry(entry(), state, config))).toEqual(['DISC_CLONE_ON_SITE']);
     });
@@ -154,7 +155,36 @@ describe('evaluateVehicleEntry', () => {
   });
 
   it('does not care how long other visits have been open', () => {
-    const state = gateState({ openVisits: [vehicleVisit({ id: 'visit-car-b', vehicle: identity(carB), enteredAt: NOW - 600 * MINUTE })] });
+    const state = gateState({ openVisits: [vehicleVisit({ id: 'visit-car-b', driverKey: 'person-b', vehicle: identity(carB), enteredAt: NOW - 600 * MINUTE })] });
     expect(evaluateVehicleEntry(entry(), state, config)).toEqual([]);
+  });
+});
+
+describe('DRIVER_ALREADY_ON_SITE', () => {
+  const walkedIn = pedestrianVisit({ id: 'visit-walked-in', personKey: 'person-a' });
+
+  it('fires when the driver walked in and has not walked out', () => {
+    const hits = evaluateVehicleEntry(entry(), gateState({ openVisits: [walkedIn] }), config);
+    expect(hits).toEqual([{ code: 'DRIVER_ALREADY_ON_SITE', severity: 'amber', relatedVisitId: 'visit-walked-in' }]);
+    expect(outcomeOf(hits)).toBe('warning');
+  });
+
+  it('fires when the driver brought another car in that is still on site', () => {
+    const hits = evaluateVehicleEntry(entry({ disc: carB, typedPlate: carB.plate }), gateState({ openVisits: [vehicleVisit()] }), config);
+    expect(hits).toEqual([{ code: 'DRIVER_ALREADY_ON_SITE', severity: 'amber', relatedVisitId: 'visit-car-a' }]);
+  });
+
+  it('leaves the same car entering twice to DUPLICATE_ENTRY', () => {
+    expect(codes(evaluateVehicleEntry(entry(), gateState({ openVisits: [vehicleVisit()] }), config))).toEqual(['DUPLICATE_ENTRY']);
+  });
+
+  it('does not fire for someone else on site', () => {
+    const someoneElse = pedestrianVisit({ personKey: 'person-b' });
+    expect(evaluateVehicleEntry(entry(), gateState({ openVisits: [someoneElse] }), config)).toEqual([]);
+  });
+
+  it('can be switched off by the site', () => {
+    const quiet = { ...config, disabledRules: ['DRIVER_ALREADY_ON_SITE' as const] };
+    expect(evaluateVehicleEntry(entry(), gateState({ openVisits: [walkedIn] }), quiet)).toEqual([]);
   });
 });

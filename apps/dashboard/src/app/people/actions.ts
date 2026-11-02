@@ -52,7 +52,7 @@ export async function createPerson(_previous: CreateState, form: FormData): Prom
   });
   if (!data.login || !data.password) return { problem: PROBLEMS[data.error ?? ""] ?? SOMETHING_FAILED, created: null };
 
-  revalidatePath("/people");
+  // No refresh here: the page catches up when the popup closes, so the temporary password can't vanish before it's copied.
   return { problem: null, created: { name: String(form.get("fullName") ?? ""), login: data.login, password: data.password } };
 }
 

@@ -59,8 +59,9 @@ export function CancelButton({ onClick, label = "Cancel" }: { onClick: () => voi
   );
 }
 
-export function ConfirmButton({ label, pendingLabel, tone }: { label: string; pendingLabel: string; tone: Tone }) {
-  const { pending } = useFormStatus();
+export function ConfirmButton({ label, pendingLabel, tone, pending: sending = false }: { label: string; pendingLabel: string; tone: Tone; pending?: boolean }) {
+  const status = useFormStatus();
+  const pending = sending || status.pending;
   return (
     <button
       type="submit"

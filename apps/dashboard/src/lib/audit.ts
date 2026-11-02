@@ -70,6 +70,10 @@ const WORDS: Readonly<Record<string, string>> = {
   "gate.override": "overrode a block at",
   "gate.turned_away": "turned someone away at",
   "gate.alert_ack": "let someone through after a warning at",
+  "gate.left_post": "left their post with",
+  "gate.returned_to_post": "came back to their post with",
+  "gate.stepping_away": "said they were stepping away from",
+  "shift.selfie_viewed": "looked at the shift photo of",
 };
 
 export type AuditEntry = {
@@ -88,7 +92,8 @@ export type AuditFilter = { search: string; category: AuditCategory | null; comp
 function detailOf(action: string, detail: string | null): string | null {
   if (!detail) return null;
   if (action === "gate.override" || action === "gate.turned_away" || action === "gate.alert_ack") return detail.split(", ").map(ruleTitle).join(", ");
-  if (action.startsWith("gate.shift")) return detail.split(" · ").map(plainLabel).join(" · ");
+  if (action.startsWith("gate.shift") || action.endsWith("_post")) return detail.split(" · ").map(plainLabel).join(" · ");
+  if (action === "gate.stepping_away") return detail.split(" · ").map((part, index) => (index === 0 ? plainLabel(part) : part)).join(" · ");
   if (action.endsWith(".changed")) return `Changed: ${detail.split(", ").map(plainLabel).join(", ")}`;
   return action === "person.added" ? plainLabel(detail) : detail;
 }

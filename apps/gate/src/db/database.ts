@@ -75,6 +75,45 @@ const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX shifts_open ON shifts (ended_at);
   `,
+  // A shift's photo waits here, encrypted with the rest, until the server has it. away_until is when a guard who said
+  // they were stepping away is due back, so the pause survives a restart.
+  `
+  CREATE TABLE shift_selfies (
+    shift_id TEXT PRIMARY KEY NOT NULL,
+    taken_at INTEGER NOT NULL,
+    jpeg_base64 TEXT NOT NULL
+  );
+  ALTER TABLE shifts ADD COLUMN away_until INTEGER;
+  `,
+  // The expiry on the disc a car came in with, so a car leaving with a different disc is caught.
+  `
+  ALTER TABLE visits ADD COLUMN disc_expires_on TEXT;
+  `,
+  // The open visits of every gate at the site, from the server, kept apart from this device's own. Each sync writes a
+  // new generation and then switches to it in one step, so a scan never reads half a sync. closed_visits remembers what
+  // this device ended until the server stops listing it.
+  `
+  CREATE TABLE site_visits (
+    generation INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('vehicle', 'pedestrian')),
+    person_key TEXT NOT NULL,
+    vin TEXT,
+    plate TEXT,
+    disc_number TEXT,
+    disc_expires_on TEXT,
+    occupants INTEGER,
+    visit_type TEXT NOT NULL,
+    entered_at INTEGER NOT NULL,
+    person_name TEXT NOT NULL,
+    vehicle_description TEXT,
+    PRIMARY KEY (generation, id)
+  );
+  CREATE TABLE closed_visits (
+    id TEXT PRIMARY KEY NOT NULL,
+    closed_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export type LocalDatabase = {

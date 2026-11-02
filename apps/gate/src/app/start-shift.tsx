@@ -11,8 +11,10 @@ import { OptionTile } from '@/components/option-tile';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
+import type { ShiftPhoto } from '@/db/shifts';
 import { currentPosts, shiftPeriodAt, siteConfig } from '@/site/site-config';
 import { useShift } from '@/shift/shift-context';
+import { ShiftSelfie } from '@/shift/shift-selfie';
 
 export default function StartShiftScreen() {
   const insets = useSafeAreaInsets();
@@ -22,19 +24,23 @@ export default function StartShiftScreen() {
   const [posts] = useState(currentPosts);
   const [post, setPost] = useState<string>(posts[0]?.code ?? '');
   const [period, setPeriod] = useState<string>(() => shiftPeriodAt(Date.now()).code);
+  const [takingPhoto, setTakingPhoto] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startProblem, setStartProblem] = useState<string | null>(null);
 
-  const begin = async () => {
+  const begin = async (photo: ShiftPhoto) => {
+    setTakingPhoto(false);
     setStarting(true);
     setStartProblem(null);
     try {
-      await start(post, period);
+      await start(post, period, photo);
     } catch (cause) {
       setStartProblem(`Your shift wasn't started (${cause instanceof Error ? cause.message : 'unknown error'}). Try the switch again.`);
       setStarting(false);
     }
   };
+
+  if (takingPhoto) return <ShiftSelfie onDone={begin} onCancel={() => setTakingPhoto(false)} />;
 
   return (
     <ScrollView
@@ -106,7 +112,7 @@ export default function StartShiftScreen() {
         </View>
         <Switch
           value={starting}
-          onValueChange={begin}
+          onValueChange={() => setTakingPhoto(true)}
           disabled={starting}
           trackColor={{ false: colors.border, true: colors.clear }}
           thumbColor={colors.surface}

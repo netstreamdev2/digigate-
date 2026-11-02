@@ -7,6 +7,20 @@ import { supabaseServer } from "./supabase/server";
 /** `quiet` is a device that stopped answering with a guard on duty. With nobody on it, it's only `offline`. */
 export type DeviceStatus = "quiet" | "offline" | "online" | "revoked";
 
+export type DeviceHealth = {
+  battery: number | null;
+  charging: boolean;
+  network: string | null;
+  wifiName: string | null;
+  cellGeneration: string | null;
+  cellBars: number | null;
+  appVersion: string | null;
+  locationAllowed: boolean | null;
+  /** Null for a client's view-only login. */
+  latitude: number | null;
+  longitude: number | null;
+};
+
 export type FleetDevice = {
   id: string;
   name: string;
@@ -21,6 +35,7 @@ export type FleetDevice = {
   status: DeviceStatus;
   lastCheckAt: string | null;
   checksToday: number;
+  health: DeviceHealth | null;
 };
 
 type Filter = { search: string; company: string };
@@ -30,6 +45,25 @@ const STATUSES: readonly DeviceStatus[] = ["quiet", "offline", "online", "revoke
 export const asDeviceStatus = (value: string): DeviceStatus | null => STATUSES.find((status) => status === value) ?? null;
 
 const pattern = (search: string) => (search ? likePattern(search) : "");
+
+function healthFrom(report: unknown): DeviceHealth | null {
+  if (typeof report !== "object" || report === null) return null;
+  const read = report as Record<string, unknown>;
+  const number = (key: string) => (typeof read[key] === "number" ? read[key] : null);
+  const words = (key: string) => (typeof read[key] === "string" ? read[key] : null);
+  return {
+    battery: number("battery"),
+    charging: read.charging === true,
+    network: words("network"),
+    wifiName: words("wifiName"),
+    cellGeneration: words("cellGeneration"),
+    cellBars: number("cellBars"),
+    appVersion: words("appVersion"),
+    locationAllowed: typeof read.locationAllowed === "boolean" ? read.locationAllowed : null,
+    latitude: number("latitude"),
+    longitude: number("longitude"),
+  };
+}
 
 /** One page of the fleet, trouble first. The database decides whose devices come back. */
 export async function deviceBoard({ search, company }: Filter, status: DeviceStatus | null, page: number): Promise<{ devices: FleetDevice[]; total: number }> {
@@ -57,6 +91,7 @@ export async function deviceBoard({ search, company }: Filter, status: DeviceSta
         status: known,
         lastCheckAt: row.last_check_at,
         checksToday: row.checks_today,
+        health: healthFrom(row.health),
       };
       return [device];
     }),

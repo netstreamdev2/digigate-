@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { AddedNotice } from "@/components/added-notice";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmAction } from "@/components/dialog";
 import { Field, SelectField } from "@/components/form";
@@ -11,11 +12,13 @@ import { SearchBox } from "@/components/search-box";
 import { StatusChip } from "@/components/status-chip";
 import { appNav } from "@/lib/nav";
 import { anyColumnLike, likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
+import { counted, maybe, must } from "@/lib/reads";
 import { currentUser, roleLabel } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
-import { addGateUser, addPost, revokeDevice, setGateUserActive } from "../../../actions";
-import { LaneChoices, PairDeviceButton } from "../../../setup-forms";
+import { addGateUser, addPost, revokeDevice, setGateUserActive, setPostLocation } from "../../../actions";
+import { PairDeviceButton } from "../../../pair-device";
+import { LaneChoices } from "../../../setup-forms";
 
 const LANE_LABELS: Record<string, string> = { vehicle: "Cars", pedestrian: "On foot" };
 
@@ -42,17 +45,31 @@ async function PostsTab({ ids, query, path }: { ids: SiteIds; query: Query; path
   const page = pageParam(query);
   const [from, to] = rangeOf(page);
   const supabase = await supabaseServer();
-  let list = supabase.from("posts").select("id, label, lanes", { count: "exact" }).eq("site_id", ids.site).order("created_at").range(from, to);
+  let list = supabase.from("posts").select("id, label, lanes, latitude, longitude, radius_m", { count: "exact" }).eq("site_id", ids.site).order("created_at").range(from, to);
   if (search) list = list.ilike("label", likePattern(search));
-  const { data: posts, count } = await list;
+  const listed = await list;
+  const posts = must(listed);
+  const count = counted(listed);
   return (
     <ListCard
-      isEmpty={!posts?.length}
+      isEmpty={posts.length === 0}
       empty={search ? "Nothing matches that search." : "No posts yet. Guards pick one when they start a shift."}
       footer={<Pagination page={page} total={count ?? 0} hrefFor={(next) => pageHref(path, query, next)} />}
     >
-      {posts?.map((post) => (
-        <Row key={post.id} title={post.label} detail={post.lanes.map((lane) => LANE_LABELS[lane] ?? lane).join(" and ")} />
+      {posts.map((post) => (
+        <Row
+          key={post.id}
+          title={post.label}
+          detail={`${post.lanes.map((lane) => LANE_LABELS[lane] ?? lane).join(" and ")} · ${post.latitude === null ? "No location set" : `Geofence ${post.radius_m} m`}`}
+        >
+          <FormDialog compact label="Set location" title={`Where is ${post.label}?`} icon="sites" submitLabel="Save location" pendingLabel="Saving…" action={setPostLocation} fields={{ id: post.id }}>
+            <p className="text-sm text-ink-muted">
+              In Google Maps, right-click the gate and click the numbers at the top to copy them. A guard who goes further than the distance below is warned on their handheld, and the control room is told. Leave the location empty to turn this off.
+            </p>
+            <Field label="Latitude and longitude" name="location" placeholder="-33.9249, 18.4241" defaultValue={post.latitude === null ? "" : `${post.latitude}, ${post.longitude}`} autoComplete="off" autoFocus />
+            <Field label="Distance from the post, in metres" name="radius" type="number" inputMode="numeric" min={30} max={1000} defaultValue={post.radius_m} required />
+          </FormDialog>
+        </Row>
       ))}
     </ListCard>
   );
@@ -70,14 +87,16 @@ async function StaffTab({ ids, query, path }: { ids: SiteIds; query: Query; path
     .order("employee_number")
     .range(from, to);
   if (search) list = list.or(anyColumnLike(["first_name", "last_name", "employee_number"], search));
-  const { data: people, count } = await list;
+  const listed = await list;
+  const people = must(listed);
+  const count = counted(listed);
   return (
     <ListCard
-      isEmpty={!people?.length}
+      isEmpty={people.length === 0}
       empty={search ? "Nothing matches that search." : "No gate staff yet."}
       footer={<Pagination page={page} total={count ?? 0} hrefFor={(next) => pageHref(path, query, next)} />}
     >
-      {people?.map((person) => {
+      {people.map((person) => {
         const name = `${person.first_name} ${person.last_name}`;
         return (
           <Row key={person.id} title={name} detail={`${person.employee_number} · ${person.role === "supervisor" ? "Supervisor" : "Guard"}`}>
@@ -130,14 +149,16 @@ async function DevicesTab({ ids, query, path }: { ids: SiteIds; query: Query; pa
     .order("paired_at", { ascending: false })
     .range(from, to);
   if (search) list = list.ilike("name", likePattern(search));
-  const { data: devices, count } = await list;
+  const listed = await list;
+  const devices = must(listed);
+  const count = counted(listed);
   return (
     <ListCard
-      isEmpty={!devices?.length}
+      isEmpty={devices.length === 0}
       empty={search ? "Nothing matches that search." : "No devices yet. Pair each handheld once and it then works offline."}
       footer={<Pagination page={page} total={count ?? 0} hrefFor={(next) => pageHref(path, query, next)} />}
     >
-      {devices?.map((device) => (
+      {devices.map((device) => (
         <Row
           key={device.id}
           title={device.name}
@@ -176,7 +197,7 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
   const tab = asTab(textParam(query, "tab"));
 
   const supabase = await supabaseServer();
-  const [{ data: company }, { data: client }, { data: site }, posts, staff, devices] = await Promise.all([
+  const [companyRead, clientRead, siteRead, posts, staff, devices] = await Promise.all([
     supabase.from("organisations").select("name").eq("id", ids.org).maybeSingle(),
     supabase.from("clients").select("name").eq("id", ids.client).maybeSingle(),
     supabase.from("sites").select("name").eq("id", ids.site).eq("client_id", ids.client).maybeSingle(),
@@ -184,7 +205,11 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
     supabase.from("gate_users").select("id", { count: "exact", head: true }).contains("site_ids", [ids.site]),
     supabase.from("devices").select("id", { count: "exact", head: true }).eq("site_id", ids.site),
   ]);
+  const company = maybe(companyRead);
+  const client = maybe(clientRead);
+  const site = maybe(siteRead);
   if (!company || !client || !site) notFound();
+  const justAdded = textParam(query, "added") === "1";
 
   const base = `/setup/${ids.org}/${ids.client}/${ids.site}`;
   const crumbs = [{ label: company.name, href: `/setup/${ids.org}` }, { label: client.name, href: `/setup/${ids.org}/${ids.client}` }, { label: site.name }];
@@ -228,11 +253,14 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
                 </SelectField>
               </FormDialog>
             ) : null}
-            {tab === "devices" ? <PairDeviceButton orgId={ids.org} siteId={ids.site} /> : null}
+            {tab === "devices" ? (
+              <PairDeviceButton place={{ company: { id: ids.org, name: company.name }, client: { id: ids.client, name: client.name }, site: { id: ids.site, name: site.name } }} />
+            ) : null}
           </div>
         </div>
       }
     >
+      {justAdded ? <AddedNotice title={`${site.name} is added`} next="Add its posts and set where each one is, then its gate staff, then pair a handheld." /> : null}
       {tab === "posts" ? <PostsTab ids={ids} query={query} path={base} /> : null}
       {tab === "staff" ? <StaffTab ids={ids} query={query} path={base} /> : null}
       {tab === "devices" ? <DevicesTab ids={ids} query={query} path={base} /> : null}

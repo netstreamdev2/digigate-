@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, type FormEvent, type ReactNode } from "react";
 
 import { FORM_START, type FormState } from "@/lib/form-state";
 
@@ -31,11 +31,18 @@ type Props = {
 export function FormDialog({ label, title, icon, submitLabel, pendingLabel, action, fields = {}, compact = false, children }: Props) {
   const dialog = useDialog();
   const { ref } = dialog;
-  const [state, formAction] = useActionState(action, FORM_START);
+  const [state, formAction, pending] = useActionState(action, FORM_START);
 
   useEffect(() => {
     if (state.saved) ref.current?.close();
   }, [ref, state.saved]);
+
+  // Sent by hand because React empties a form once its action finishes, which would wipe what was typed when it's refused.
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    startTransition(() => formAction(form));
+  };
 
   return (
     <>
@@ -48,7 +55,7 @@ export function FormDialog({ label, title, icon, submitLabel, pendingLabel, acti
       </button>
       <Dialog dialogRef={dialog.ref}>
         <DialogHeading icon={icon} tone="neutral" title={title} />
-        <form key={state.saved} action={formAction} className="mt-5 flex flex-col gap-4">
+        <form key={state.saved} onSubmit={submit} className="mt-5 flex flex-col gap-4">
           <FormProblem message={state.problem} />
           {Object.entries(fields).map(([name, value]) => (
             <input key={name} type="hidden" name={name} value={value} />
@@ -56,7 +63,7 @@ export function FormDialog({ label, title, icon, submitLabel, pendingLabel, acti
           {children}
           <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <CancelButton onClick={dialog.close} />
-            <ConfirmButton label={submitLabel} pendingLabel={pendingLabel} tone="neutral" />
+            <ConfirmButton label={submitLabel} pendingLabel={pendingLabel} tone="neutral" pending={pending} />
           </div>
         </form>
       </Dialog>

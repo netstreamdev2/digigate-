@@ -25,6 +25,7 @@
     },
     "production": {
       "extends": "base",
+      "environment": "production",
       "distribution": "internal",
       "autoIncrement": true,
       "android": {

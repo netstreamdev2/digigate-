@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 
 import { CancelButton, ConfirmButton, Dialog, DialogHeading, useDialog } from "@/components/dialog";
 import { Field, FormProblem, SelectField } from "@/components/form";
@@ -85,9 +86,10 @@ function PasswordHandOver({ name, login, password }: { name: string; login: stri
   );
 }
 
-function PersonSteps({ companies, onClose }: { companies: readonly Named[]; onClose: () => void }) {
-  const [state, action] = useActionState(createPerson, NOTHING_YET);
-  const [role, setRole] = useState("control_room");
+/** `role` fixes the role, for a button that only ever adds one kind of login, such as a company's administrator. */
+function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Named[]; fixedRole?: string; onClose: () => void }) {
+  const [state, action, pending] = useActionState(createPerson, NOTHING_YET);
+  const [role, setRole] = useState(fixedRole ?? "control_room");
   const [orgId, setOrgId] = useState(companies[0]?.id ?? "");
   const [options, setOptions] = useState<{ clients: readonly Named[]; sites: readonly Named[] }>({ clients: [], sites: [] });
 
@@ -118,10 +120,20 @@ function PersonSteps({ companies, onClose }: { companies: readonly Named[]; onCl
     );
   }
 
+  // Sent by hand because React empties a form once its action finishes, which would wipe what was typed when it's refused.
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    startTransition(() => action(form));
+  };
+
+  const fixedLabel = ROLES.find((option) => option.value === fixedRole)?.label;
+  const company = companies[0]?.name ?? "";
+
   return (
     <>
-      <DialogHeading icon="users" tone="neutral" title="Add a person" />
-      <form action={action} className="mt-5 flex flex-col gap-3">
+      <DialogHeading icon="users" tone="neutral" title={fixedLabel ? `Add ${company}'s ${fixedLabel.toLowerCase()}` : "Add a person"} />
+      <form onSubmit={submit} className="mt-5 flex flex-col gap-3">
         <FormProblem message={state.problem} />
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -129,13 +141,17 @@ function PersonSteps({ companies, onClose }: { companies: readonly Named[]; onCl
           <Field label="Username or email" name="login" autoCapitalize="none" autoComplete="off" spellCheck={false} required />
         </div>
 
-        <SelectField label="Role" name="role" value={role} onChange={(event) => setRole(event.target.value)}>
-          {ROLES.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </SelectField>
+        {fixedRole ? (
+          <input type="hidden" name="role" value={fixedRole} />
+        ) : (
+          <SelectField label="Role" name="role" value={role} onChange={(event) => setRole(event.target.value)}>
+            {ROLES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </SelectField>
+        )}
 
         {companies.length > 1 ? (
           <SelectField label="Security company" name="orgId" value={orgId} onChange={(event) => setOrgId(event.target.value)}>
@@ -181,28 +197,40 @@ function PersonSteps({ companies, onClose }: { companies: readonly Named[]; onCl
 
         <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <CancelButton onClick={onClose} />
-          <ConfirmButton label="Create login" pendingLabel="Creating…" tone="neutral" />
+          <ConfirmButton label="Create login" pendingLabel="Creating…" tone="neutral" pending={pending} />
         </div>
       </form>
     </>
   );
 }
 
-export function AddPersonButton({ companies }: { companies: readonly Named[] }) {
+type AddPersonProps = { companies: readonly Named[]; role?: string; label?: string; compact?: boolean };
+
+export function AddPersonButton({ companies, role, label = "Add a person", compact = false }: AddPersonProps) {
   const dialog = useDialog();
-  // Closing starts it fresh, so a temporary password never lingers behind the popup.
+  const router = useRouter();
+  // Closing starts it fresh, so a temporary password never lingers behind the popup. The page catches up only then: a
+  // checklist that ticked itself off while the password was showing would take the popup away with it.
   const [round, setRound] = useState(0);
+  const close = () => {
+    setRound(round + 1);
+    router.refresh();
+  };
   return (
     <>
       <button
         type="button"
         onClick={dialog.open}
-        className="inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink"
+        className={
+          compact
+            ? "shrink-0 rounded-pill bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-border"
+            : "inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink"
+        }
       >
-        Add a person
+        {label}
       </button>
-      <Dialog dialogRef={dialog.ref} onClose={() => setRound(round + 1)}>
-        <PersonSteps key={round} companies={companies} onClose={dialog.close} />
+      <Dialog dialogRef={dialog.ref} onClose={close}>
+        <PersonSteps key={round} companies={companies} fixedRole={role} onClose={dialog.close} />
       </Dialog>
     </>
   );

@@ -1,4 +1,5 @@
 export { ageBand, type AgeBand } from './demographics';
+export * from './geofence';
 export { decodeDocument, type DecodedDocument } from './documents/decode';
 export {
   decodeDriverLicence,
@@ -18,7 +19,8 @@ export { checkSmartId, smartIdPassesChecks, type SmartIdChecks } from './documen
 export type { GateEvent, GateEventPayload, GateEventType, JsonValue } from './events';
 export { isExpired } from './rules/dates';
 export { normaliseIdentifier } from './identifiers';
-export { sameVin, vehicleVisits } from './rules/vehicles';
+export { sameVehicle, sameVin, vehicleVisits } from './rules/vehicles';
+export { missedHits, recheck, reportedCodes, SITE_RULE_DEFAULTS, type UploadedCheck } from './rules/recheck';
 export { uuidv7 } from './ids';
 export * from './reports';
 export { RULE_SEVERITY, type RuleCode, type Severity } from './rules/codes';

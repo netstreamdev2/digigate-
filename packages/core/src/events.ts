@@ -22,7 +22,12 @@ export type GateEventType =
   /** A supervisor let a blocked vehicle through, with a reason. */
   | 'override'
   /** The guard kept the boom closed and sent the vehicle back. */
-  | 'turned_away';
+  | 'turned_away'
+  /** The device has gone from its post's geofence, and the guard didn't say they were stepping away. */
+  | 'left_post'
+  | 'returned_to_post'
+  /** The guard said why they're leaving their post, which pauses the geofence for a while. */
+  | 'stepping_away';
 
 export type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 

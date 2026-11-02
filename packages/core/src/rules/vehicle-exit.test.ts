@@ -156,3 +156,57 @@ describe('evaluateVehicleExit', () => {
     });
   });
 });
+
+describe('DISC_CHANGED_ON_SITE', () => {
+  const insideWithExpiry = vehicleVisit({ discExpiresOn: carA.expiresOn });
+
+  it('fires when the car leaves with an older disc carrying another plate, and blocks the boom', () => {
+    const oldDisc = { ...carA, plate: 'TEST 900', discNumber: 'DISCTEST900', expiresOn: '2025-01-31' };
+    const hits = evaluateVehicleExit(exit({ disc: oldDisc, typedPlate: oldDisc.plate }), gateState({ openVisits: [insideWithExpiry] }), config);
+    expect(hits).toEqual([{ code: 'DISC_CHANGED_ON_SITE', severity: 'red', relatedVisitId: 'visit-car-a' }]);
+    expect(outcomeOf(hits)).toBe('blocked');
+  });
+
+  it('fires on a different disc number alone', () => {
+    const swapped = { ...carA, discNumber: 'DISCTEST777' };
+    expect(codes(evaluateVehicleExit(exit({ disc: swapped }), gateState({ openVisits: [insideWithExpiry] }), config))).toEqual(['DISC_CHANGED_ON_SITE']);
+  });
+
+  it('fires on a different expiry alone', () => {
+    const older = { ...carA, expiresOn: '2026-01-31' };
+    expect(codes(evaluateVehicleExit(exit({ disc: older }), gateState({ openVisits: [insideWithExpiry] }), config))).toEqual(['DISC_CHANGED_ON_SITE']);
+  });
+
+  it('does not fire for the disc it came in with, however the plate is spaced', () => {
+    const sameDisc = { ...carA, plate: 'test-001', discNumber: 'disctest001' };
+    expect(evaluateVehicleExit(exit({ disc: sameDisc, typedPlate: 'TEST001' }), gateState({ openVisits: [insideWithExpiry] }), config)).toEqual([]);
+  });
+
+  it('compares expiry only when it was recorded at entry', () => {
+    const older = { ...carA, expiresOn: '2026-01-31' };
+    expect(evaluateVehicleExit(exit({ disc: older }), gateState({ openVisits: [carAInside] }), config)).toEqual([]);
+  });
+
+  it('is not raised without an entry record, which NO_ENTRY_RECORD covers', () => {
+    expect(codes(evaluateVehicleExit(exit({ disc: { ...carA, plate: 'TEST 900' }, typedPlate: 'TEST 900' }), gateState(), config))).toEqual(['NO_ENTRY_RECORD']);
+  });
+});
+
+describe('a car entered by hand, with no disc', () => {
+  const handTyped = { vin: '', plate: 'TEST 001', discNumber: '', expiresOn: '' };
+
+  it('is matched to its visit by plate', () => {
+    const inside = vehicleVisit({ vehicle: { vin: '', plate: 'TEST001', discNumber: '' } });
+    expect(evaluateVehicleExit(exit({ disc: handTyped, typedPlate: 'TEST 001' }), gateState({ openVisits: [inside] }), config)).toEqual([]);
+  });
+
+  it('is never a clone of a scanned car with the same plate', () => {
+    expect(codes(evaluateVehicleExit(exit({ disc: handTyped, typedPlate: 'TEST 001' }), gateState({ openVisits: [carAInside] }), config))).not.toContain('DISC_CLONE_ON_SITE');
+  });
+
+  it('still notices the driver leaving with a different plate', () => {
+    const inside = vehicleVisit({ vehicle: { vin: '', plate: 'TEST001', discNumber: '' } });
+    const other = { ...handTyped, plate: 'TEST 999' };
+    expect(codes(evaluateVehicleExit(exit({ disc: other, typedPlate: 'TEST 999' }), gateState({ openVisits: [inside] }), config))).toEqual(['NO_ENTRY_RECORD', 'DRIVER_VEHICLE_MISMATCH']);
+  });
+});

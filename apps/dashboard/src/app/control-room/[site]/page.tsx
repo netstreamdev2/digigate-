@@ -29,11 +29,31 @@ import { readClock } from "@/lib/reads";
 import { currentUser, roleLabel } from "@/lib/session";
 
 import { LiveAlerts } from "../live-alerts";
+import { SelfieButton } from "../selfie-button";
 
 /** Handhelds sync every minute, so three missed rounds means this one has gone quiet. */
 const DEVICE_QUIET_MS = 3 * 60_000;
 
 const NO_VALUE = "—";
+
+/** What the control room can see of the guard's photo and whether they've said they're away. */
+function GateNotes({ gate, now }: { gate: Gate; now: number }) {
+  const away = gate.awayUntil !== null && new Date(gate.awayUntil).getTime() > now;
+  const selfie = !gate.shiftId ? null : gate.hasSelfie ? (
+    <SelfieButton shiftId={gate.shiftId} guard={gate.guard ?? "Guard on duty"} />
+  ) : gate.selfie === "skipped" ? (
+    <StatusChip status="warning" label="No selfie" />
+  ) : gate.selfie === "taken" ? (
+    <span className="text-xs text-ink-muted">Selfie on its way</span>
+  ) : null;
+  if (!away && !selfie) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {selfie}
+      {away && gate.awayUntil ? <StatusChip status="info" label={`${gate.awayReason ?? "Stepping away"}, back by ${timeOfDay(gate.awayUntil)}`} /> : null}
+    </div>
+  );
+}
 
 function gateRow(gate: Gate, now: number) {
   const onDuty = gate.onDutySince !== null;
@@ -43,7 +63,10 @@ function gateRow(gate: Gate, now: number) {
     cells: {
       gate: <TwoLine main={gate.label} sub={gate.lanes.map(labelFor).join(" · ")} />,
       guard: gate.onDutySince ? (
-        <TwoLine main={gate.guard ?? "Guard on duty"} sub={`${labelFor(gate.period ?? "")} shift, since ${timeOfDay(gate.onDutySince)}`} />
+        <>
+          <TwoLine main={gate.guard ?? "Guard on duty"} sub={`${labelFor(gate.period ?? "")} shift, since ${timeOfDay(gate.onDutySince)}`} />
+          <GateNotes gate={gate} now={now} />
+        </>
       ) : (
         <StatusChip status="warning" label="Nobody on duty" />
       ),
@@ -95,6 +118,8 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
   const gateLabel = (post: string | null) => gates.find((gate) => gate.post === post)?.label ?? NO_VALUE;
   const uncovered = gates.filter((gate) => gate.onDutySince === null);
   const openTotal = open.red + open.amber;
+  // An alert with no check behind it is about the guard on that post, not someone at the gate.
+  const alerts = open.alerts.map((alert) => (alert.person ? alert : { ...alert, person: gates.find((gate) => gate.post === alert.post)?.guard ?? null }));
 
   return (
     <AppShell
@@ -190,7 +215,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
 
         <div className="flex min-w-0 flex-col gap-6">
           <Card title="Live alerts" subtitle="Blocked first, then the newest">
-            <LiveAlerts alerts={open.alerts} total={openTotal} gateLabel={gateLabel} canClose={!user.roles.includes("client_viewer")} />
+            <LiveAlerts alerts={alerts} total={openTotal} gateLabel={gateLabel} canClose={!user.roles.includes("client_viewer")} />
           </Card>
         </div>
       </div>

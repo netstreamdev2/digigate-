@@ -1,18 +1,20 @@
 import { finalise, hit } from './hits';
 import { isOverstay } from './overstay';
 import type { GateState, OpenVehicleVisit, PersonKey, RuleConfig, RuleHit, VehicleExitScan } from './types';
-import { findCloneOnSite, samePlate, sameVin, vehicleVisits } from './vehicles';
+import { discChangedSince, findCloneOnSite, samePlate, sameVehicle, vehicleVisits } from './vehicles';
 
 export function evaluateVehicleExit(scan: VehicleExitScan, state: GateState, config: RuleConfig): RuleHit[] {
   const { disc } = scan;
   const hits: RuleHit[] = [];
-  const visit = vehicleVisits(state.openVisits).find((candidate) => sameVin(candidate.vehicle, disc));
+  const visit = vehicleVisits(state.openVisits).find((candidate) => sameVehicle(candidate.vehicle, disc));
 
   if (!samePlate({ plate: scan.typedPlate }, disc)) {
     hits.push(hit('PLATE_DISC_MISMATCH'));
   }
   if (!visit) {
     hits.push(hit('NO_ENTRY_RECORD'));
+  } else if (discChangedSince(visit, disc)) {
+    hits.push(hit('DISC_CHANGED_ON_SITE', visit.id));
   }
   if (scan.ignitionRestart === 'failed') {
     hits.push(hit('IGNITION_RESTART_FAILED'));

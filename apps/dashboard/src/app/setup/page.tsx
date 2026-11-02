@@ -9,7 +9,8 @@ import { NoAccess } from "@/components/no-access";
 import { SearchBox } from "@/components/search-box";
 import { StatusChip } from "@/components/status-chip";
 import { appNav } from "@/lib/nav";
-import { likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
+import { likePattern, PAGE_SIZE, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
+import { must } from "@/lib/reads";
 import { currentUser, roleLabel } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -28,16 +29,12 @@ async function Companies({ searchParams }: { searchParams: Promise<Query> }) {
   const query = await searchParams;
   const search = textParam(query, "q");
   const page = pageParam(query);
-  const [from, to] = rangeOf(page);
+  const [from] = rangeOf(page);
 
+  // Counted in the database: gate staff can't be counted through the API without reaching their PIN hashes.
   const supabase = await supabaseServer();
-  let list = supabase
-    .from("organisations")
-    .select("id, name, is_active, clients(count), sites(count), gate_users(count)", { count: "exact" })
-    .order("name")
-    .range(from, to);
-  if (search) list = list.ilike("name", likePattern(search));
-  const { data: companies, count } = await list;
+  const companies = must(await supabase.rpc("company_board", { _search: search ? likePattern(search) : "", _limit: PAGE_SIZE, _offset: from }));
+  const count = companies[0]?.total ?? 0;
 
   return (
     <AppShell
@@ -56,16 +53,16 @@ async function Companies({ searchParams }: { searchParams: Promise<Query> }) {
       }
     >
       <ListCard
-        isEmpty={!companies?.length}
+        isEmpty={companies.length === 0}
         empty={search ? "Nothing matches that search." : "No security companies yet. Add the first one."}
         footer={<Pagination page={page} total={count ?? 0} hrefFor={(next) => pageHref("/setup", query, next)} />}
       >
-        {companies?.map((company) => (
+        {companies.map((company) => (
           <ListRow
             key={company.id}
             href={`/setup/${company.id}`}
             title={company.name}
-            detail={`${plural(company.clients[0]?.count ?? 0, "client")} · ${plural(company.sites[0]?.count ?? 0, "site")} · ${company.gate_users[0]?.count ?? 0} gate staff`}
+            detail={`${plural(company.clients, "client")} · ${plural(company.sites, "site")} · ${company.gate_staff} gate staff`}
             trailing={company.is_active ? null : <StatusChip status="blocked" label="Inactive" />}
           />
         ))}

@@ -1,4 +1,4 @@
-import type { RuleConfig } from '@digigate/core';
+import { SITE_RULE_DEFAULTS, type Fence } from '@digigate/core';
 import type { colors } from '@digigate/design';
 
 import type { IconName } from '@/components/icon';
@@ -14,10 +14,16 @@ export type PostOption = {
   lanes: readonly Lane[];
   icon: IconName;
   tint: keyof typeof colors;
+  /** Where the post is, once someone has set it in the dashboard. A post without one isn't checked. */
+  fence?: Fence | null;
 };
 
 /** A post as the dashboard sends it. The app adds its own icon and colour. */
-export type SyncedPost = Pick<PostOption, 'code' | 'label' | 'lanes'>;
+export type SyncedPost = Pick<PostOption, 'code' | 'label' | 'lanes'> & {
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusM?: number | null;
+};
 
 export function isSyncedPost(value: unknown): value is SyncedPost {
   if (typeof value !== 'object' || value === null) return false;
@@ -64,6 +70,9 @@ export const siteConfig = {
   /** A shift nobody ended is over after this long, so the next sign-in has to start a new one. */
   maxShiftHours: 14,
   idleLockMinutes: 3,
+  /** How long the post's geofence stays quiet after a guard says they're stepping away. */
+  steppingAwayMinutes: 10,
+  steppingAwayReasons: ['Toilet break', 'Patrol', 'Helping someone', 'Called by a supervisor'],
   visitTypes: [
     { code: 'visitor', label: 'Visitor', icon: 'visitor', tint: 'tileSky' },
     { code: 'staff', label: 'Staff', icon: 'staff', tint: 'tileMint' },
@@ -73,24 +82,26 @@ export const siteConfig = {
     { code: 'emergency', label: 'Emergency', icon: 'emergency', tint: 'blockedSoft' },
   ] satisfies readonly VisitTypeOption[],
   defaultVisitType: 'visitor',
-  rules: {
-    /** SAST. Decides which calendar day it is for document expiry. */
-    utcOffsetMinutes: 120,
-    overstayLimitMinutes: {},
-    disabledRules: [],
-  } satisfies RuleConfig,
+  rules: SITE_RULE_DEFAULTS,
 } as const;
 
 const POST_TINTS = ['tileSky', 'tileLilac', 'tileMint', 'tileButter'] as const;
+
+function fenceFrom({ latitude, longitude, radiusM }: SyncedPost): Fence | null {
+  return typeof latitude === 'number' && typeof longitude === 'number' && typeof radiusM === 'number' ? { latitude, longitude, radiusM } : null;
+}
 
 let syncedPosts: readonly PostOption[] = [];
 
 /** The site's posts from the dashboard. Any number of them works: every screen reads this list. */
 export function applySyncedPosts(posts: readonly SyncedPost[]): void {
   syncedPosts = posts.map((post, index) => ({
-    ...post,
+    code: post.code,
+    label: post.label,
+    lanes: post.lanes,
     icon: post.lanes.includes('vehicle') ? 'vehicle' : 'pedestrian',
     tint: POST_TINTS[index % POST_TINTS.length] ?? 'tileSky',
+    fence: fenceFrom(post),
   }));
 }
 
@@ -108,6 +119,11 @@ export function postLabel(code: string): string {
 /** A post that has left the config mid-shift keeps every lane, so a guard is never left with nothing to do. */
 export function lanesOf(code: string): readonly Lane[] {
   return postOf(code)?.lanes ?? ALL_LANES;
+}
+
+/** Null for a post with no location set, or one that has left the config mid-shift. */
+export function fenceOf(code: string): Fence | null {
+  return postOf(code)?.fence ?? null;
 }
 
 export function periodHours(code: string): string {

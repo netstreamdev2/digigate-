@@ -31,6 +31,8 @@ export type OpenVehicleVisit = {
   driverKey: PersonKey;
   coDriverKeys: readonly PersonKey[];
   vehicle: VehicleIdentity;
+  /** The expiry on the disc scanned at entry. Absent for visits recorded before it was kept. */
+  discExpiresOn?: IsoDate;
   occupants: number;
   visitType: string;
   enteredAt: EpochMs;

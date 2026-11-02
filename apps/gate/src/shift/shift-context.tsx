@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { useSession } from '@/auth/session';
 import { useLocalDatabase } from '@/db/database-context';
-import { beginShift, closeShift, openShift, type Shift } from '@/db/shifts';
+import { beginShift, closeShift, openShift, type Shift, type ShiftPhoto } from '@/db/shifts';
 import { newEventId } from '@/lib/ids';
 import { lanesOf, postLabel, siteConfig, type Lane } from '@/site/site-config';
 import { useSync } from '@/sync/sync-context';
@@ -14,7 +14,7 @@ type ShiftApi = {
   shift: Shift | null | undefined;
   /** True when the device's shift record couldn't be read. */
   problem: boolean;
-  start(post: string, period: string): Promise<void>;
+  start(post: string, period: string, photo: ShiftPhoto): Promise<void>;
   /** Ends the guard's shift and signs them out. */
   end(): Promise<void>;
 };
@@ -65,11 +65,11 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
   const shift = userId !== null && known?.forUser === userId ? known.shift : undefined;
 
   const start = useCallback(
-    async (post: string, period: string) => {
+    async (post: string, period: string, photo: ShiftPhoto) => {
       if (!userId) return;
       const at = Date.now();
-      const next: Shift = { id: newEventId(at), gateUserId: userId, post, period, startedAt: at };
-      await beginShift(db, next);
+      const next: Shift = { id: newEventId(at), gateUserId: userId, post, period, startedAt: at, awayUntil: null };
+      await beginShift(db, next, photo);
       setProblem(false);
       setKnown({ forUser: userId, shift: next });
       eventRecorded();

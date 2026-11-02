@@ -10,6 +10,9 @@ export function personIdOf(person: PersonDocument): { idType: string; idNumber: 
     const { licence } = person;
     return { idType: licence.idNumberType, idNumber: licence.idNumber, name: `${licence.initials} ${licence.surname}` };
   }
+  if (person.kind === 'typed') {
+    return { idType: person.idType, idNumber: person.idNumber, name: `${person.names} ${person.surname}` };
+  }
   if (person.kind === 'id-book') {
     return { idType: SA_ID_TYPE, idNumber: person.idNumber, name: `${person.names} ${person.surname}` };
   }

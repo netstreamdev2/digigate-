@@ -18,13 +18,16 @@ import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import { VisitTypePicker } from '@/components/visit-type-picker';
 import { useLocalDatabase } from '@/db/database-context';
+import { masked, rememberLastScan, settleLastScan, visitTypeLabel } from '@/db/last-scan';
 import { signalOutcome } from '@/lib/feedback';
-import { siteConfig } from '@/site/site-config';
+import { titleCase } from '@/lib/format';
+import { siteConfig, visitTypeOf } from '@/site/site-config';
 import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
 import { CheckResult, type Settled } from './check-result';
 import { recordDecision, type Decision, type Direction } from './decision';
+import { personIdOf } from './person-id';
 import { IdNumberPopup } from './id-number-popup';
 import { usePersonDocument } from './use-person-document';
 import { usePersonVisits } from './use-person-visits';
@@ -59,6 +62,14 @@ function Details({ person }: { person: PersonDocument }) {
       return <DocumentPreview decoded={{ kind: 'smart-id', card: person.card }} photo={null} />;
     case 'id-book':
       return <IdBookPreview book={person} />;
+    case 'typed':
+      return (
+        <Card>
+          <Text variant="body" color={colors.inkMuted}>
+            {`Typed in by hand (${person.reason}). Nothing was scanned, so there are no document details to show.`}
+          </Text>
+        </Card>
+      );
   }
 }
 
@@ -93,6 +104,20 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
       setChecked(result);
       signalOutcome(result.outcome);
       eventRecorded();
+      const identity = personIdOf(person);
+      rememberLastScan(db, {
+        gateUserId: guard.id,
+        at: result.event.occurredAt,
+        direction: direction === 'entry' ? 'in' : 'out',
+        name: titleCase(identity.name),
+        visitType: visitTypeLabel(result.event.payload.visit_type, (code) => visitTypeOf(code)?.label ?? null),
+        outcome: result.outcome,
+        settled: null,
+        plate: null,
+        vehicle: null,
+        people: null,
+        idNumber: masked(identity.idNumber),
+      });
     } catch (cause) {
       setProblem(`Nothing was recorded (${cause instanceof Error ? cause.message : 'unknown error'}). Press Check again.`);
     } finally {
@@ -108,6 +133,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
       await recordDecision(db, checked, decision, guard.id);
       setSettled(decision.kind === 'turned-away' ? 'turned-away' : 'let-through');
       eventRecorded();
+      settleLastScan(db, decision.kind === 'turned-away' ? 'turned-away' : 'let-through');
     } catch (cause) {
       setProblem(`That wasn't recorded (${cause instanceof Error ? cause.message : 'unknown error'}). Try again.`);
     } finally {

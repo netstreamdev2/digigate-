@@ -4,11 +4,15 @@ import { isPinHash } from '@/auth/pin';
 import { isGateUserRole, type GateUser } from '@/auth/users';
 import { replaceGateUsers } from '@/db/gate-users';
 import { pendingEvents, removeEvents } from '@/db/outbox';
+import { pendingSelfie, removeSelfie } from '@/db/shifts';
 import { saveSyncedPosts } from '@/db/site-posts';
+import { isSiteToday, saveSiteToday } from '@/db/site-today';
+import { saveSiteVisits, type SiteVisit } from '@/db/visits';
 import { wipeRevokedDevice } from '@/db/wipe';
 import { isSyncedPost, type SyncedPost } from '@/site/site-config';
 
 import { callFunction, deviceToken } from './device-api';
+import { readDeviceHealth } from './device-health';
 
 const UPLOAD_BATCH_SIZE = 100;
 
@@ -41,15 +45,62 @@ function toGateUser(value: unknown): GateUser | null {
   return { id, employeeNumber, firstName, lastName, role, pin, active };
 }
 
+const textOrNull = (value: unknown) => (typeof value === 'string' ? value : null);
+
+/** A visit from another gate, checked like the guard list: a bad row is dropped, never the reason to lose them all. */
+function toSiteVisit(value: unknown): SiteVisit | null {
+  if (!isRecord(value)) return null;
+  const { id, kind, personKey, personName, visitType, enteredAt, occupants } = value;
+  if (
+    typeof id !== 'string' ||
+    (kind !== 'vehicle' && kind !== 'pedestrian') ||
+    typeof personKey !== 'string' ||
+    typeof personName !== 'string' ||
+    typeof visitType !== 'string' ||
+    typeof enteredAt !== 'number'
+  ) {
+    return null;
+  }
+  const plate = textOrNull(value.plate);
+  if (kind === 'vehicle' && plate === null) return null;
+  return {
+    id,
+    kind,
+    personKey,
+    personName,
+    visitType,
+    enteredAt,
+    occupants: typeof occupants === 'number' ? occupants : null,
+    vin: textOrNull(value.vin),
+    plate,
+    discNumber: textOrNull(value.discNumber),
+    discExpiresOn: textOrNull(value.discExpiresOn),
+    vehicleDescription: textOrNull(value.vehicleDescription),
+  };
+}
+
 function acceptedIds(body: unknown): string[] {
   if (!isRecord(body) || !Array.isArray(body.accepted)) return [];
   return body.accepted.filter((id): id is string => typeof id === 'string');
 }
 
 /**
- * One round: upload the outbox oldest first, then replace the local guard list and posts with the site's.
- * An event leaves the outbox only once the server has it, and uploads are idempotent, so a round cut off part-way is
- * simply repeated next time.
+ * One photo a round, sent on its own so it can never hold up events. It stays on the device until the server keeps it or
+ * refuses it for good: "later" means the server hasn't got that shift yet, and any failure simply waits for the next round.
+ */
+async function uploadSelfie(db: SQLiteDatabase, token: string): Promise<void> {
+  const selfie = await pendingSelfie(db);
+  if (!selfie) return;
+  const response = await callFunction('digigate-sync', { selfie: { shiftId: selfie.shiftId, image: selfie.jpegBase64 } }, token);
+  if (!response.ok) return;
+  const body: unknown = await response.json();
+  if (isRecord(body) && (body.selfie === 'saved' || body.selfie === 'refused')) await removeSelfie(db, selfie.shiftId);
+}
+
+/**
+ * One round: upload the outbox oldest first, then a waiting selfie, then send the device's health and replace the local
+ * guard list and posts with the site's. An event leaves the outbox only once the server has it, and uploads are
+ * idempotent, so a round cut off part-way is simply repeated next time.
  */
 export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
   const token = await deviceToken();
@@ -70,7 +121,9 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
     uploaded += accepted.length;
   }
 
-  const response = await callFunction('digigate-sync', { pull: true }, token);
+  await uploadSelfie(db, token);
+
+  const response = await callFunction('digigate-sync', { pull: true, health: await readDeviceHealth() }, token);
   if (response.status === 410) {
     await wipeRevokedDevice(db);
     return { status: 'revoked' };
@@ -89,6 +142,14 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
   const posts: SyncedPost[] = body.posts.filter(isSyncedPost);
   await replaceGateUsers(db, users);
   await saveSyncedPosts(db, posts);
+  // An older server sends no visits; then the device keeps working from its own, as it always has.
+  if (Array.isArray(body.openVisits)) {
+    await saveSiteVisits(db, body.openVisits.flatMap((row) => {
+      const visit = toSiteVisit(row);
+      return visit ? [visit] : [];
+    }));
+  }
+  if (isSiteToday(body.siteToday)) await saveSiteToday(db, body.siteToday, Date.now());
 
   return { status: 'synced', at: Date.now(), uploaded, users: users.length };
 }

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { AddedNotice } from "@/components/added-notice";
 import { AppShell } from "@/components/app-shell";
 import { Field, SelectField } from "@/components/form";
 import { FormDialog } from "@/components/form-dialog";
@@ -9,6 +10,7 @@ import { NoAccess } from "@/components/no-access";
 import { SearchBox } from "@/components/search-box";
 import { appNav } from "@/lib/nav";
 import { likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
+import { counted, maybe, must } from "@/lib/reads";
 import { currentUser, roleLabel } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -29,15 +31,20 @@ async function Client({ params, searchParams }: { params: Promise<{ org: string;
   const [from, to] = rangeOf(page);
 
   const supabase = await supabaseServer();
-  const [{ data: company }, { data: client }] = await Promise.all([
+  const [companyRead, clientRead] = await Promise.all([
     supabase.from("organisations").select("name").eq("id", org).maybeSingle(),
     supabase.from("clients").select("name").eq("id", clientId).eq("org_id", org).maybeSingle(),
   ]);
+  const company = maybe(companyRead);
+  const client = maybe(clientRead);
   if (!company || !client) notFound();
+  const justAdded = textParam(query, "added") === "1";
 
   let list = supabase.from("sites").select("id, name, site_type, posts(count)", { count: "exact" }).eq("client_id", clientId).order("name").range(from, to);
   if (search) list = list.ilike("name", likePattern(search));
-  const { data: sites, count } = await list;
+  const listed = await list;
+  const sites = must(listed);
+  const count = counted(listed);
   const path = `/setup/${org}/${clientId}`;
   const crumbs = [{ label: company.name, href: `/setup/${org}` }, { label: client.name }];
 
@@ -64,12 +71,13 @@ async function Client({ params, searchParams }: { params: Promise<{ org: string;
         </>
       }
     >
+      {justAdded ? <AddedNotice title={`${client.name} is added`} next="Next, add the site where its gates are." /> : null}
       <ListCard
-        isEmpty={!sites?.length}
+        isEmpty={sites.length === 0}
         empty={search ? "Nothing matches that search." : "No sites yet. Add the first one."}
         footer={<Pagination page={page} total={count ?? 0} hrefFor={(next) => pageHref(path, query, next)} />}
       >
-        {sites?.map((site) => {
+        {sites.map((site) => {
           const posts = site.posts[0]?.count ?? 0;
           return (
             <ListRow

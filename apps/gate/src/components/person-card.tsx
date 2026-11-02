@@ -27,7 +27,9 @@ export type PersonDocument =
   | { kind: 'driver-licence'; licence: DriverLicence; photo: LicencePhotoResult | null }
   | { kind: 'smart-id'; card: SmartIdCard }
   /** A green ID book: the ID number scanned from its barcode, the name and sex typed in by the guard. */
-  | { kind: 'id-book'; idNumber: string; names: string; surname: string; gender: 'male' | 'female' };
+  | { kind: 'id-book'; idNumber: string; names: string; surname: string; gender: 'male' | 'female' }
+  /** Typed in by the guard: a passport, a damaged card, or a document with no barcode. */
+  | { kind: 'typed'; idType: string; idNumber: string; names: string; surname: string; reason: string };
 
 type ChipSpec = { label: string; tone: 'neutral' | 'clear' | 'blocked'; icon?: IconName };
 
@@ -69,6 +71,19 @@ function describe(document: PersonDocument): CardContent {
             ? "Compare this photo with the driver's face."
             : 'No usable photo in this barcode. Compare the photo on the card with the driver.',
       photo,
+    };
+  }
+  if (document.kind === 'typed') {
+    return {
+      caption: 'Typed in by hand',
+      name: titleCase(`${document.names} ${document.surname}`),
+      idNumber: document.idNumber,
+      chips: [
+        { label: 'Typed by hand', tone: 'neutral', icon: 'manual-entry' },
+        { label: document.reason, tone: 'neutral' },
+      ],
+      compare: 'Nothing was scanned. Compare the name and number with their document and their face.',
+      photo: 'none',
     };
   }
   if (document.kind === 'id-book') {
@@ -129,7 +144,7 @@ function Photo({ photo }: { photo: LicencePhotoResult | null }) {
 function IdIcon({ kind }: { kind: PersonDocument['kind'] }) {
   return (
     <View style={styles.idIcon}>
-      <Icon name={kind === 'id-book' ? 'id-book' : 'id-card'} size={40} color={colors.brand} />
+      <Icon name={kind === 'id-book' ? 'id-book' : kind === 'typed' ? 'manual-entry' : 'id-card'} size={40} color={colors.brand} />
     </View>
   );
 }

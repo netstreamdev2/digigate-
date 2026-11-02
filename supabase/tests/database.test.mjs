@@ -520,6 +520,134 @@ const staffCounts = (await as('authenticated', ADMIN_A, 'aal2', `select * from d
 check('the staff counts add up', staffCounts.reduce((sum, row) => sum + Number(row.people), 0) === ownStaff.length);
 check('and count who is on duty', staffCounts.reduce((sum, row) => sum + Number(row.on_duty), 0) === 1);
 
+// A guard leaving their post, the fence that says so, and the handheld's own health.
+const GATE_SHIFT = u(90);
+const FENCED_DEVICE_EVENTS = (type, payload) => event(type, { shift_id: GATE_SHIFT, post: 'back-gate', ...payload });
+await ingest([event('shift_start', { shift_id: GATE_SHIFT, post: 'back-gate', period: 'night', selfie: 'taken' })]);
+const fencedShift = async () => one('select * from digigate.shifts where id = $1', [GATE_SHIFT]);
+check('a shift keeps whether a selfie was taken', (await fencedShift()).selfie === 'taken');
+await ingest([event('shift_start', { shift_id: u(91), post: 'back-gate', period: 'night', selfie: 'nonsense' })]);
+check('a wrong selfie state is left out, and never stops the upload', (await one('select selfie from digigate.shifts where id = $1', [u(91)])).selfie === null);
+await ingest([event('shift_end', { shift_id: u(91), post: 'back-gate', period: 'night', reason: 'ended' })]);
+
+const leftAlert = async (id) => one(`select * from digigate.alerts where event_id = '${id}' and rule_code = 'LEFT_POST'`);
+const rulesToday = async (day) => (await one('select rules from digigate.daily_activity where site_id = $1 and day = $2', [SITE_A, day])).rules;
+const firstLeft = FENCED_DEVICE_EVENTS('left_post', {});
+const leftDay = new Date(firstLeft.occurredAt).toISOString().slice(0, 10);
+const leftBefore = (await rulesToday(leftDay)).LEFT_POST ?? 0;
+await ingest([firstLeft]);
+const raised = await leftAlert(firstLeft.id);
+check('leaving a post raises an amber alert', raised?.severity === 'amber' && raised?.status === 'open' && raised?.post === 'back-gate');
+check('it holds no position', !JSON.stringify((await one('select payload from digigate.event_details where event_id = $1', [firstLeft.id])).payload).match(/latitude|longitude/));
+check('it counts in the day\'s rule hits', (await rulesToday(leftDay)).LEFT_POST === leftBefore + 1);
+check('it is logged', (await auditFor(`action = 'gate.left_post'`))?.detail === 'back-gate');
+await ingest([firstLeft]);
+check('sending it twice raises one alert', (await count(`digigate.alerts where event_id = '${firstLeft.id}'`)) === 1);
+await ingest([FENCED_DEVICE_EVENTS('returned_to_post', {})]);
+const cleared = await leftAlert(firstLeft.id);
+check('coming back closes it', cleared.status === 'resolved' && cleared.resolution === 'Back at their post' && cleared.resolved_by === GUARD);
+
+const secondLeft = FENCED_DEVICE_EVENTS('left_post', {});
+await ingest([secondLeft]);
+await ingest([FENCED_DEVICE_EVENTS('stepping_away', { reason: 'Toilet break', minutes: 10 })]);
+const away = await fencedShift();
+check('stepping away records why and until when', away.away_reason === 'Toilet break' && new Date(away.away_until).getTime() > Date.parse(raised.raised_at));
+check('and explains an alert already raised', (await leftAlert(secondLeft.id)).resolution === 'Stepping away: Toilet break');
+check('its reason is logged', (await auditFor(`action = 'gate.stepping_away'`))?.detail === 'back-gate · Toilet break');
+await ingest([FENCED_DEVICE_EVENTS('stepping_away', { reason: 'Patrol', minutes: 9000 })]);
+const capped = await fencedShift();
+const lastAway = await one(`select occurred_at from digigate.events where shift_id = '${GATE_SHIFT}' and type = 'stepping_away' order by occurred_at desc limit 1`);
+check('a device cannot claim more than an hour', new Date(capped.away_until).getTime() - new Date(lastAway.occurred_at).getTime() === 3_600_000);
+await ingest([FENCED_DEVICE_EVENTS('returned_to_post', {})]);
+check('being back clears the away state', (await fencedShift()).away_until === null && (await fencedShift()).away_reason === null);
+
+await ingest([FENCED_DEVICE_EVENTS('stepping_away', { reason: 'Patrol', minutes: 10 })]);
+const atBoard = async (profile) => (await as('authenticated', profile, 'aal2', 'select * from digigate.gate_board($1)', [SITE_A])).rows.find((row) => row.post === 'back-gate');
+await db.exec(`update digigate.shifts set started_at = now() - interval '1 hour' where id = '${GATE_SHIFT}'`);
+await db.exec(`update digigate.shifts set selfie_path = null where id = '${GATE_SHIFT}'`);
+const boardRow = await atBoard(ROOM_A);
+check('the control room sees the shift\'s selfie state', boardRow.shift_id === GATE_SHIFT && boardRow.selfie === 'taken' && boardRow.has_selfie === false);
+check('and that the guard stepped away', boardRow.away_reason === 'Patrol' && boardRow.away_until !== null);
+check('a post with no location has no fence', boardRow.has_fence === false);
+check('anon cannot attach a selfie', (await as('anon', '', '', `select digigate.attach_selfie('${DEVICE}', '${GATE_SHIFT}', 'x')`)).error);
+check('nor can a dashboard login', (await as('authenticated', ROOM_A, 'aal2', `select digigate.attach_selfie('${DEVICE}', '${GATE_SHIFT}', 'x')`)).error);
+await service(`select digigate.attach_selfie('${u(999)}', '${GATE_SHIFT}', 'wrong-device.jpg')`);
+check('another device cannot put a photo on this shift', (await fencedShift()).selfie_path === null);
+await service(`select digigate.attach_selfie('${DEVICE}', '${GATE_SHIFT}', 'org/site/shift.jpg')`);
+check('the device on the shift can', (await fencedShift()).selfie_path === 'org/site/shift.jpg');
+check('the board then knows there is a photo', (await atBoard(ROOM_A)).has_selfie === true);
+
+await db.exec(`update digigate.posts set latitude = -33.9, longitude = 18.4, radius_m = 75 where site_id = '${SITE_A}' and code = 'back-gate'`);
+const fencedPost = (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.posts.find((post) => post.code === 'back-gate');
+check('a device receives its post\'s fence', fencedPost.latitude === -33.9 && fencedPost.longitude === 18.4 && fencedPost.radiusM === 75);
+check('the board then shows a fence', (await atBoard(ROOM_A)).has_fence === true);
+
+const health = (value) => service('select digigate.record_device_health($1, $2::jsonb)', [DEVICE, JSON.stringify(value)]);
+await health({ battery: 87.4, charging: false, appVersion: '1.0.0', network: 'wifi', wifiName: 'Gatehouse', wifiStrength: 150, cellGeneration: '4g', cellBars: 3, locationAllowed: true, latitude: -33.9, longitude: 18.4, fixAt: 1_790_000_000_000, secret: 'dropped', surname: 'dropped' });
+const stored = await one('select health, health_at from digigate.devices where id = $1', [DEVICE]);
+check('a health report is stored', stored.health.battery === 87 && stored.health.charging === false && stored.health.wifiName === 'Gatehouse' && stored.health.cellBars === 3 && stored.health_at !== null);
+check('numbers are held to their range', stored.health.wifiStrength === 100);
+check('anything not on the list is dropped', stored.health.secret === undefined && stored.health.surname === undefined);
+await health({ battery: 'full', network: 'carrier-pigeon', latitude: 200, cellBars: 'lots' });
+const junk = (await one('select health from digigate.devices where id = $1', [DEVICE])).health;
+check('wrongly shaped values are left out, not an error', Object.keys(junk).length === 0);
+const auditedBefore = await count(`digigate.audit_log where device_id = '${DEVICE}'`);
+await health({ battery: 50, latitude: -33.1, longitude: 18.1, fixAt: 1 });
+await health({ battery: 49, latitude: -33.2, longitude: 18.2, fixAt: 2 });
+check('a new position replaces the last, so no trail builds up', (await one('select health from digigate.devices where id = $1', [DEVICE])).health.latitude === -33.2);
+check('health reports add nothing to the audit log', (await count(`digigate.audit_log where device_id = '${DEVICE}'`)) === auditedBefore);
+check('anon cannot report health', (await as('anon', '', '', `select digigate.record_device_health('${DEVICE}', '{}')`)).error);
+check('nor can a dashboard login', (await as('authenticated', ADMIN_A, 'aal2', `select digigate.record_device_health('${DEVICE}', '{}')`)).error);
+await db.exec(`update digigate.devices set last_seen_at = now() where id = '${DEVICE}'`);
+const fleetHealth = await fleetRow(DEVICE);
+check('the device view shows health', fleetHealth.health.battery === 49 && fleetHealth.health_at !== null);
+check('and the position, for the company', fleetHealth.health.latitude === -33.2);
+check('the fleet function stays closed to logins', (await as('authenticated', ADMIN_A, 'aal2', `select * from digigate.fleet('', null)`)).error);
+check('health columns are not readable directly', (await as('authenticated', ADMIN_A, 'aal2', 'select health from digigate.devices')).error);
+
+await ingest([FENCED_DEVICE_EVENTS('left_post', {})]);
+const endsOpen = await one(`select event_id from digigate.alerts where rule_code = 'LEFT_POST' and status = 'open' order by raised_at desc limit 1`);
+await ingest([FENCED_DEVICE_EVENTS('shift_end', { period: 'night', reason: 'ended' })]);
+check('going off duty closes it too', (await leftAlert(endsOpen.event_id)).resolution === 'Shift ended');
+
+// The super user's list of companies.
+const companyBoard = (profile, search = '', aal = 'aal2') => as('authenticated', profile, aal, 'select * from digigate.company_board($1, 25, 0)', [search]);
+const superCompanies = (await companyBoard(SUPER)).rows;
+const companyA = superCompanies.find((row) => row.id === ORG_A);
+const realA = await one(`select (select count(*)::int from digigate.clients where org_id = '${ORG_A}') as clients, (select count(*)::int from digigate.sites where org_id = '${ORG_A}') as sites, (select count(*)::int from digigate.gate_users where org_id = '${ORG_A}') as staff`);
+check('a super user sees every company', superCompanies.length === (await count('digigate.organisations')) && Number(superCompanies[0].total) === superCompanies.length);
+check('with its clients, sites and gate staff counted', Number(companyA.clients) === realA.clients && Number(companyA.sites) === realA.sites && Number(companyA.gate_staff) === realA.staff && realA.staff > 0);
+check('in name order', superCompanies.every((row, index) => index === 0 || superCompanies[index - 1].name <= row.name));
+check('search narrows it', (await companyBoard(SUPER, 'B')).rows.every((row) => row.name.includes('B')));
+check('an admin gets nothing from it', (await companyBoard(ADMIN_A)).rows.length === 0);
+check('a super user without MFA gets nothing', (await companyBoard(SUPER, '', 'aal1')).rows.length === 0);
+check('anon cannot call it', (await as('anon', '', '', `select * from digigate.company_board('', 25, 0)`)).error);
+check('and the PIN stays out of reach', (await as('authenticated', SUPER, 'aal2', 'select pin from digigate.gate_users')).error);
+
+// Every gate at a site works from the whole site's open visits.
+const SHARED_VISIT = u(120), ODD_EXPIRY_VISIT = u(121), OTHER_SITE_VISIT = u(122);
+const sharedCar = { ...vehicle, vin: 'TESTVIN0000000120', plate: 'TT12TTGP', disc_number: 'D120', disc_expires_on: '2027-03-31' };
+await ingest([event('vehicle_entry', { visit_id: SHARED_VISIT, outcome: 'clear', hits: [], vehicle: sharedCar, driver, occupants: 2, visit_type: 'visitor' })]);
+check('a visit keeps the expiry of the disc it came in with', (await one('select disc_expires_on::text as d from digigate.visit_details where visit_id = $1', [SHARED_VISIT])).d === '2027-03-31');
+await ingest([event('vehicle_entry', { visit_id: ODD_EXPIRY_VISIT, outcome: 'clear', hits: [], vehicle: { ...sharedCar, vin: 'TESTVIN0000000121', disc_expires_on: 'soon' }, driver, occupants: 1, visit_type: 'visitor' })]);
+check('a badly formed expiry is left out, never an error', (await one('select disc_expires_on from digigate.visit_details where visit_id = $1', [ODD_EXPIRY_VISIT])).disc_expires_on === null);
+await db.exec(`
+  insert into digigate.visits (id, org_id, site_id, kind, visit_type, entered_at) values ('${OTHER_SITE_VISIT}', '${ORG_A}', '${SITE_A2}', 'pedestrian', 'visitor', now());
+  insert into digigate.visit_details (visit_id, org_id, site_id, person_key, person_name) values ('${OTHER_SITE_VISIT}', '${ORG_A}', '${SITE_A2}', 'key-elsewhere', 'Someone Elsewhere');
+`);
+const sharedSnapshot = (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s;
+const sharedRow = sharedSnapshot.openVisits.find((visit) => visit.id === SHARED_VISIT);
+check('a device receives the site\'s open visits', sharedRow?.kind === 'vehicle' && sharedRow.vin === sharedCar.vin && sharedRow.plate === sharedCar.plate && sharedRow.discNumber === 'D120');
+check('with what the rules need', sharedRow?.personKey === 'key-a' && sharedRow.discExpiresOn === '2027-03-31' && sharedRow.occupants === 2 && typeof sharedRow.enteredAt === 'number');
+check('and what the guard sees', sharedRow?.personName === 'T KHUMALO' && sharedRow.vehicleDescription === 'TOYOTA COROLLA · White');
+check('but nothing from another site', !sharedSnapshot.openVisits.some((visit) => visit.id === OTHER_SITE_VISIT));
+check('and the site\'s figures for the home screen', typeof sharedSnapshot.siteToday.openAlerts === 'number' && typeof sharedSnapshot.siteToday.exits === 'number' && typeof sharedSnapshot.siteToday.stayMinutes === 'number');
+await ingest([event('vehicle_exit', { visit_id: SHARED_VISIT, outcome: 'clear', hits: [], vehicle: sharedCar, driver, occupants: 2 })]);
+check('a visit that has ended leaves the list', !(await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.openVisits.some((visit) => visit.id === SHARED_VISIT));
+check('a revoked device gets no visits', (await service('select digigate.device_snapshot($1) as s', [u(999)])).rows[0].s.openVisits.length === 0);
+// The visit at the other site was only there to prove it stays out; the later company-change checks count visits.
+await db.exec(`delete from digigate.visit_details where visit_id = '${OTHER_SITE_VISIT}'; delete from digigate.visits where id = '${OTHER_SITE_VISIT}';`);
+
 // Append-only and erasure.
 const change = async (sql) => (await service(sql)).error;
 check('service role cannot change an event', await change(`update digigate.events set type = 'x'`));
@@ -557,6 +685,9 @@ check('client viewer sees a gate is staffed, not by whom', viewerGate?.on_duty_s
 check('client viewer reads the checks at their site', (await as('authenticated', VIEWER, 'aal2', 'select id from digigate.check_records')).rows.length > 0);
 const viewerDevices = (await as('authenticated', VIEWER, 'aal2', `select * from digigate.device_board('', '', 25, 0)`)).rows;
 check('client viewer sees the devices at their site, with no guard names', viewerDevices.length > 0 && viewerDevices.every((row) => row.guard === null));
+check('client viewer never gets a handheld position', viewerDevices.every((row) => row.health === null || row.health.latitude === undefined));
+const viewerGateShift = (await as('authenticated', VIEWER, 'aal2', 'select * from digigate.gate_board($1)', [SITE_A])).rows;
+check('client viewer gets no selfie of a guard', viewerGateShift.every((row) => row.shift_id === null && row.selfie === null && row.has_selfie === false));
 const viewerResolves = await as('authenticated', VIEWER, 'aal2', `update digigate.alerts set status = 'open' returning id`);
 check('client viewer cannot change alerts', viewerResolves.rows.length === 0);
 check('client viewer cannot add a post', (await as('authenticated', VIEWER, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_A}','v','V','{vehicle}')`)).error);

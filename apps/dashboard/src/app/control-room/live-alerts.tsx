@@ -34,6 +34,9 @@ export function LiveAlerts({ alerts, total, gateLabel, canClose }: Props) {
                 <StatusChip status={alert.severity === "red" ? "blocked" : "warning"} />
                 <p className="font-display text-base font-semibold tracking-tight">{titles}</p>
               </div>
+              {alert.foundAfter ? (
+                <p className="mt-2 text-xs font-semibold text-brand">Found by the server after the gate, from every gate&apos;s records. The boom may already be open.</p>
+              ) : null}
               {alert.person ? <p className="mt-2 text-sm font-medium">{alert.person}</p> : null}
               {alert.plate ? <p className="mt-0.5 text-sm text-ink-muted">{[alert.plate, alert.vehicle].filter(Boolean).join(" · ")}</p> : null}
               {plateDiffers ? <p className="mt-0.5 text-sm text-ink-muted">{`Guard typed ${alert.typedPlate}`}</p> : null}

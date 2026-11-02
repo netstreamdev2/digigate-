@@ -19,6 +19,7 @@ export type Database = {
           event_id: string | null
           id: string
           org_id: string
+          post: string | null
           raised_at: string
           resolution: string | null
           resolved_at: string | null
@@ -34,6 +35,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           org_id: string
+          post?: string | null
           raised_at: string
           resolution?: string | null
           resolved_at?: string | null
@@ -49,6 +51,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           org_id?: string
+          post?: string | null
           raised_at?: string
           resolution?: string | null
           resolved_at?: string | null
@@ -266,6 +269,8 @@ export type Database = {
       }
       devices: {
         Row: {
+          health: Json | null
+          health_at: string | null
           id: string
           last_seen_at: string | null
           name: string
@@ -277,6 +282,8 @@ export type Database = {
           token_hash: string
         }
         Insert: {
+          health?: Json | null
+          health_at?: string | null
           id?: string
           last_seen_at?: string | null
           name: string
@@ -288,6 +295,8 @@ export type Database = {
           token_hash: string
         }
         Update: {
+          health?: Json | null
+          health_at?: string | null
           id?: string
           last_seen_at?: string | null
           name?: string
@@ -851,6 +860,8 @@ export type Database = {
       }
       shifts: {
         Row: {
+          away_reason: string | null
+          away_until: string | null
           device_id: string
           end_reason: string | null
           ended_at: string | null
@@ -860,10 +871,14 @@ export type Database = {
           org_id: string
           period: string
           post: string
+          selfie: string | null
+          selfie_path: string | null
           site_id: string
           started_at: string
         }
         Insert: {
+          away_reason?: string | null
+          away_until?: string | null
           device_id: string
           end_reason?: string | null
           ended_at?: string | null
@@ -873,10 +888,14 @@ export type Database = {
           org_id: string
           period: string
           post: string
+          selfie?: string | null
+          selfie_path?: string | null
           site_id: string
           started_at: string
         }
         Update: {
+          away_reason?: string | null
+          away_until?: string | null
           device_id?: string
           end_reason?: string | null
           ended_at?: string | null
@@ -886,6 +905,8 @@ export type Database = {
           org_id?: string
           period?: string
           post?: string
+          selfie?: string | null
+          selfie_path?: string | null
           site_id?: string
           started_at?: string
         }
@@ -959,6 +980,7 @@ export type Database = {
       }
       visit_details: {
         Row: {
+          disc_expires_on: string | null
           disc_number: string | null
           erase_after: string | null
           org_id: string
@@ -971,6 +993,7 @@ export type Database = {
           visit_id: string
         }
         Insert: {
+          disc_expires_on?: string | null
           disc_number?: string | null
           erase_after?: string | null
           org_id: string
@@ -983,6 +1006,7 @@ export type Database = {
           visit_id: string
         }
         Update: {
+          disc_expires_on?: string | null
           disc_number?: string | null
           erase_after?: string | null
           org_id?: string
@@ -1135,6 +1159,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      attach_selfie: {
+        Args: { _device: string; _path: string; _shift: string }
+        Returns: undefined
+      }
       audit_gate_event: {
         Args: {
           _at: string
@@ -1168,6 +1196,28 @@ export type Database = {
           site_id: string
         }[]
       }
+      close_left_post: {
+        Args: {
+          _at: string
+          _by: string
+          _resolution: string
+          _shift: string
+          _site: string
+        }
+        Returns: undefined
+      }
+      company_board: {
+        Args: { _limit: number; _offset: number; _search: string }
+        Returns: {
+          clients: number
+          gate_staff: number
+          id: string
+          is_active: boolean
+          name: string
+          sites: number
+          total: number
+        }[]
+      }
       device_board: {
         Args: {
           _limit: number
@@ -1180,6 +1230,8 @@ export type Database = {
           checks_today: number
           client_name: string
           guard: string
+          health: Json
+          health_at: string
           id: string
           last_check_at: string
           last_seen_at: string
@@ -1207,6 +1259,8 @@ export type Database = {
         Returns: {
           client_name: string
           guard: string
+          health: Json
+          health_at: string
           id: string
           last_seen_at: string
           name: string
@@ -1221,15 +1275,21 @@ export type Database = {
       gate_board: {
         Args: { _site: string }
         Returns: {
+          away_reason: string
+          away_until: string
           device: string
           device_seen_at: string
           guard: string
+          has_fence: boolean
+          has_selfie: boolean
           label: string
           lanes: string[]
           last_check_at: string
           on_duty_since: string
           period: string
           post: string
+          selfie: string
+          shift_id: string
         }[]
       }
       gate_staff_board: {
@@ -1308,6 +1368,10 @@ export type Database = {
           people: number
           role: string
         }[]
+      }
+      record_device_health: {
+        Args: { _device: string; _health: Json }
+        Returns: undefined
       }
       report_board: {
         Args: { _day: string; _limit: number; _offset: number; _search: string }

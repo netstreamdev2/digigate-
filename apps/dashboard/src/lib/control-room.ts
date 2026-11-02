@@ -26,6 +26,12 @@ export type Gate = {
   guard: string | null;
   deviceSeenAt: string | null;
   lastCheckAt: string | null;
+  /** Null for a client's view-only login, which never sees a guard's photo. */
+  shiftId: string | null;
+  selfie: "taken" | "skipped" | null;
+  hasSelfie: boolean;
+  awayUntil: string | null;
+  awayReason: string | null;
 };
 
 /** Every rule one check broke, as one thing to deal with: a car with two problems is still one car at the boom. */
@@ -41,6 +47,8 @@ export type LiveAlert = {
   vehicle: string | null;
   post: string | null;
   direction: "in" | "out" | null;
+  /** Found by the server re-running the rules after the gate had decided, across every gate's records. */
+  foundAfter: boolean;
 };
 
 export type InsideNow = {
@@ -112,6 +120,11 @@ export async function gatesAt(siteId: string): Promise<Gate[]> {
     guard: row.guard,
     deviceSeenAt: row.device_seen_at,
     lastCheckAt: row.last_check_at,
+    shiftId: row.shift_id,
+    selfie: row.selfie === "taken" || row.selfie === "skipped" ? row.selfie : null,
+    hasSelfie: row.has_selfie,
+    awayUntil: row.away_until,
+    awayReason: row.away_reason,
   }));
 }
 
@@ -121,7 +134,7 @@ export async function openAlerts(siteId: string): Promise<{ alerts: LiveAlert[];
   const [rows, red, amber] = await Promise.all([
     supabase
       .from("alerts")
-      .select("id, event_id, rule_code, severity, raised_at")
+      .select("id, event_id, rule_code, severity, raised_at, post, source")
       .eq("site_id", siteId)
       .eq("status", "open")
       .order("severity", { ascending: false })
@@ -142,7 +155,7 @@ export async function openAlerts(siteId: string): Promise<{ alerts: LiveAlert[];
     const key = alert.event_id ?? alert.id;
     const known = grouped.get(key);
     if (known) {
-      grouped.set(key, { ...known, ids: [...known.ids, alert.id], codes: [...known.codes, alert.rule_code] });
+      grouped.set(key, { ...known, ids: [...known.ids, alert.id], codes: [...known.codes, alert.rule_code], foundAfter: known.foundAfter || alert.source === "server" });
       continue;
     }
     const check = checks.find((row) => row.id === alert.event_id);
@@ -156,8 +169,9 @@ export async function openAlerts(siteId: string): Promise<{ alerts: LiveAlert[];
       plate: check?.plate ?? null,
       typedPlate: check?.typed_plate ?? null,
       vehicle: check?.vehicle_description ?? null,
-      post: check?.post ?? null,
+      post: check?.post ?? alert.post,
       direction: check ? directionOf(check.type) : null,
+      foundAfter: alert.source === "server",
     });
   }
   return { alerts: [...grouped.values()], red: counted(red), amber: counted(amber) };

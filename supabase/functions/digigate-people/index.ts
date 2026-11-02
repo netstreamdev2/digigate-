@@ -1,6 +1,7 @@
-// Manages dashboard accounts, which only the service key can create. Called by the dashboard's server code with the
-// signed-in person's session, so the service key stays in Supabase and never reaches the dashboard. Deployed with
-// --no-verify-jwt: the session is checked below, and it must have passed MFA. Super users are never created here.
+// Manages dashboard accounts, which only the service key can create, and opens guards' shift selfies, which only it can
+// read. Called by the dashboard's server code with the signed-in person's session, so the service key stays in Supabase
+// and never reaches the dashboard. Deployed with --no-verify-jwt: the session is checked below, and it must have passed
+// MFA. Super users are never created here.
 // Logs carry error names only: requests hold names and temporary passwords.
 import { admin, audit, callerOf, canManage, isSuper, type Caller } from '../_shared/caller.ts';
 import { json, randomHex, sql } from '../_shared/device.ts';
@@ -11,6 +12,8 @@ const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BANNED_FOR_GOOD = '876000h';
+const SELFIE_BUCKET = 'shift-selfies';
+const SELFIE_LINK_SECONDS = 60;
 
 /** The company responsible for an account: its own, or for a client's login, the client's. */
 async function companyOf(profileId: string): Promise<{ org_id: string | null; roles: string[]; full_name: string } | null> {
@@ -92,6 +95,30 @@ async function changePerson(caller: Caller, body: Record<string, unknown>): Prom
   return json({ id, password });
 }
 
+/**
+ * A one-minute link to a guard's selfie, logged each time. A client's view-only login never gets one, and anyone else
+ * has to be someone who could see that site's control room.
+ */
+async function selfieLink(caller: Caller, body: Record<string, unknown>): Promise<Response> {
+  const shiftId = String(body.shiftId ?? '');
+  if (!UUID.test(shiftId) || caller.roles.includes('client_viewer')) return json({ error: 'not-allowed' }, 403);
+
+  const [shift] = await sql`
+    select x.org_id, x.selfie_path, trim(g.first_name || ' ' || g.last_name) as guard
+    from digigate.shifts x
+    join digigate.profiles p on p.id = ${caller.id}
+    left join digigate.gate_users g on g.id = x.gate_user_id
+    where x.id = ${shiftId}
+      and ('super_user' = any (p.roles) or (x.org_id = p.org_id and ('admin' = any (p.roles) or x.site_id = any (p.site_ids))))`;
+  if (!shift) return json({ error: 'not-allowed' }, 403);
+  if (!shift.selfie_path) return json({ error: 'no-selfie' }, 404);
+
+  const { data, error } = await admin.storage.from(SELFIE_BUCKET).createSignedUrl(shift.selfie_path, SELFIE_LINK_SECONDS);
+  if (error || !data) throw new Error('selfie link failed');
+  await audit(caller, shift.org_id, 'people', 'shift.selfie_viewed', shift.guard);
+  return json({ url: data.signedUrl });
+}
+
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -105,6 +132,7 @@ Deno.serve(async (request) => {
       await audit(caller, caller.org_id, 'people', 'person.password_changed', caller.name);
       return json({ ok: true });
     }
+    if (body.action === 'selfie-link') return await selfieLink(caller, body);
     if (!isSuper(caller) && !caller.roles.includes('admin')) return json({ error: 'not-allowed' }, 403);
     if (body.action === 'create') return await createPerson(caller, body);
     if (body.action === 'set-active' || body.action === 'reset-password') return await changePerson(caller, body);

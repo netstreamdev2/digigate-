@@ -20,7 +20,9 @@ import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
 import { loadSyncedPosts } from '@/db/site-posts';
 import { siteConfig } from '@/site/site-config';
 import { seedUsers } from '@/demo/seed-users';
+import { prepareTones } from '@/lib/feedback';
 import { newEventId } from '@/lib/ids';
+import { PostWarning } from '@/shift/post-warning';
 import { ShiftProvider, useShift } from '@/shift/shift-context';
 import { deviceToken } from '@/sync/device-api';
 import { SyncProvider, useSync } from '@/sync/sync-context';
@@ -49,6 +51,11 @@ export default function RootLayout() {
   });
   const [database, setDatabase] = useState<LocalDatabase | null>(null);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
+
+  // Without its tones the gate still vibrates, so a failure here stops nothing.
+  useEffect(() => {
+    prepareTones().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,6 +155,8 @@ function GuardedStack() {
           <Stack.Screen name="walk-in" />
           <Stack.Screen name="shift" />
           <Stack.Screen name="scan-test" />
+          <Stack.Screen name="stepping-away" />
+          <Stack.Screen name="manual" />
         </Stack.Protected>
         <Stack.Protected guard={signedIn && !onDuty} redirectTo={signedIn ? '/' : '/sign-in'}>
           <Stack.Screen name="start-shift" />
@@ -158,6 +167,7 @@ function GuardedStack() {
         <Stack.Screen name="pair" />
       </Stack>
       {locked ? <LockCover /> : null}
+      <PostWarning shift={onDuty && shift ? shift : null} locked={locked} />
     </View>
   );
 }

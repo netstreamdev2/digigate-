@@ -18,6 +18,7 @@ import { siteConfig } from '@/site/site-config';
 import type { Direction, GateCheck } from './decision';
 import { demographicsPayload } from './demographics';
 import { personIdOf } from './person-id';
+import { typedPersonPayload } from './typed-identity';
 
 export type CheckedPerson = GateCheck & {
   outcome: Outcome;
@@ -58,6 +59,8 @@ function personPayload(person: PersonDocument, personKey: string, at: number): G
         manual: true,
         demographics: demographicsPayload(person.gender, factsFromSaIdNumber(person.idNumber, at)?.birthDate ?? null, at),
       };
+    case 'typed':
+      return typedPersonPayload(person, personKey, person.reason, at);
   }
 }
 

@@ -14,14 +14,29 @@ export type VehicleBody =
   | 'motorbike';
 
 /**
- * Disc descriptions seen on real discs, keyed by their normalised text. Add one only after seeing it on a real disc:
- * a wrong shape could make a guard doubt a genuine car, and a description not listed falls back to a plain icon.
+ * The words on a disc that name a body shape, in English or Afrikaans, most specific first: a double-cab pick-up is a
+ * double cab before it's a pick-up. A description that doesn't name one shape gets no drawing. "Station wagon" stays
+ * out on purpose: discs use it for estates and for SUVs alike, and a drawing of the wrong one could make a guard doubt a
+ * genuine car.
  */
-const BODY_BY_DESCRIPTION: ReadonlyMap<string, VehicleBody> = new Map([['HATCH BACK / LUIKRUG', 'hatchback']]);
+const BODY_WORDS: readonly (readonly [VehicleBody, RegExp])[] = [
+  ['bakkie-double-cab', /DOUBLE ?CAB|D\/CAB|DUBBEL ?KAJUIT/],
+  ['bakkie-single-cab', /SINGLE ?CAB|ENKEL ?KAJUIT|PICK[ -]?UP|BAKKIE|OOPBAK/],
+  ['panel-van', /PANEL ?VAN|PANEEL ?WA/],
+  ['minibus', /MINI[ -]?BUS/],
+  ['motorbike', /MOTOR ?CYCLE|MOTORFIETS|SCOOTER/],
+  ['truck-heavy', /TRUCK[ -]?TRACTOR|VOORHAKER/],
+  ['truck-light', /\bTRUCK\b|VRAGMOTOR|\bLORRY\b/],
+  ['mpv', /MULTI[ -]?PURPOSE|\bMPV\b/],
+  ['suv-small', /\bSUV\b|SPORT[ -]?UTILITY/],
+  ['hatchback', /HATCH ?BACK|LUIKRUG/],
+  ['sedan', /SEDAN|SALOON|COUPE|KOEPEE/],
+];
 
 const normalise = (description: string) => description.trim().replace(/\s+/g, ' ').toUpperCase();
 
-/** The body shape for a disc's description, e.g. "Hatch back / Luikrug", or null when it isn't a known one. */
+/** The body shape a disc's description names, e.g. "Hatch back / Luikrug", or null when it doesn't name one. */
 export function vehicleBodyFromDisc(description: string): VehicleBody | null {
-  return BODY_BY_DESCRIPTION.get(normalise(description)) ?? null;
+  const text = normalise(description);
+  return BODY_WORDS.find(([, words]) => words.test(text))?.[0] ?? null;
 }

@@ -12,7 +12,7 @@ import { NoAccess } from "@/components/no-access";
 import { FilterSelect, SearchBox } from "@/components/search-box";
 import { StatTile } from "@/components/stat-tile";
 import { StatusChip } from "@/components/status-chip";
-import { asDeviceStatus, deviceBoard, deviceSummary, type DeviceStatus, type FleetDevice } from "@/lib/devices";
+import { asDeviceStatus, deviceBoard, deviceSummary, type DeviceHealth, type DeviceStatus, type FleetDevice } from "@/lib/devices";
 import { ago, plural, shortDate, timeOfDay, timeWithSeconds } from "@/lib/format";
 import { appNav } from "@/lib/nav";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
@@ -21,9 +21,11 @@ import { currentUser, roleLabel } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { revokeDevice } from "../setup/actions";
+import { PairDeviceButton } from "../setup/pair-device";
 
 const MOST_COMPANIES = 500;
 const NO_VALUE = "—";
+const LOW_BATTERY = 20;
 
 const TABS: readonly { status: DeviceStatus | null; label: string }[] = [
   { status: null, label: "All" },
@@ -49,7 +51,7 @@ function DeviceChip({ device }: { device: FleetDevice }) {
 /** Long names are clipped so the table always fits, with the full name on hover. */
 function Clipped({ text: value }: { text: string }) {
   return (
-    <span title={value} className="block max-w-64 truncate">
+    <span title={value} className="block max-w-44 truncate">
       {value}
     </span>
   );
@@ -57,7 +59,48 @@ function Clipped({ text: value }: { text: string }) {
 
 function scansLine({ checksToday, lastCheckAt }: FleetDevice): string {
   if (!lastCheckAt) return "No scans yet";
-  return checksToday ? `${plural(checksToday, "scan")} today, last ${timeOfDay(lastCheckAt)}` : `Last scan ${shortDate(lastCheckAt)}, ${timeOfDay(lastCheckAt)}`;
+  return checksToday ? `${plural(checksToday, "scan")}, last ${timeOfDay(lastCheckAt)}` : `Last scan ${shortDate(lastCheckAt)}, ${timeOfDay(lastCheckAt)}`;
+}
+
+function networkWords({ network, cellGeneration }: DeviceHealth): string {
+  if (network === "wifi") return "Wi-Fi";
+  if (network === "cellular") return cellGeneration?.toUpperCase() ?? "Mobile data";
+  return network === "none" ? "No connection" : "Connected";
+}
+
+function signalWords({ network, wifiName, cellBars }: DeviceHealth): string | null {
+  if (network === "wifi") return wifiName;
+  return network === "cellular" && cellBars !== null ? `${cellBars} of 4 bars` : null;
+}
+
+function HealthCell({ health }: { health: DeviceHealth | null }) {
+  if (!health) return <span className="text-ink-muted">No report yet</span>;
+  const { battery, charging, appVersion, latitude, longitude, locationAllowed } = health;
+  const low = battery !== null && battery <= LOW_BATTERY && !charging;
+  const level = battery === null ? null : `${battery}%${charging ? " charging" : low ? " low" : ""}`;
+  const details = [signalWords(health), appVersion ? `v${appVersion}` : null].filter(Boolean).join(" · ");
+  return (
+    <TwoLine
+      main={
+        <>
+          {level ? <span className={low ? "text-warning" : undefined}>{level}</span> : null}
+          {level ? " · " : null}
+          {networkWords(health)}
+        </>
+      }
+      sub={
+        <span className="flex items-center gap-2">
+          <span title={details} className="block max-w-36 truncate">{details || NO_VALUE}</span>
+          {locationAllowed === false ? <span className="font-semibold text-warning">Location off</span> : null}
+          {latitude !== null && longitude !== null ? (
+            <a href={`https://www.google.com/maps?q=${latitude},${longitude}`} target="_blank" rel="noreferrer" className="font-semibold text-brand hover:text-ink">
+              Map
+            </a>
+          ) : null}
+        </span>
+      }
+    />
+  );
 }
 
 function deviceRow(device: FleetDevice, now: number) {
@@ -78,6 +121,7 @@ function deviceRow(device: FleetDevice, now: number) {
       ),
       duty: device.guard ? <TwoLine main={device.guard} sub={device.post ?? NO_VALUE} /> : <span className="text-ink-muted">{device.status === "revoked" ? NO_VALUE : "Nobody on duty"}</span>,
       activity: <TwoLine main={device.lastSeenAt ? `Seen ${ago(device.lastSeenAt, now)}` : "Never seen"} sub={scansLine(device)} />,
+      health: <HealthCell health={device.health} />,
       action:
         device.status === "revoked" ? null : (
           <ConfirmAction
@@ -132,6 +176,9 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
           <SearchBox placeholder="Search a device, site, client or company" />
           {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />
+          <div className="sm:ml-auto">
+            <PairDeviceButton />
+          </div>
         </>
       }
     >
@@ -161,7 +208,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
 
       <Card className="mt-6" title={active?.label ?? "All"} subtitle="A device that stops answering keeps working offline. Its scans arrive when it reconnects.">
         {devices.length === 0 ? (
-          <p className="py-8 text-center text-sm text-ink-muted">{everyDevice === 0 && !search ? "No devices yet. Pair one from a site's Devices tab." : "Nothing here right now."}</p>
+          <p className="py-8 text-center text-sm text-ink-muted">{everyDevice === 0 && !search ? "No devices yet. Use Pair a device to add the first one." : "Nothing here right now."}</p>
         ) : (
           <DataTable
             columns={[
@@ -170,6 +217,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
               { key: "where", label: "Where" },
               { key: "duty", label: "On duty" },
               { key: "activity", label: "Activity" },
+              { key: "health", label: "Health" },
               { key: "action", label: "", align: "right" },
             ]}
             rows={devices.map((device) => deviceRow(device, now))}

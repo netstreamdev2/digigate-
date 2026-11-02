@@ -27,6 +27,10 @@ export const ruleCopy: Record<RuleCode, { title: string; message: string }> = {
     title: 'Possible cloned plate or disc',
     message: 'Another car on site carries the same plate or disc. Keep the boom closed and call your supervisor.',
   },
+  DISC_CHANGED_ON_SITE: {
+    title: 'Disc changed since entry',
+    message: 'This car came in with a different licence disc: the plate, disc number or expiry has changed. Keep the boom closed and call your supervisor.',
+  },
   PLATE_VIN_HISTORY_CONFLICT: {
     title: 'Plate and VIN history conflict',
     message: 'This plate was seen before on a different vehicle. Plates can move between cars, so look closely.',
@@ -34,6 +38,10 @@ export const ruleCopy: Record<RuleCode, { title: string; message: string }> = {
   DUPLICATE_ENTRY: {
     title: 'Already on site',
     message: 'DigiGate thinks this car is already inside. It may have left through an unattended gate.',
+  },
+  DRIVER_ALREADY_ON_SITE: {
+    title: 'Driver already on site',
+    message: "DigiGate has this driver inside already, on foot or in another car. They may have left without being scanned out, or someone else has their licence. Check their face against the licence photo.",
   },
   DISC_EXPIRED: { title: 'Licence disc expired', message: "The car's licence disc has expired." },
   LICENCE_EXPIRED: { title: "Driver's licence expired", message: "The driver's licence has expired." },

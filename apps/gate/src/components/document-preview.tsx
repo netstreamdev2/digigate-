@@ -28,6 +28,7 @@ import { Chip } from './chip';
 import { Icon, type IconName } from './icon';
 import { ResultBanner } from './result-banner';
 import { Text } from './text';
+import { vehicleArtFor } from './vehicle-art';
 
 // The guard compares these with the physical document, so the current scan shows every value in full.
 
@@ -101,7 +102,9 @@ function Section({ title, fields }: { title: string; fields: readonly Field[] })
   );
 }
 
-function DiscPreview({ disc }: { disc: ParsedLicenceDisc }) {
+/** `plateHidden` keeps the plate back until the check, so the guard reads it off the car rather than off the screen. */
+function DiscPreview({ disc, plateHidden }: { disc: ParsedLicenceDisc; plateHidden: boolean }) {
+  const art = vehicleArtFor(disc.description);
   return (
     <Card style={styles.card}>
       <Header
@@ -111,10 +114,24 @@ function DiscPreview({ disc }: { disc: ParsedLicenceDisc }) {
         title={`${disc.make} ${disc.model}`}
         detail={`Expires ${formatDate(disc.expiresOn)}`}
       />
+      {art ? (
+        <View style={styles.vehicleArt}>
+          <Image source={art} style={styles.vehicleArtImage} contentFit="contain" accessibilityLabel={disc.description} />
+          <Text variant="label" color={colors.inkMuted}>
+            The body shape only. Check the make, model and colour against the car.
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.plate}>
-        <Text variant="title" style={styles.plateText}>
-          {formatPlate(disc.plate)}
-        </Text>
+        {plateHidden ? (
+          <Text variant="bodyStrong" color={colors.inkMuted} style={styles.plateHidden}>
+            The plate shows after the check
+          </Text>
+        ) : (
+          <Text variant="title" style={styles.plateText}>
+            {formatPlate(disc.plate)}
+          </Text>
+        )}
         <ExpiryChip expiresOn={disc.expiresOn} />
       </View>
       <Section
@@ -131,7 +148,7 @@ function DiscPreview({ disc }: { disc: ParsedLicenceDisc }) {
       <Section
         title="Disc"
         fields={[
-          { label: 'Number plate', value: disc.plate },
+          { label: 'Number plate', value: plateHidden ? 'After the check' : disc.plate },
           { label: 'Register number', value: disc.registerNumber },
           { label: 'Disc number', value: disc.discNumber },
           { label: 'Expires', value: formatDate(disc.expiresOn) },
@@ -350,11 +367,14 @@ function LicenceChecks({ licence }: { licence: DriverLicence }) {
   );
 }
 
-/** A decoded scan, laid out the way the gate screens will show it. `photo` is null until the licence photo decodes. */
-export function DocumentPreview({ decoded, photo }: { decoded: DecodedDocument; photo: LicencePhotoResult | null }) {
+/**
+ * A decoded scan, laid out the way the gate screens will show it. `photo` is null until the licence photo decodes, and
+ * `plateHidden` holds a disc's plate back until the check.
+ */
+export function DocumentPreview({ decoded, photo, plateHidden = false }: { decoded: DecodedDocument; photo: LicencePhotoResult | null; plateHidden?: boolean }) {
   switch (decoded.kind) {
     case 'licence-disc':
-      return <DiscPreview disc={decoded.disc} />;
+      return <DiscPreview disc={decoded.disc} plateHidden={plateHidden} />;
     case 'driver-licence':
       return <LicencePreview licence={decoded.licence} photo={photo} />;
     case 'smart-id':
@@ -417,6 +437,19 @@ const styles = StyleSheet.create({
   },
   plateText: {
     letterSpacing: 1,
+  },
+  plateHidden: {
+    flex: 1,
+  },
+  // The drawings are 480 by 300 pixels; this keeps their 8:5 shape.
+  vehicleArt: {
+    gap: space.xs,
+  },
+  vehicleArtImage: {
+    width: '100%',
+    aspectRatio: 8 / 5,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
   },
   status: {
     flexDirection: 'row',

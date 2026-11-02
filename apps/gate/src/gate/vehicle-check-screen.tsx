@@ -10,6 +10,7 @@ import type { GateUser } from '@/auth/users';
 import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import { DocumentPreview } from '@/components/document-preview';
+import { DiscPopup } from '@/components/disc-popup';
 import { DocumentSheet } from '@/components/document-sheet';
 import { Icon, type IconName } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
@@ -20,9 +21,10 @@ import { Text } from '@/components/text';
 import { VehicleCard } from '@/components/vehicle-card';
 import { VisitTypePicker } from '@/components/visit-type-picker';
 import { useLocalDatabase } from '@/db/database-context';
+import { masked, rememberLastScan, settleLastScan, visitTypeLabel } from '@/db/last-scan';
 import { signalOutcome } from '@/lib/feedback';
-import { formatPlate, plateInput } from '@/lib/format';
-import { siteConfig } from '@/site/site-config';
+import { formatPlate, plateInput, titleCase } from '@/lib/format';
+import { siteConfig, visitTypeOf } from '@/site/site-config';
 import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
@@ -31,7 +33,7 @@ import { useVehicleDocuments } from './use-vehicle-documents';
 import { recordDecision, type Decision, type Direction } from './decision';
 import { CheckResult, type Settled } from './check-result';
 import { completedExitChecks, ExitChecksCard, NO_EXIT_CHECKS, type ExitChecks } from './exit-checks';
-import { checkVehicle, type CheckedVehicle, type Passage } from './vehicle-check';
+import { checkVehicle, scannedSubject, type CheckedVehicle, type Passage } from './vehicle-check';
 
 const FOOTER_HEIGHT = 160;
 const MIN_PLATE_LENGTH = 2;
@@ -55,7 +57,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   const [checked, setChecked] = useState<CheckedVehicle | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
   const [overriding, setOverriding] = useState(false);
-  const [details, setDetails] = useState<'licence' | 'disc' | null>(null);
+  const [details, setDetails] = useState<'licence' | 'disc' | 'disc-drawing' | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [typedPlate, setTypedPlate] = useState('');
@@ -75,10 +77,23 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
     setBusy(true);
     setProblem(null);
     try {
-      const result = await checkVehicle(db, { ...passage, disc, licence, typedPlate, occupants, visitType, guardId: guard.id });
+      const result = await checkVehicle(db, { ...passage, subject: scannedSubject({ disc, licence }), typedPlate, occupants, visitType, guardId: guard.id });
       setChecked(result);
       signalOutcome(result.outcome);
       eventRecorded();
+      rememberLastScan(db, {
+        gateUserId: guard.id,
+        at: result.event.occurredAt,
+        direction: direction === 'entry' ? 'in' : 'out',
+        name: `${licence.initials} ${titleCase(licence.surname)}`,
+        visitType: visitTypeLabel(result.event.payload.visit_type, (code) => visitTypeOf(code)?.label ?? null),
+        outcome: result.outcome,
+        settled: null,
+        plate: masked(normaliseIdentifier(disc.plate)),
+        vehicle: `${disc.make} ${disc.model}`,
+        people: occupants,
+        idNumber: masked(licence.idNumber),
+      });
     } catch (cause) {
       setProblem(`Nothing was recorded (${cause instanceof Error ? cause.message : 'unknown error'}). Press Check again.`);
     } finally {
@@ -94,6 +109,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
       await recordDecision(db, checked, decision, guard.id);
       setSettled(decision.kind === 'turned-away' ? 'turned-away' : 'let-through');
       eventRecorded();
+      settleLastScan(db, decision.kind === 'turned-away' ? 'turned-away' : 'let-through');
     } catch (cause) {
       setProblem(`That wasn't recorded (${cause instanceof Error ? cause.message : 'unknown error'}). Try again.`);
     } finally {
@@ -154,8 +170,8 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
 
         {licence ? <PersonCard document={{ kind: 'driver-licence', licence, photo }} onOpen={() => setDetails('licence')} /> : null}
 
-        {/* The disc's details include its plate, so they open only after the check (see the plate input below). */}
-        {disc ? <VehicleCard disc={disc} {...(checked ? { onOpen: () => setDetails('disc') } : {})} /> : null}
+        {/* The disc's plate stays back until the check, in its details and its drawing alike (see the plate input below). */}
+        {disc ? <VehicleCard disc={disc} onOpen={() => setDetails('disc')} onShowDisc={() => setDetails('disc-drawing')} /> : null}
 
         {disc && licence ? null : (
           <Card style={styles.documents}>
@@ -259,9 +275,11 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
 
       {details === 'disc' && disc ? (
         <DocumentSheet onClose={() => setDetails(null)}>
-          <DocumentPreview decoded={{ kind: 'licence-disc', disc }} photo={null} />
+          <DocumentPreview decoded={{ kind: 'licence-disc', disc }} photo={null} plateHidden={!checked} />
         </DocumentSheet>
       ) : null}
+
+      {details === 'disc-drawing' && disc ? <DiscPopup disc={disc} plateShown={checked !== null} onClose={() => setDetails(null)} /> : null}
 
       {overriding ? (
         <SupervisorOverride

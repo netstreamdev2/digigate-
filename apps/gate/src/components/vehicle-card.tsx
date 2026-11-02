@@ -1,4 +1,4 @@
-import { englishPart, isExpired, vehicleBodyFromDisc, type ParsedLicenceDisc, type VehicleBody } from '@digigate/core';
+import { englishPart, isExpired, type ParsedLicenceDisc } from '@digigate/core';
 import { colors, radius, space } from '@digigate/design';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -10,40 +10,24 @@ import { Card } from './card';
 import { Chip } from './chip';
 import { Icon } from './icon';
 import { Text } from './text';
-
-// Neutral grey drawings of the body shape only. A drawing of a specific model or paint colour that the car doesn't
-// quite match (an older Hilux, an orange that comes out red) could make a guard think a genuine car is stolen.
-const BODY_ART: Record<VehicleBody, number> = {
-  hatchback: require('@digigate/design/vehicles/generic-hatchback-neutral.webp'),
-  sedan: require('@digigate/design/vehicles/generic-sedan-neutral.webp'),
-  'suv-small': require('@digigate/design/vehicles/generic-suv-small-neutral.webp'),
-  'suv-large': require('@digigate/design/vehicles/generic-suv-large-neutral.webp'),
-  mpv: require('@digigate/design/vehicles/generic-mpv-neutral.webp'),
-  'bakkie-single-cab': require('@digigate/design/vehicles/generic-bakkie-single-cab-neutral.webp'),
-  'bakkie-double-cab': require('@digigate/design/vehicles/generic-bakkie-double-cab-neutral.webp'),
-  minibus: require('@digigate/design/vehicles/generic-minibus-neutral.webp'),
-  'panel-van': require('@digigate/design/vehicles/generic-panel-van-neutral.webp'),
-  'truck-light': require('@digigate/design/vehicles/generic-truck-light-neutral.webp'),
-  'truck-heavy': require('@digigate/design/vehicles/generic-truck-heavy-neutral.webp'),
-  motorbike: require('@digigate/design/vehicles/generic-motorbike-neutral.webp'),
-};
+import { vehicleArtFor } from './vehicle-art';
 
 /**
  * The car behind a scanned disc: its body shape, and the make, model and colour in the disc's own words for the guard
- * to check against the car. The plate is left out so the guard reads it off the car. Tapping it, when `onOpen` is
- * given, opens every detail on the disc.
+ * to check against the car. The plate is left out so the guard reads it off the car. Tapping it opens every detail on
+ * the disc, and the round disc button draws the disc itself.
  */
-export function VehicleCard({ disc, onOpen }: { disc: ParsedLicenceDisc; onOpen?: () => void }) {
-  const body = vehicleBodyFromDisc(disc.description);
+export function VehicleCard({ disc, onOpen, onShowDisc }: { disc: ParsedLicenceDisc; onOpen?: () => void; onShowDisc?: () => void }) {
+  const art = vehicleArtFor(disc.description);
   const expired = isExpired(disc.expiresOn, Date.now(), siteConfig.rules.utcOffsetMinutes);
   const name = `${disc.make} ${disc.model}`;
 
   const card = (pressed: boolean) => (
     <Card style={[styles.card, pressed && styles.pressed]}>
       <View style={styles.top}>
-        {body ? (
+        {art ? (
           <View style={styles.art}>
-            <Image source={BODY_ART[body]} style={styles.artImage} contentFit="contain" accessibilityLabel={englishPart(disc.description)} />
+            <Image source={art} style={styles.artImage} contentFit="contain" accessibilityLabel={englishPart(disc.description)} />
           </View>
         ) : (
           <View style={styles.icon}>
@@ -63,18 +47,30 @@ export function VehicleCard({ disc, onOpen }: { disc: ParsedLicenceDisc; onOpen?
         </View>
       </View>
 
-      <View style={styles.chips}>
-        {expired ? (
-          <Chip label="Disc expired" tone="blocked" icon="result-blocked" />
-        ) : (
-          <Chip label={`Valid to ${formatDate(disc.expiresOn)}`} tone="clear" icon="check" />
-        )}
+      <View style={styles.chipRow}>
+        <View style={styles.chips}>
+          {expired ? (
+            <Chip label="Disc expired" tone="blocked" icon="result-blocked" />
+          ) : (
+            <Chip label={`Valid to ${formatDate(disc.expiresOn)}`} tone="clear" icon="check" />
+          )}
+        </View>
+        {onShowDisc ? (
+          <Pressable
+            onPress={onShowDisc}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Show the disc"
+            style={({ pressed }) => [styles.discButton, pressed && styles.discButtonPressed]}>
+            <Icon name="licence-disc" size={24} color={colors.brand} />
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.compare}>
         <Icon name="info" size={20} color={colors.brand} />
         <Text variant="label" style={styles.compareCopy}>
-          {body
+          {art
             ? 'Check the make, model and colour against the car. The drawing shows the body shape only.'
             : 'Check the make, model and colour against the car.'}
         </Text>
@@ -133,10 +129,29 @@ const styles = StyleSheet.create({
     gap: space.xxs,
     justifyContent: 'center',
   },
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
   chips: {
+    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: space.xs,
+  },
+  discButton: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.tileSky,
+    backgroundColor: colors.surface,
+  },
+  discButtonPressed: {
+    backgroundColor: colors.tileSky,
   },
   compare: {
     flexDirection: 'row',

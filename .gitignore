@@ -34,3 +34,6 @@ packages/design/assets/vehicles/app/*
 *.log
 .DS_Store
 Thumbs.db
+
+# Built from packages/core for the Edge Functions: pnpm functions:bundle
+supabase/functions/_shared/core.js

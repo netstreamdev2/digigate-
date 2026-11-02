@@ -16,11 +16,14 @@ import { ResultBanner } from '@/components/result-banner';
 import { StatStrip } from '@/components/stat-strip';
 import { SyncPill } from '@/components/sync-pill';
 import { Text } from '@/components/text';
-import { demoLastScan, demoSiteStats } from '@/demo/gate-demo';
+import type { LastScan } from '@/db/last-scan';
 import { handOffScan } from '@/gate/scan-handoff';
+import { useHomeFigures } from '@/gate/use-home-figures';
 import type { ScanNotice } from '@/gate/use-vehicle-documents';
 import { fromBase64 } from '@/lib/bytes';
+import { formatDuration } from '@/lib/format';
 import { periodHours, type Lane } from '@/site/site-config';
+import { PostStatus } from '@/shift/post-status';
 import { usePost, useShift } from '@/shift/shift-context';
 
 import { subscribeToScans } from '../../modules/scanner';
@@ -46,6 +49,41 @@ function postHandles(document: Pending['document'], lanes: readonly Lane[]): boo
   return (byCar && lanes.includes('vehicle')) || (onFoot && lanes.includes('pedestrian'));
 }
 
+const NO_FIGURE = '—';
+
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+function ago(at: number, now: number): string {
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  return `${Math.floor(minutes / 60)} h ago`;
+}
+
+/** How the check ended, when it wasn't simply clear. */
+function resultOf(scan: LastScan): { label: string; tone: 'blocked' | 'neutral' } | null {
+  if (scan.settled === 'turned-away') return { label: 'Turned away', tone: 'blocked' };
+  if (scan.outcome === 'blocked') return scan.settled ? { label: 'Overridden', tone: 'neutral' } : { label: 'Blocked', tone: 'blocked' };
+  if (scan.outcome === 'warning') return scan.settled ? { label: 'Let through', tone: 'neutral' } : { label: 'Warning', tone: 'neutral' };
+  return null;
+}
+
+function scanFields(scan: LastScan): { label: string; value: string }[] {
+  return [
+    ...(scan.plate ? [{ label: 'Plate', value: scan.plate }] : []),
+    ...(scan.idNumber ? [{ label: 'ID', value: scan.idNumber }] : []),
+    ...(scan.vehicle ? [{ label: 'Vehicle', value: scan.vehicle }] : [{ label: 'Came', value: 'On foot' }]),
+    ...(scan.people !== null ? [{ label: 'People', value: String(scan.people) }] : []),
+  ];
+}
+
 function open(destination: Destination) {
   if (destination === 'walk-in') router.push({ pathname: '/walk-in', params: { direction: 'entry' } });
   else if (destination === 'walk-out') router.push({ pathname: '/walk-in', params: { direction: 'exit' } });
@@ -63,6 +101,9 @@ export default function HomeScreen() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [notice, setNotice] = useState<ScanNotice | null>(null);
   const [walkInOpen, setWalkInOpen] = useState(false);
+  const figures = useHomeFigures(shift);
+  const openAlerts = figures?.openAlerts ?? null;
+  const lastScan = figures?.lastScan ?? null;
 
   // Only while home is in front: the screen it opens listens for itself. Leaving folds the walk-in tile back.
   useFocusEffect(
@@ -109,7 +150,11 @@ export default function HomeScreen() {
           </Pressable>
           <View style={styles.topActions}>
             <SyncPill />
-            <IconButton icon="bell" label={`${demoSiteStats.openAlerts} open alerts`} badge={demoSiteStats.openAlerts} />
+            <IconButton
+              icon="bell"
+              label={openAlerts === null ? 'Open alerts not synced yet' : `${openAlerts} open alerts`}
+              {...(openAlerts ? { badge: openAlerts } : {})}
+            />
           </View>
         </View>
 
@@ -119,6 +164,8 @@ export default function HomeScreen() {
             {shift ? `${post.label} · ${periodHours(shift.period)}` : post.label}
           </Text>
         </View>
+
+        <PostStatus />
 
         {notice ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
 
@@ -161,23 +208,37 @@ export default function HomeScreen() {
             </View>
           ) : null}
           <View style={styles.tileSlot}>
-            <ActionTile icon="alerts" label="Alerts" detail={`${demoSiteStats.openAlerts} open`} tint={colors.tileButter} />
+            <ActionTile icon="alerts" label="Alerts" detail={openAlerts === null ? 'Not synced yet' : `${openAlerts} open`} tint={colors.tileButter} />
           </View>
         </View>
 
         <StatStrip
           stats={[
-            { icon: 'vehicle', value: String(demoSiteStats.vehiclesOnSite), label: 'Cars in' },
-            { icon: 'occupants', value: String(demoSiteStats.peopleOnSite), label: 'People in' },
-            { icon: 'duration', value: demoSiteStats.averageStay, label: 'Avg stay' },
+            { icon: 'vehicle', value: figures ? String(figures.vehicles) : NO_FIGURE, label: 'Cars in' },
+            { icon: 'occupants', value: figures ? String(figures.people) : NO_FIGURE, label: 'People in' },
+            { icon: 'duration', value: figures?.averageStayMs ? formatDuration(figures.averageStayMs) : NO_FIGURE, label: 'Avg stay today' },
           ]}
         />
 
-        <LastScanCard {...demoLastScan} />
+        {lastScan && figures ? (
+          <LastScanCard
+            name={lastScan.name}
+            initials={initialsOf(lastScan.name)}
+            visitType={lastScan.visitType}
+            direction={lastScan.direction}
+            time={ago(lastScan.at, figures.readAt)}
+            fields={scanFields(lastScan)}
+            result={resultOf(lastScan)}
+          />
+        ) : null}
       </ScrollView>
 
       <View style={[styles.dock, { paddingBottom: insets.bottom + space.sm }]}>
-        <Pressable accessibilityRole="button" style={styles.manualEntry}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Type a plate or ID number"
+          onPress={() => router.push('/manual')}
+          style={({ pressed }) => [styles.manualEntry, pressed && styles.manualEntryPressed]}>
           <Icon name="manual-entry" size={20} color={colors.inkMuted} />
           <Text variant="body" color={colors.inkSubtle}>
             Type a plate or ID number
@@ -290,6 +351,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
+  },
+  manualEntryPressed: {
+    backgroundColor: colors.surfaceMuted,
   },
   dockRow: {
     flexDirection: 'row',
