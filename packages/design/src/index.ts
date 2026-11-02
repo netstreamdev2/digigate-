@@ -29,6 +29,19 @@ export const colors = {
 // card surface; slot 3 is under 3:1 contrast there, so charts using it must show their values as visible labels.
 export const seriesColors = ['#2a78d6', '#eb6834', '#1baf7a'] as const;
 
+// Frosted glass for the dashboard's report pages: see-through panels floating over a soft wash of the logo's colours.
+export const glass = {
+  fill: 'rgba(255, 255, 255, 0.58)',
+  fillSoft: 'rgba(255, 255, 255, 0.42)',
+  fillStrong: 'rgba(255, 255, 255, 0.78)',
+  edge: 'rgba(255, 255, 255, 0.8)',
+  shadow: '0px 14px 44px rgba(6, 44, 101, 0.1)',
+  blur: '26px',
+  washSky: 'rgba(84, 191, 244, 0.42)',
+  washLilac: 'rgba(120, 112, 214, 0.3)',
+  washMint: 'rgba(27, 175, 122, 0.22)',
+} as const;
+
 export const space = {
   xxs: 4,
   xs: 8,

@@ -34,6 +34,13 @@ export const Scanner = requireOptionalNativeModule<ScannerNativeModule>('Scanner
 
 const DUPLICATE_WINDOW_MS = 250;
 
+let paused = false;
+
+/** While paused, scans reach no listener: a locked screen must not change what's hidden behind it. */
+export function setScansPaused(value: boolean): void {
+  paused = value;
+}
+
 /**
  * Listens for scans, dropping an identical one inside 250 ms. Urovo sends every scan twice (once per broadcast
  * action); the native module filters this from its next build, and this keeps older builds correct too.
@@ -43,6 +50,7 @@ export function subscribeToScans(listener: (event: ScanEvent) => void): { remove
   if (!Scanner) return null;
   let previous: ScanEvent | null = null;
   return Scanner.addListener('onScan', (event) => {
+    if (paused) return;
     if (previous && previous.bytes === event.bytes && event.receivedAt - previous.receivedAt < DUPLICATE_WINDOW_MS) return;
     previous = event;
     listener(event);

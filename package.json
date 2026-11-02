@@ -9,6 +9,16 @@
     "gate": "pnpm --filter gate",
     "dashboard": "pnpm --filter dashboard",
     "test": "pnpm -r --if-present test",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test:db": "node supabase/tests/database.test.mjs",
+    "test:reports": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./supabase/tests/gate-simulator/resolve-ts.mjs supabase/tests/report-files.test.ts",
+    "simulate": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./supabase/tests/gate-simulator/resolve-ts.mjs supabase/tests/gate-simulator/simulate.ts",
+    "simulate:erase": "pnpm simulate --erase",
+    "functions:bundle": "node supabase/setup/bundle-core.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "pdf-lib": "1.17.1",
+    "rolldown": "1.2.15"
   }
 }

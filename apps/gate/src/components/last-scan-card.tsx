@@ -17,9 +17,11 @@ type Props = {
   direction: 'in' | 'out';
   time: string;
   fields: readonly Field[];
+  /** How the check ended, when it wasn't simply clear. */
+  result?: { label: string; tone: 'blocked' | 'neutral' } | null;
 };
 
-export function LastScanCard({ name, initials, visitType, direction, time, fields }: Props) {
+export function LastScanCard({ name, initials, visitType, direction, time, fields, result = null }: Props) {
   return (
     <Card style={styles.card}>
       <View style={styles.header}>
@@ -43,7 +45,11 @@ export function LastScanCard({ name, initials, visitType, direction, time, field
             {visitType}
           </Text>
         </View>
-        <Chip label={direction === 'in' ? 'In' : 'Out'} icon={direction === 'in' ? 'entry' : 'exit'} tone="clear" />
+        {result ? (
+          <Chip label={result.label} icon={result.tone === 'blocked' ? 'result-blocked' : 'result-warning'} tone={result.tone} />
+        ) : (
+          <Chip label={direction === 'in' ? 'In' : 'Out'} icon={direction === 'in' ? 'entry' : 'exit'} tone="clear" />
+        )}
       </View>
 
       <View style={styles.fields}>

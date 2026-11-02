@@ -2,9 +2,13 @@
 // 74-byte RSA block. There is no official specification. The public keys and layout follow the community's
 // reverse engineering (github.com/ugommirikwe/sa-license-decoder SPEC.md, ported via the south-africa-driving-license
 // Python package); field positions were checked against a real card on 2026-10-29.
+//
+// Each decrypted block starts with 5 bytes of padding. Without them the data is 684 bytes: a 10-byte header that
+// gives the length of each section, then the text fields, the packed dates and the photo.
 import type { IsoDate } from '../rules/types';
 
 import { bigIntToBytes, bytesToBigInt, bytesToText } from './bytes';
+import { decodeWaveletImage, type PhotoResult } from './licence-photo/wavelet-image';
 import { modPow, parseRsaPublicKey, type RsaPublicKey } from './rsa';
 
 const BARCODE_LENGTH = 720;
@@ -12,11 +16,17 @@ const HEADER_LENGTH = 6;
 const LONG_BLOCK = 128;
 const LONG_BLOCK_COUNT = 5;
 const SHORT_BLOCK = 74;
+const PLAINTEXT_LENGTH = LONG_BLOCK * LONG_BLOCK_COUNT + SHORT_BLOCK;
 
-const SECTION_START = 0x82;
+const BLOCK_PADDING = 5;
+const DATA_LENGTH = PLAINTEXT_LENGTH - BLOCK_PADDING * (LONG_BLOCK_COUNT + 1);
+const DATA_HEADER_LENGTH = 10;
+const TEXT_LENGTH_BYTE = 5;
+const DATES_LENGTH_BYTE = 7;
+const PHOTO_LENGTH_BYTE = 8;
+
 const FIELD_END = 0xe0;
 const GROUP_END = 0xe1;
-const NIBBLES_END = 0x57;
 const EMPTY_DATE_NIBBLE = 0xa;
 
 const KEY_VERSIONS = [
@@ -99,7 +109,7 @@ export function decryptDriverLicence(bytes: Uint8Array): { keyVersion: LicenceKe
   if (!version) return null;
 
   const keys = keysFor(version);
-  const plaintext = new Uint8Array(LONG_BLOCK * LONG_BLOCK_COUNT + SHORT_BLOCK);
+  const plaintext = new Uint8Array(PLAINTEXT_LENGTH);
   for (let block = 0; block < LONG_BLOCK_COUNT; block++) {
     const start = HEADER_LENGTH + block * LONG_BLOCK;
     plaintext.set(decryptBlock(bytes.subarray(start, start + LONG_BLOCK), keys.long), block * LONG_BLOCK);
@@ -109,19 +119,47 @@ export function decryptDriverLicence(bytes: Uint8Array): { keyVersion: LicenceKe
   return { keyVersion: version.version, plaintext };
 }
 
-class Cursor {
-  private position: number;
+function byteAt(data: Uint8Array, index: number): number {
+  const value = data[index];
+  if (value === undefined) throw new MalformedLicence('Ran past the end of the data');
+  return value;
+}
 
-  constructor(
-    private readonly data: Uint8Array,
-    start: number,
-  ) {
-    this.position = start;
+/** Joins the blocks without the padding each one starts with. */
+function stripBlockPadding(plaintext: Uint8Array): Uint8Array {
+  if (plaintext.length !== PLAINTEXT_LENGTH) throw new MalformedLicence('Wrong plaintext length');
+  const data = new Uint8Array(DATA_LENGTH);
+  let written = 0;
+  for (let start = 0; start < plaintext.length; start += LONG_BLOCK) {
+    const block = plaintext.subarray(start + BLOCK_PADDING, Math.min(start + LONG_BLOCK, plaintext.length));
+    data.set(block, written);
+    written += block.length;
   }
+  return data;
+}
+
+type LicenceSections = { text: Uint8Array; dates: Uint8Array; photo: Uint8Array };
+
+/** Cuts the data into its sections using the lengths in the header, which must account for every byte. */
+function splitSections(data: Uint8Array): LicenceSections {
+  const textLength = byteAt(data, TEXT_LENGTH_BYTE);
+  const datesLength = byteAt(data, DATES_LENGTH_BYTE);
+  // The upper 4 bits of this 12-bit length are not part of it.
+  const photoLength = ((byteAt(data, PHOTO_LENGTH_BYTE) & 0x0f) << 8) | byteAt(data, PHOTO_LENGTH_BYTE + 1);
+  if (DATA_HEADER_LENGTH + textLength + datesLength + photoLength !== data.length) throw new MalformedLicence('Section lengths do not add up');
+
+  const datesStart = DATA_HEADER_LENGTH + textLength;
+  const photoStart = datesStart + datesLength;
+  return { text: data.subarray(DATA_HEADER_LENGTH, datesStart), dates: data.subarray(datesStart, photoStart), photo: data.subarray(photoStart) };
+}
+
+class Cursor {
+  private position = 0;
+
+  constructor(private readonly data: Uint8Array) {}
 
   byte(): number {
-    const value = this.data[this.position];
-    if (value === undefined) throw new MalformedLicence('Ran past the end of the data');
+    const value = byteAt(this.data, this.position);
     this.position += 1;
     return value;
   }
@@ -155,10 +193,8 @@ class Cursor {
 class Nibbles {
   private readonly values: number[] = [];
 
-  constructor(cursor: Cursor) {
-    for (let byte = cursor.byte(); byte !== NIBBLES_END; byte = cursor.byte()) {
-      this.values.push(byte >> 4, byte & 0x0f);
-    }
+  constructor(bytes: Uint8Array) {
+    for (const byte of bytes) this.values.push(byte >> 4, byte & 0x0f);
   }
 
   next(): number {
@@ -189,9 +225,8 @@ class Nibbles {
 }
 
 export function parseDecryptedLicence(plaintext: Uint8Array, keyVersion: LicenceKeyVersion): DriverLicence {
-  const start = plaintext.indexOf(SECTION_START);
-  if (start < 0) throw new MalformedLicence('No section start marker');
-  const cursor = new Cursor(plaintext, start + 2);
+  const { text, dates } = splitSections(stripBlockPadding(plaintext));
+  const cursor = new Cursor(text);
 
   const vehicleCodes = cursor.group(4);
   const surname = cursor.field();
@@ -202,9 +237,9 @@ export function parseDecryptedLicence(plaintext: Uint8Array, keyVersion: Licence
   const vehicleRestrictions = cursor.group(4);
   const licenceNumber = cursor.field().value;
   const idNumber = cursor.text(13);
-  const idNumberType = String(cursor.byte()).padStart(2, '0');
 
-  const nibbles = new Nibbles(cursor);
+  const nibbles = new Nibbles(dates);
+  const idNumberType = nibbles.digits(2);
   const licenceCodeIssueDates = Array.from({ length: 4 }, () => nibbles.date()).filter((date): date is IsoDate => date !== null);
   const driverRestrictionCodes = nibbles.digits(2);
   const prdpExpiresOn = nibbles.date();
@@ -247,4 +282,26 @@ export function decodeDriverLicence(bytes: Uint8Array): DriverLicenceResult {
     if (error instanceof MalformedLicence) return { ok: false, reason: 'malformed' };
     throw error;
   }
+}
+
+/** The photo section of a decrypted licence, still compressed. */
+export function licencePhotoData(plaintext: Uint8Array): Uint8Array | null {
+  try {
+    return splitSections(stripBlockPadding(plaintext)).photo;
+  } catch (error) {
+    if (error instanceof MalformedLicence) return null;
+    throw error;
+  }
+}
+
+export type LicencePhotoResult = PhotoResult | { ok: false; reason: 'not-a-licence' };
+
+/**
+ * Decodes the photo printed into a licence barcode, for the guard to compare with the driver's face. Kept apart
+ * from `decodeDriverLicence` so the scan result never waits on it.
+ */
+export function decodeLicencePhoto(bytes: Uint8Array): LicencePhotoResult {
+  const decrypted = decryptDriverLicence(bytes);
+  const photo = decrypted ? licencePhotoData(decrypted.plaintext) : null;
+  return photo ? decodeWaveletImage(photo) : { ok: false, reason: 'not-a-licence' };
 }

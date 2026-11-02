@@ -10,24 +10,33 @@ type Props = {
   detail: string;
   tint: string;
   outlined?: boolean;
+  /** Half height, icon beside the label: two compact tiles fill the space of one. */
+  compact?: boolean;
   onPress?: () => void;
 };
 
-export function ActionTile({ icon, label, detail, tint, outlined = false, onPress }: Props) {
+export function ActionTile({ icon, label, detail, tint, outlined = false, compact = false, onPress }: Props) {
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [styles.tile, { backgroundColor: tint }, outlined && styles.outlined, pressed && styles.pressed]}>
-      <View style={styles.badge}>
-        <Icon name={icon} size={24} />
+      style={({ pressed }) => [
+        compact ? styles.compact : styles.tile,
+        { backgroundColor: tint },
+        outlined && styles.outlined,
+        pressed && styles.pressed,
+      ]}>
+      <View style={[styles.badge, compact && styles.badgeCompact]}>
+        <Icon name={icon} size={compact ? 18 : 24} />
       </View>
-      <Text variant="heading">{label}</Text>
-      <Text variant="label" color={colors.inkMuted}>
-        {detail}
-      </Text>
+      <View style={compact ? styles.copyCompact : styles.copy}>
+        <Text variant={compact ? 'bodyStrong' : 'heading'}>{label}</Text>
+        <Text variant="label" color={colors.inkMuted}>
+          {detail}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -40,6 +49,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.xxs,
+  },
+  compact: {
+    minHeight: 70,
+    paddingHorizontal: space.xs,
+    borderRadius: radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
   },
   outlined: {
     borderWidth: 1,
@@ -56,5 +73,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  badgeCompact: {
+    width: 32,
+    height: 32,
+    marginBottom: 0,
+  },
+  copy: {
+    alignItems: 'center',
+    gap: space.xxs,
+  },
+  copyCompact: {
+    flex: 1,
+    gap: 2,
   },
 });

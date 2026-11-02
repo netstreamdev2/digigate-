@@ -1,7 +1,6 @@
-import { RULE_SEVERITY, type Severity } from "@digigate/core";
+import { RULE_SEVERITY, ruleTitle, type Severity } from "@digigate/core";
 
 import type { DemoAlert } from "@/demo/dashboard-demo";
-import { ruleTitles } from "@/rule-titles";
 
 import { Icon } from "./icon";
 import { StatusChip, type Status } from "./status-chip";
@@ -17,8 +16,8 @@ type Field = {
 
 type Props = {
   alerts: readonly DemoAlert[];
-  /** The visit behind the first alert, shown expanded. */
-  expanded: {
+  /** The visit behind the first alert, shown expanded. Leave out for a plain list. */
+  expanded?: {
     initials: string;
     name: string;
     visitType: string;
@@ -35,7 +34,7 @@ export function AlertsPanel({ alerts, expanded }: Props) {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusChip status={statusBySeverity[RULE_SEVERITY[alert.code]]} />
-                <p className="font-display text-base font-semibold tracking-tight">{ruleTitles[alert.code]}</p>
+                <p className="font-display text-base font-semibold tracking-tight">{ruleTitle(alert.code)}</p>
               </div>
               <p className="mt-2 text-sm text-ink-muted">{alert.summary}</p>
               <p className="mt-1 text-xs tabular-nums text-ink-subtle">
@@ -45,7 +44,7 @@ export function AlertsPanel({ alerts, expanded }: Props) {
             <Icon name="chevron-right" className="mt-1 size-5 shrink-0 text-ink-subtle" />
           </div>
 
-          {index === 0 ? (
+          {index === 0 && expanded ? (
             <div className="mt-4 rounded-md bg-surface-muted p-4">
               <div className="flex items-center gap-3">
                 <span className="grid size-11 place-items-center rounded-pill bg-tile-lilac font-display font-semibold text-brand">

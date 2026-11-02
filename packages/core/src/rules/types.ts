@@ -31,6 +31,8 @@ export type OpenVehicleVisit = {
   driverKey: PersonKey;
   coDriverKeys: readonly PersonKey[];
   vehicle: VehicleIdentity;
+  /** The expiry on the disc scanned at entry. Absent for visits recorded before it was kept. */
+  discExpiresOn?: IsoDate;
   occupants: number;
   visitType: string;
   enteredAt: EpochMs;
@@ -82,12 +84,20 @@ export type VehicleEntryScan = {
   typedPlate: string;
 };
 
+/** Whether the driver could stop the engine and start it again at the exit: someone without the key can't. */
+export type IgnitionRestart = 'done' | 'failed';
+
+/** The boot is only opened when something looks suspicious. */
+export type BootCheck = 'not-needed' | 'clear' | 'problem';
+
 export type VehicleExitScan = {
   at: EpochMs;
   driver: Driver;
   disc: LicenceDisc;
   typedPlate: string;
   occupants: number;
+  ignitionRestart: IgnitionRestart;
+  bootCheck: BootCheck;
 };
 
 export type PedestrianScan = {

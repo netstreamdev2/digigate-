@@ -1,0 +1,44 @@
+// Who is calling a dashboard function. These are deployed with --no-verify-jwt, so the session is checked here, and every
+// account must have passed MFA. The service key stays in Supabase and never reaches the dashboard.
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+import { json, sql } from './device.ts';
+
+export const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
+
+export type Caller = { id: string; name: string; org_id: string | null; roles: string[] };
+
+/** The token is proven by getUser before this runs, so its claims can be trusted. */
+function assuranceLevel(token: string): string | null {
+  try {
+    const payload = (token.split('.')[1] ?? '').replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(payload)).aal ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export const isSuper = (caller: Caller) => caller.roles.includes('super_user');
+
+export function canManage(caller: Caller, orgId: string | null): boolean {
+  return isSuper(caller) || (caller.roles.includes('admin') && orgId !== null && caller.org_id === orgId);
+}
+
+/** The signed-in person, or the response that turns them away. */
+export async function callerOf(request: Request): Promise<Caller | Response> {
+  const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data.user) return json({ error: 'not-signed-in' }, 401);
+  if (assuranceLevel(token) !== 'aal2') return json({ error: 'needs-mfa' }, 403);
+
+  const [profile] = await sql`select full_name, org_id, roles::text[] as roles from digigate.profiles where id = ${data.user.id} and is_active`;
+  if (!profile) return json({ error: 'not-allowed' }, 403);
+  return { id: data.user.id, name: profile.full_name, org_id: profile.org_id, roles: profile.roles };
+}
+
+/** Records what a function did in the audit log, under the person who asked for it. */
+export function audit(caller: Caller, orgId: string | null, category: string, action: string, target: string | null, detail: string | null = null) {
+  return sql`select digigate.write_audit(${orgId}::uuid, null, null, ${category}, ${action}, ${caller.id}::uuid, ${caller.name}, ${target}, ${detail})`;
+}

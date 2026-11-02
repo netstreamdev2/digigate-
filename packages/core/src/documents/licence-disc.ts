@@ -4,7 +4,7 @@ import { bytesToText } from './bytes';
 
 const FIELD_COUNT = 14;
 
-/** Everything the disc's barcode carries that DigiGate uses. Field order confirmed on a real disc (CLAUDE.md). */
+/** Everything the disc's barcode carries that DigiGate uses. Field order confirmed on a real disc. */
 export type ParsedLicenceDisc = LicenceDisc & {
   registerNumber: string;
   /** English / Afrikaans, as printed, e.g. "Hatch back / Luikrug". */

@@ -26,6 +26,8 @@ function lookFor(status: SyncStatus, pending: number): Look {
       return { label: 'This device only', icon: 'device', tone: 'neutral' };
     case 'not-paired':
       return { label: 'Pair device', icon: 'offline', tone: 'warning', onPress: () => router.push('/pair') };
+    case 'revoked':
+      return { label: 'Device removed', icon: 'offline', tone: 'warning', onPress: () => router.push('/pair') };
     case 'syncing':
       return { label: 'Syncing', icon: 'syncing', tone: 'neutral' };
     case 'synced':

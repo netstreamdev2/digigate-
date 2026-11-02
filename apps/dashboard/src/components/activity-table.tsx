@@ -1,11 +1,23 @@
-import type { DemoActivity } from "@/demo/dashboard-demo";
-
 import { Icon } from "./icon";
 import { StatusChip } from "./status-chip";
 
-const columns = ["Time", "Person", "Movement", "Vehicle", "Gate", "On site", "Result"];
+export type ActivityRow = {
+  id: string;
+  time: string;
+  person: string;
+  visitType: string;
+  direction: "in" | "out";
+  vehicle: string;
+  plate: string;
+  gate: string;
+  stay: string;
+  result: "clear" | "warning" | "blocked";
+};
 
-export function ActivityTable({ rows }: { rows: readonly DemoActivity[] }) {
+// The result sits beside the time so it can never scroll out of sight on a narrow screen.
+const columns = ["Time", "Result", "Person", "Movement", "Vehicle", "Gate", "On site"];
+
+export function ActivityTable({ rows }: { rows: readonly ActivityRow[] }) {
   return (
     <div className="-mx-6 overflow-x-auto px-6">
       <table className="w-full min-w-[640px] whitespace-nowrap text-sm">
@@ -23,6 +35,9 @@ export function ActivityTable({ rows }: { rows: readonly DemoActivity[] }) {
             <tr key={row.id} className="hover:bg-surface-muted/60">
               <td className="py-3 pr-4 tabular-nums text-ink-muted">{row.time}</td>
               <td className="py-3 pr-4">
+                <StatusChip status={row.result} />
+              </td>
+              <td className="py-3 pr-4">
                 <p className="font-medium">{row.person}</p>
                 <p className="text-xs text-ink-muted">{row.visitType}</p>
               </td>
@@ -37,10 +52,7 @@ export function ActivityTable({ rows }: { rows: readonly DemoActivity[] }) {
                 <p className="text-xs tabular-nums text-ink-muted">{row.plate}</p>
               </td>
               <td className="py-3 pr-4 text-ink-muted">{row.gate}</td>
-              <td className="py-3 pr-4 tabular-nums text-ink-muted">{row.stay}</td>
-              <td className="py-3">
-                <StatusChip status={row.result} />
-              </td>
+              <td className="py-3 tabular-nums text-ink-muted">{row.stay}</td>
             </tr>
           ))}
         </tbody>

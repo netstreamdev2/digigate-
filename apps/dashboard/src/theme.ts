@@ -1,4 +1,4 @@
-import { colors, radius, seriesColors, shadow } from "@digigate/design";
+import { colors, glass, radius, seriesColors, shadow } from "@digigate/design";
 
 const kebab = (name: string) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 
@@ -8,4 +8,5 @@ export const themeCss = `:root{${[
   ...seriesColors.map((value, index) => `--dg-color-series-${index + 1}:${value}`),
   ...Object.entries(radius).map(([name, value]) => `--dg-radius-${name}:${value}px`),
   ...Object.entries(shadow).map(([name, value]) => `--dg-shadow-${kebab(name)}:${value}`),
+  ...Object.entries(glass).map(([name, value]) => `--dg-glass-${kebab(name)}:${value}`),
 ].join(";")}}`;

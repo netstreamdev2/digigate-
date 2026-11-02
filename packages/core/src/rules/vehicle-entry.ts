@@ -1,7 +1,7 @@
 import { isExpired } from './dates';
 import { finalise, hit } from './hits';
 import type { GateState, RuleConfig, RuleHit, VehicleEntryScan } from './types';
-import { findCloneOnSite, hasHistoryConflict, samePlate, sameVin, vehicleVisits } from './vehicles';
+import { findCloneOnSite, hasHistoryConflict, samePlate, sameVehicle, sameVin, vehicleVisits } from './vehicles';
 
 export function evaluateVehicleEntry(scan: VehicleEntryScan, state: GateState, config: RuleConfig): RuleHit[] {
   const { disc, driver } = scan;
@@ -19,12 +19,22 @@ export function evaluateVehicleEntry(scan: VehicleEntryScan, state: GateState, c
   }
 
   // A visit already flagged as a clone of this car isn't also reported as the same car entering twice.
-  const alreadyInside = vehicleVisits(state.openVisits).find((visit) => sameVin(visit.vehicle, disc));
+  const alreadyInside = vehicleVisits(state.openVisits).find((visit) => sameVehicle(visit.vehicle, disc));
   if (alreadyInside && alreadyInside !== clone) {
     hits.push(hit('DUPLICATE_ENTRY', alreadyInside.id));
   }
 
-  if (isExpired(disc.expiresOn, scan.at, config.utcOffsetMinutes)) {
+  // Nobody can drive in while they're inside. Already here on foot, or as the driver of another car still on site,
+  // means they left without being scanned out, or someone else is using their licence.
+  const driverInside = state.openVisits.find((visit) =>
+    visit.kind === 'pedestrian' ? visit.personKey === driver.personKey : visit.driverKey === driver.personKey && !sameVehicle(visit.vehicle, disc),
+  );
+  if (driverInside) {
+    hits.push(hit('DRIVER_ALREADY_ON_SITE', driverInside.id));
+  }
+
+  // A car entered by hand has no disc expiry to check.
+  if (disc.expiresOn !== '' && isExpired(disc.expiresOn, scan.at, config.utcOffsetMinutes)) {
     hits.push(hit('DISC_EXPIRED'));
   }
   if (driver.licenceExpiresOn !== undefined && isExpired(driver.licenceExpiresOn, scan.at, config.utcOffsetMinutes)) {

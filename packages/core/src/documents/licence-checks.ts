@@ -1,5 +1,5 @@
 import type { DriverLicence } from './driver-licence';
-import { isValidSaIdNumber } from './sa-id-number';
+import { idNumberMatchesBirthDate, idNumberMatchesGender, isValidSaIdNumber } from './sa-id-number';
 
 const SA_ID_NUMBER_TYPE = '02';
 
@@ -16,14 +16,11 @@ export type LicenceChecks = {
 
 export function checkLicence(licence: DriverLicence): LicenceChecks {
   const saId = licence.idNumberType === SA_ID_NUMBER_TYPE;
-  const birthDigits = licence.birthDate?.slice(2).replace(/-/g, '');
-  // The 7th digit of an SA ID number encodes gender: 5–9 male, 0–4 female.
-  const idSaysMale = Number(licence.idNumber[6]) >= 5;
 
   return {
     idNumberValid: saId ? isValidSaIdNumber(licence.idNumber) : null,
-    birthDateMatchesIdNumber: saId && birthDigits ? licence.idNumber.startsWith(birthDigits) : null,
-    genderMatchesIdNumber: saId && licence.gender ? idSaysMale === (licence.gender === 'male') : null,
+    birthDateMatchesIdNumber: saId && licence.birthDate ? idNumberMatchesBirthDate(licence.idNumber, licence.birthDate) : null,
+    genderMatchesIdNumber: saId && licence.gender ? idNumberMatchesGender(licence.idNumber, licence.gender) : null,
     datesInOrder: licence.validFrom && licence.expiresOn ? licence.validFrom < licence.expiresOn : null,
   };
 }

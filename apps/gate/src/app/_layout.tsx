@@ -9,28 +9,35 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LockCover } from '@/auth/lock-cover';
 import { SessionProvider, useSession, type SessionStore } from '@/auth/session';
 import { ResultBanner } from '@/components/result-banner';
 import { openLocalDatabase, type LocalDatabase } from '@/db/database';
 import { LocalDatabaseProvider, useLocalDatabase } from '@/db/database-context';
 import { countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users';
-import { hasValueWithPrefix } from '@/db/kv';
 import { appendEvent } from '@/db/outbox';
 import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
-import { demoPost } from '@/demo/gate-demo';
+import { loadSyncedPosts } from '@/db/site-posts';
+import { siteConfig } from '@/site/site-config';
 import { seedUsers } from '@/demo/seed-users';
+import { prepareTones } from '@/lib/feedback';
 import { newEventId } from '@/lib/ids';
-import { AUTH_KEY_PREFIX } from '@/sync/supabase';
+import { PostWarning } from '@/shift/post-warning';
+import { ShiftProvider, useShift } from '@/shift/shift-context';
+import { deviceToken } from '@/sync/device-api';
 import { SyncProvider, useSync } from '@/sync/sync-context';
+
+import { setScansPaused, subscribeToScans } from '../../modules/scanner';
 
 SplashScreen.preventAutoHideAsync();
 
 async function prepareDatabase(): Promise<LocalDatabase> {
   const local = await openLocalDatabase();
   // Development builds start with the demo guards until the device is paired and syncs real ones.
-  if (__DEV__ && (await countGateUsers(local.db)) === 0 && !(await hasValueWithPrefix(local.db, AUTH_KEY_PREFIX))) {
+  if (__DEV__ && (await countGateUsers(local.db)) === 0 && !(await deviceToken())) {
     await replaceGateUsers(local.db, seedUsers);
   }
+  await loadSyncedPosts(local.db);
   return local;
 }
 
@@ -44,6 +51,11 @@ export default function RootLayout() {
   });
   const [database, setDatabase] = useState<LocalDatabase | null>(null);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
+
+  // Without its tones the gate still vibrates, so a failure here stops nothing.
+  useEffect(() => {
+    prepareTones().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,8 +84,10 @@ export default function RootLayout() {
     <LocalDatabaseProvider database={database}>
       <SyncProvider>
         <AppSession>
-          <StatusBar style="dark" />
-          <GuardedStack />
+          <ShiftProvider>
+            <StatusBar style="dark" />
+            <GuardedStack />
+          </ShiftProvider>
         </AppSession>
       </SyncProvider>
     </LocalDatabaseProvider>
@@ -99,32 +113,61 @@ function AppSession({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SessionProvider store={store} idleLockMinutes={demoPost.idleLockMinutes}>
+    <SessionProvider store={store} idleLockMinutes={siteConfig.idleLockMinutes}>
       {children}
     </SessionProvider>
   );
 }
 
 function GuardedStack() {
-  const { state, recordActivity } = useSession();
-  const signedIn = state.status === 'active';
+  const { state, recordActivity, signOut } = useSession();
+  const { shift } = useShift();
+  const { status: syncStatus } = useSync();
+  const user = state.status === 'signed-out' ? null : state.user;
+  // Signed in only counts once the shift is known, so the guard goes straight to the right screen after their PIN.
+  const signedIn = user !== null && shift !== undefined;
+  const onDuty = user !== null && shift?.gateUserId === user.id;
+  const locked = state.status === 'locked';
+
+  useEffect(() => {
+    setScansPaused(locked);
+  }, [locked]);
+
+  // The device has just cleared itself, so nobody can carry on working on it.
+  useEffect(() => {
+    if (syncStatus.state === 'revoked') signOut();
+  }, [signOut, syncStatus.state]);
+
+  // A guard working through cars with the scanner is busy, even without touching the screen.
+  useEffect(() => {
+    const subscription = subscribeToScans(recordActivity);
+    return () => subscription?.remove();
+  }, [recordActivity]);
 
   return (
     <View style={styles.root} onTouchStart={recordActivity}>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         {/* Explicit redirects: without them the router falls back to the first open route by name, which was pair. */}
-        <Stack.Protected guard={signedIn} redirectTo="/sign-in">
+        <Stack.Protected guard={onDuty} redirectTo={signedIn ? '/start-shift' : '/sign-in'}>
           <Stack.Screen name="index" />
           <Stack.Screen name="entry" />
           <Stack.Screen name="exit" />
+          <Stack.Screen name="walk-in" />
           <Stack.Screen name="shift" />
           <Stack.Screen name="scan-test" />
+          <Stack.Screen name="stepping-away" />
+          <Stack.Screen name="manual" />
         </Stack.Protected>
-        <Stack.Protected guard={!signedIn} redirectTo="/">
+        <Stack.Protected guard={signedIn && !onDuty} redirectTo={signedIn ? '/' : '/sign-in'}>
+          <Stack.Screen name="start-shift" />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn} redirectTo={onDuty ? '/' : '/start-shift'}>
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
         <Stack.Screen name="pair" />
       </Stack>
+      {locked ? <LockCover /> : null}
+      <PostWarning shift={onDuty && shift ? shift : null} locked={locked} />
     </View>
   );
 }

@@ -1,6 +1,12 @@
-import type { Kpi } from "@/demo/dashboard-demo";
+import { Icon, type IconName } from "./icon";
 
-import { Icon } from "./icon";
+export type Kpi = {
+  label: string;
+  value: string;
+  icon: IconName;
+  detail?: string;
+  tone?: "neutral" | "blocked";
+};
 
 export function StatTile({ label, value, icon, detail, tone = "neutral" }: Kpi) {
   const blocked = tone === "blocked";
