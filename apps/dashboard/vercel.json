@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm install --global --allow-scripts=pnpm pnpm@12.15.0 && pnpm install --frozen-lockfile --filter dashboard...",
+  "installCommand": "npm install --global --allow-scripts=pnpm pnpm@12.15.0 && export npm_config_manage_package_manager_versions=false && PNPM=\"$(npm prefix --global)/bin/pnpm\" && \"$PNPM\" --version && \"$PNPM\" install --frozen-lockfile --filter dashboard...",
   "regions": [
     "dub1"
   ]
