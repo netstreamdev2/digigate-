@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install --global pnpm@12.15.0 && pnpm install --frozen-lockfile --filter dashboard...",
+  "regions": ["dub1"]
+}
