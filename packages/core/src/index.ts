@@ -1,3 +1,4 @@
+export { carParkState, NEARLY_FULL, type CarPark, type CarParkState } from './car-park';
 export { ageBand, type AgeBand } from './demographics';
 export * from './geofence';
 export * from './guard-record';

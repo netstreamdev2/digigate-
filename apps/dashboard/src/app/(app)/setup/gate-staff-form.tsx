@@ -19,8 +19,11 @@ function freshPin(): string {
   return Array.from(digits, (value) => String(value % 10)).join("");
 }
 
-/** Finds a site by name or code, for any form that starts from one. Only the first few matches show: search narrows it. */
-export function SitePicker({ onPick, label = "Which site?" }: { onPick: (site: SiteChoice) => void; label?: string }) {
+/**
+ * Finds a site by name or code, for any form that starts from one. Only the first few matches show: search narrows it.
+ * Given a company, only its sites: a super user working inside a company is never offered another company's.
+ */
+export function SitePicker({ onPick, label = "Which site?", orgId = "", autoFocus = true }: { onPick: (site: SiteChoice) => void; label?: string; orgId?: string; autoFocus?: boolean }) {
   const [search, setSearch] = useState("");
   const [found, setFound] = useState<{ sites: SiteChoice[]; problem: string | null } | null>(null);
 
@@ -28,7 +31,7 @@ export function SitePicker({ onPick, label = "Which site?" }: { onPick: (site: S
     let current = true;
     const timer = setTimeout(
       () => {
-        siteChoices(search).then(
+        siteChoices(search, orgId).then(
           (next) => {
             if (current) setFound(next);
           },
@@ -43,11 +46,11 @@ export function SitePicker({ onPick, label = "Which site?" }: { onPick: (site: S
       current = false;
       clearTimeout(timer);
     };
-  }, [search]);
+  }, [search, orgId]);
 
   return (
     <div className="flex flex-col gap-3">
-      <Field label={label} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search a site name or code" autoFocus autoComplete="off" />
+      <Field label={label} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search a site name or code" autoFocus={autoFocus} autoComplete="off" />
       {found?.problem ? <FormProblem message={found.problem} /> : null}
       {found === null ? <p className="text-sm text-ink-muted">Loading…</p> : null}
       {found && !found.problem && found.sites.length === 0 ? <p className="text-sm text-ink-muted">No site matches that.</p> : null}
@@ -175,7 +178,7 @@ function GateStaffForm({ site, onChangeSite, onClose }: { site: SiteChoice; onCh
  * Adding gate staff from anywhere. On a site's page the site is already chosen; on People it starts by finding the site.
  * The page catches up when the popup closes, so the PIN just added can't vanish under it.
  */
-export function AddGateStaffButton({ site, compact = false }: { site?: SiteChoice; compact?: boolean }) {
+export function AddGateStaffButton({ site, compact = false, orgId = "" }: { site?: SiteChoice; compact?: boolean; orgId?: string }) {
   const dialog = useDialog();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -209,7 +212,7 @@ export function AddGateStaffButton({ site, compact = false }: { site?: SiteChoic
             <>
               <DialogHeading icon="guard" tone="neutral" title="Add gate staff" />
               <div className="mt-5">
-                <SitePicker onPick={setChosen} />
+                <SitePicker onPick={setChosen} orgId={orgId} />
               </div>
               <div className="mt-5 flex justify-end">
                 <CancelButton onClick={dialog.close} />

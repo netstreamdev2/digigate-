@@ -59,4 +59,11 @@ export function labelFor(code: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+/**
+ * The username a person types: lucy, never lucy@fire. The company code after the @ only keeps two companies' Lucys
+ * apart behind the scenes. A real email address is shown as it is.
+ */
+export const usernameOf = (login: string) => (/^[^@]+@[a-z0-9]+$/.test(login) ? (login.split("@")[0] ?? login) : login);
+
+/** `3 guards`, or with an irregular plural, `3 people`. */
+export const plural = (count: number, word: string, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;

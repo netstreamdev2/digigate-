@@ -1,36 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
 
 import type { CompanyBrand } from "@/lib/company-brand";
+import { useCompanyContext } from "@/lib/company-context";
 
 import { CompanyMark } from "./company-mark";
 import { Icon } from "./icon";
 
-type Jump = { label: string; href: string; path: string; company?: boolean };
-
-const jumpsFor = (id: string): readonly Jump[] => [
-  { label: "Sites", href: `/setup/${id}`, path: `/setup/${id}` },
-  { label: "Admin", href: `/admin/${id}`, path: `/admin/${id}` },
-  { label: "Reports", href: `/reports/${id}`, path: `/reports/${id}` },
-  { label: "Hotlist", href: `/hotlist?company=${id}`, path: "/hotlist", company: true },
-  { label: "Expected visitors", href: `/expected?company=${id}`, path: "/expected", company: true },
-  { label: "People", href: `/people?company=${id}`, path: "/people", company: true },
-  { label: "Devices", href: `/devices?company=${id}`, path: "/devices", company: true },
-  { label: "Audit log", href: `/audit?company=${id}`, path: "/audit", company: true },
-];
-
 /**
- * Who a super user is working inside, said at the top of every one of that company's pages: its logo, its name and a
- * way into each part of it, so nobody has to read the breadcrumbs to know whose records are on screen.
+ * Who a super user is working inside, at the top of that company's pages. Only once they've gone into the company: a
+ * list they've just filtered to it is still the everyday view, and offers a way in instead. The company's own pages
+ * are in the sidebar beside the rail; on a phone, in the menu.
  */
 export function CompanyBanner({ company }: { company: CompanyBrand }) {
-  const path = usePathname();
-  const search = useSearchParams();
-  const isHere = (jump: Jump) =>
-    jump.company ? path === jump.path && search.get("company") === company.id : path === jump.path || path.startsWith(`${jump.path}/`);
-
+  const inside = useCompanyContext()?.company.id === company.id;
+  if (!inside) {
+    return (
+      <Link
+        href={`/setup/${company.id}`}
+        className="dg-glass-soft mb-6 inline-flex h-10 items-center gap-2.5 rounded-pill py-1 pl-1.5 pr-4 text-sm font-semibold text-ink transition hover:bg-surface"
+      >
+        <CompanyMark company={company} size={28} />
+        {`Go into ${company.name}`}
+        <Icon name="chevron-right" className="size-4 text-ink-subtle" />
+      </Link>
+    );
+  }
   return (
     <section aria-label={`Working inside ${company.name}`} className="dg-glass dg-company-banner relative mb-8 overflow-hidden p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-5">
@@ -52,23 +48,6 @@ export function CompanyBanner({ company }: { company: CompanyBrand }) {
           All companies
         </Link>
       </div>
-      <nav aria-label={`${company.name}'s pages`} className="mt-5 flex gap-1.5 overflow-x-auto pb-0.5">
-        {jumpsFor(company.id).map((jump) => {
-          const here = isHere(jump);
-          return (
-            <Link
-              key={jump.label}
-              href={jump.href}
-              aria-current={here ? "page" : undefined}
-              className={`shrink-0 rounded-pill px-3.5 py-1.5 text-sm font-semibold transition ${
-                here ? "bg-brand text-ink-inverse" : "text-ink-muted hover:bg-surface/70 hover:text-ink"
-              }`}
-            >
-              {jump.label}
-            </Link>
-          );
-        })}
-      </nav>
     </section>
   );
 }

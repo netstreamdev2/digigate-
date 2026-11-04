@@ -67,9 +67,10 @@ function BookingForm({ site, close }: { site: SiteChoice; close: () => void }) {
   );
 }
 
-export function BookVisitorButton() {
+/** Given a company, only its sites are offered. */
+export function BookVisitorButton({ orgId = "" }: { orgId?: string }) {
   return (
-    <SiteFirstDialog label="Book a visitor" title="Book a visitor in" icon="invite" pickLabel="Which site are they coming to?">
+    <SiteFirstDialog label="Book a visitor" title="Book a visitor in" icon="invite" pickLabel="Which site are they coming to?" orgId={orgId}>
       {(site, { close }) => <BookingForm site={site} close={close} />}
     </SiteFirstDialog>
   );

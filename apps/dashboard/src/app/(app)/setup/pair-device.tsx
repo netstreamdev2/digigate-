@@ -289,16 +289,16 @@ function DoneStep({ siteName, deviceName, onAnother, onClose }: { siteName: stri
   );
 }
 
-function Walkthrough({ place, onClose }: { place?: PairingPlace; onClose: () => void }) {
-  const [chosen, setChosen] = useState<Chosen>(place ?? {});
+function Walkthrough({ start, onClose }: { start: Chosen; onClose: () => void }) {
+  const [chosen, setChosen] = useState<Chosen>(start);
   // Only the steps actually shown, so Back never lands on one that answered itself.
-  const [trail, setTrail] = useState<readonly Step[]>([firstStep(place ?? {})]);
+  const [trail, setTrail] = useState<readonly Step[]>([firstStep(start)]);
   const [skipped, setSkipped] = useState<readonly Step[]>([]);
   const [paired, setPaired] = useState<Paired | null>(null);
   const [lastName, setLastName] = useState("");
 
   const step = trail[trail.length - 1] ?? "company";
-  const steps = STEPS.slice(STEPS.indexOf(firstStep(place ?? {}))).filter((item) => !skipped.includes(item));
+  const steps = STEPS.slice(STEPS.indexOf(firstStep(start))).filter((item) => !skipped.includes(item));
   const position = steps.indexOf(step);
 
   const back = () => setTrail((current) => current.slice(0, -1));
@@ -372,8 +372,11 @@ function Walkthrough({ place, onClose }: { place?: PairingPlace; onClose: () => 
   );
 }
 
-/** Pairing from anywhere. Given a site it starts at naming the device; otherwise it walks there, one choice at a time. */
-export function PairDeviceButton({ place, compact = false, label = "Pair a device" }: { place?: PairingPlace; compact?: boolean; label?: string }) {
+/**
+ * Pairing from anywhere. Given a site it starts at naming the device; given only a company, at choosing one of its sites;
+ * otherwise it walks there, one choice at a time.
+ */
+export function PairDeviceButton({ place, company, compact = false, label = "Pair a device" }: { place?: PairingPlace; company?: PairingOption; compact?: boolean; label?: string }) {
   const dialog = useDialog();
   const router = useRouter();
   // Only there while open: nothing is fetched until someone asks, and closing leaves no code behind the popup. The page
@@ -400,7 +403,7 @@ export function PairDeviceButton({ place, compact = false, label = "Pair a devic
         {label}
       </button>
       <Dialog dialogRef={dialog.ref} onClose={close}>
-        {open ? <Walkthrough place={place} onClose={dialog.close} /> : null}
+        {open ? <Walkthrough start={place ?? (company ? { company } : {})} onClose={dialog.close} /> : null}
       </Dialog>
     </>
   );

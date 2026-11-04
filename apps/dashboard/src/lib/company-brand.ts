@@ -22,7 +22,8 @@ export const brandOf = (row: { id: string; name: string; logo_path: string | nul
 });
 
 /** A company on the super user's cards: its brand and how it's doing right now. */
-export type CompanyCardData = CompanyBrand & { isActive: boolean; sites: number; gateStaff: number; onSite: number; openAlerts: number };
+/** `onSite` counts people, a car's passengers included, as the handhelds do; `carsOnSite` the cars among them. */
+export type CompanyCardData = CompanyBrand & { isActive: boolean; sites: number; gateStaff: number; onSite: number; carsOnSite: number; openAlerts: number };
 
 type BoardRow = {
   id: string;
@@ -33,6 +34,7 @@ type BoardRow = {
   sites: number;
   gate_staff: number;
   on_site: number;
+  cars_on_site: number;
   open_alerts: number;
 };
 
@@ -42,6 +44,7 @@ export const companyCardOf = (row: BoardRow): CompanyCardData => ({
   sites: row.sites,
   gateStaff: row.gate_staff,
   onSite: row.on_site,
+  carsOnSite: row.cars_on_site,
   openAlerts: row.open_alerts,
 });
 

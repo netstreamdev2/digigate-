@@ -4,7 +4,7 @@ import type { CompanyBrand } from "@/lib/company-brand";
 import { currentUser } from "@/lib/session";
 
 import { CompanyBanner } from "./company-banner";
-import { CompanyTheme } from "./company-theme";
+import { CompanyBeacon } from "./company-beacon";
 
 type Props = {
   /** A short line above the title, or breadcrumbs. */
@@ -15,21 +15,24 @@ type Props = {
   /** The page's main buttons, level with the title. */
   actions?: ReactNode;
   /**
-   * The company whose records these are. Its colours repaint the page, and a super user gets a banner saying whose
-   * company they're working inside. People who work for the company have its logo in the sidebar instead.
+   * The company whose records these are. For a super user it says which company they're inside, which repaints the
+   * dashboard in its colours (components/company-theme-sync.tsx) and puts a banner on the page. People who work for
+   * the company already have its colours and its logo in the sidebar, from the layout.
    */
   company?: CompanyBrand | null;
+  /** On a site's own page: the site, so the super user stays inside its company there. */
+  siteId?: string | null;
   children: ReactNode;
 };
 
 /** The top of every dashboard page and what's under it. The sidebar around it lives in the layout and stays put. */
-export async function AppShell({ eyebrow, title, chips, actions, company = null, children }: Props) {
+export async function AppShell({ eyebrow, title, chips, actions, company = null, siteId = null, children }: Props) {
   const user = company ? await currentUser() : null;
   const asSuperUser = user?.roles.includes("super_user") ?? false;
 
   return (
     <div className="dg-page">
-      {company ? <CompanyTheme company={company} /> : null}
+      {company && asSuperUser ? <CompanyBeacon company={company} siteId={siteId} /> : null}
       {company && asSuperUser ? <CompanyBanner company={company} /> : null}
 
       <header className="flex flex-wrap items-end justify-between gap-4">

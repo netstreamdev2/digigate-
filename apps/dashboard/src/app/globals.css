@@ -12,6 +12,7 @@
   --color-ink-subtle: var(--dg-color-ink-subtle);
   --color-ink-inverse: var(--dg-color-ink-inverse);
   --color-brand: var(--dg-color-brand);
+  --color-home: var(--dg-color-home-brand);
   --color-tile-sky: var(--dg-color-tile-sky);
   --color-tile-mint: var(--dg-color-tile-mint);
   --color-tile-butter: var(--dg-color-tile-butter);
@@ -431,9 +432,11 @@ body {
   }
 }
 
-/* A page's parts settle in one after another the first time it opens, quickly enough never to be waited on. */
+/* A page's parts settle in one after another the first time it opens, quickly enough never to be waited on. Each lets
+   go of its animation once it's done ("backwards", never "both"): an element still holding a transform carries any
+   fixed-position card inside it along, which put the checks' hover card at the bottom of its panel. */
 .dg-page > * {
-  animation: dg-settle 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: dg-settle 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .dg-page > :nth-child(2) {
@@ -461,7 +464,7 @@ body {
 
 /* Cards in a grid arrive in a ripple. */
 .dg-ripple > * {
-  animation: dg-settle 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: dg-settle 560ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   animation-delay: calc(var(--dg-i, 0) * 45ms + 120ms);
 }
 
@@ -479,8 +482,72 @@ body {
   view-transition-name: dg-wash;
 }
 
-aside.dg-sidebar .dg-nav-pill {
+.dg-sidebar .dg-nav-pill {
   view-transition-name: dg-nav-pill;
+}
+
+.dg-company-panel {
+  view-transition-name: dg-company-panel;
+}
+
+/* The super user's rail: icons that turn DigiGate blue under the pointer and say what they are beside it. */
+.dg-rail-link {
+  position: relative;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.dg-rail-link:hover,
+.dg-rail-link:focus-visible {
+  background: var(--color-home);
+  color: var(--color-ink-inverse);
+  outline: none;
+}
+
+.dg-rail-current:hover {
+  background: color-mix(in srgb, var(--color-home) 14%, transparent);
+  transform: scale(1.06);
+}
+
+.dg-rail-current::before {
+  content: "";
+  position: absolute;
+  left: -0.75rem;
+  top: 25%;
+  height: 50%;
+  width: 4px;
+  border-radius: 0 9999px 9999px 0;
+  background: var(--color-home);
+}
+
+.dg-rail-link::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 0.75rem);
+  top: 50%;
+  z-index: 50;
+  padding: 0.4rem 0.75rem;
+  border-radius: 9999px;
+  background: var(--color-home);
+  color: var(--color-ink-inverse);
+  box-shadow: var(--shadow-floating);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-6px, -50%);
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.dg-rail-link:hover::after,
+.dg-rail-link:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
 }
 
 .dg-page-title {
@@ -488,10 +555,52 @@ aside.dg-sidebar .dg-nav-pill {
   width: fit-content;
 }
 
-::view-transition-group(dg-sidebar),
+/* The sidebar folds to the rail, or opens out from it, in one smooth change of width. */
+::view-transition-group(dg-sidebar) {
+  z-index: 2;
+  animation-duration: 460ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-old(dg-sidebar),
+::view-transition-new(dg-sidebar) {
+  height: 100%;
+  object-fit: none;
+  object-position: left top;
+}
+
 ::view-transition-group(dg-topbar) {
   animation: none;
   z-index: 2;
+}
+
+/* A company's own sidebar slides out from behind the rail, and back in when the super user leaves. */
+::view-transition-group(dg-company-panel) {
+  z-index: 1;
+  animation-duration: 460ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-new(dg-company-panel):only-child {
+  animation: dg-panel-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+::view-transition-old(dg-company-panel):only-child {
+  animation: dg-panel-out 300ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes dg-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-40%);
+  }
+}
+
+@keyframes dg-panel-out {
+  to {
+    opacity: 0;
+    transform: translateX(-40%);
+  }
 }
 
 ::view-transition-group(dg-nav-pill),
@@ -644,6 +753,67 @@ aside.dg-sidebar .dg-nav-pill {
 
   .dg-wash i {
     transition: none;
+  }
+}
+
+/* An alert slides in from the edge; the search box drops in from above. */
+.dg-toast {
+  animation: dg-toast-in 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dg-palette {
+  animation: dg-dialog-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes dg-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(110%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dg-toast,
+  .dg-palette {
+    animation-name: dg-fade-in;
+  }
+}
+
+/* A sheet that prints: everything around it goes, and it fills plain A4 pages, rows never split across a page. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: var(--color-surface);
+  }
+
+  .dg-wash,
+  .dg-sidebar,
+  .dg-topbar,
+  .dg-toasts,
+  .dg-page > :not(.dg-sheet) {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  .dg-sheet {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .dg-sheet tr,
+  .dg-sheet footer {
+    break-inside: avoid;
   }
 }
 

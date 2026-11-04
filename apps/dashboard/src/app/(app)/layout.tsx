@@ -1,7 +1,10 @@
 import { Suspense } from "react";
 
 import { CompanyTheme } from "@/components/company-theme";
+import { CompanyThemeSync } from "@/components/company-theme-sync";
+import { AlertToasts } from "@/components/alert-toasts";
 import { Motion } from "@/components/motion";
+import { QuickSearch } from "@/components/quick-search";
 import { Sidebar } from "@/components/sidebar";
 import { SidebarSkeleton } from "@/components/skeleton";
 import { companyBrand } from "@/lib/company-brand";
@@ -15,11 +18,15 @@ import { currentUser, roleLabel } from "@/lib/session";
 async function SignedInFrame() {
   const user = await currentUser();
   if (!user) return <SidebarSkeleton />;
-  const company = user.orgId && !user.roles.includes("super_user") ? await companyBrand(user.orgId) : null;
+  const isSuperUser = user.roles.includes("super_user");
+  const company = user.orgId && !isSuperUser ? await companyBrand(user.orgId) : null;
   return (
     <>
       {company ? <CompanyTheme company={company} /> : null}
-      <Sidebar items={appNav(user)} userName={user.fullName} userRole={roleLabel(user)} company={company} />
+      {isSuperUser ? <CompanyThemeSync /> : null}
+      <Sidebar items={appNav(user)} userName={user.fullName} userRole={roleLabel(user)} company={company} isSuperUser={isSuperUser} />
+      <QuickSearch pages={appNav(user)} />
+      <AlertToasts />
     </>
   );
 }

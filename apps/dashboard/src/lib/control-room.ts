@@ -86,11 +86,13 @@ const SITE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const directionOf = (type: string | null) => (type?.endsWith("_entry") ? "in" : "out");
 
-/** The sites this person looks after, trouble first. */
-export async function siteBoard(search: string, page: number): Promise<{ sites: BoardSite[]; total: number }> {
+/** The sites this person looks after, trouble first: one company's only, when it's named. */
+export async function siteBoard(search: string, page: number, company = ""): Promise<{ sites: BoardSite[]; total: number }> {
   const supabase = await supabaseServer();
   const [from] = rangeOf(page);
-  const rows = must(await supabase.rpc("site_board", { _search: search ? likePattern(search) : "", _limit: PAGE_SIZE, _offset: from }));
+  const rows = must(
+    await supabase.rpc("site_board", { _search: search ? likePattern(search) : "", _limit: PAGE_SIZE, _offset: from, ...(company ? { _org: company } : {}) }),
+  );
   return {
     total: rows[0]?.total ?? 0,
     sites: rows.map((row) => ({

@@ -176,7 +176,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
           {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />
           <div className="sm:ml-auto">
-            <PairDeviceButton />
+            <PairDeviceButton company={companies.find((row) => row.id === company)} />
           </div>
         </>
       }

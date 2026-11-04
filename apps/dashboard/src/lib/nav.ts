@@ -9,7 +9,10 @@ const isAdministrator = (user: CurrentUser) => user.roles.includes("super_user")
 
 /** The sidebar for the signed-in dashboard. Setting things up is for administrators. */
 export function appNav(user: CurrentUser): readonly NavItem[] {
-  const items: NavItem[] = [{ label: "Control room", icon: "on-site", href: "/control-room" }];
+  const items: NavItem[] = [
+    { label: "Control room", icon: "on-site", href: "/control-room" },
+    { label: "Checks", icon: "visits", href: "/checks" },
+  ];
   if (canWatchGates(user)) {
     items.push({ label: "Hotlist", icon: "watchlist", href: "/hotlist" }, { label: "Expected visitors", icon: "invite", href: "/expected" });
   }

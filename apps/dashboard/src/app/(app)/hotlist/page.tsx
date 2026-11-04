@@ -74,6 +74,8 @@ async function Hotlist({ searchParams }: { searchParams: Promise<Query> }) {
   const company = user.roles.includes("super_user") ? textParam(query, "company") : "";
   const now = readClock();
   const [{ rows, total }, brand] = await Promise.all([hotlistPage({ tab, search, company }, page, now), company ? companyBrand(company) : null]);
+  // The forms open on the company being looked at: the super user's chosen one, or the signed-in person's own.
+  const formCompany = brand ?? (user.orgId && !user.roles.includes("super_user") ? await companyBrand(user.orgId) : null);
 
   const tabHref = (next: HotlistTab) => pageHref("/hotlist", { ...query, tab: next === "in-force" ? undefined : next }, 1);
 
@@ -85,7 +87,7 @@ async function Hotlist({ searchParams }: { searchParams: Promise<Query> }) {
       chips={
         <>
           <SearchBox placeholder="Search a name, plate or reason" />
-          <AddToHotlistButton />
+          <AddToHotlistButton company={formCompany ? { id: formCompany.id, name: formCompany.name } : null} />
         </>
       }
     >

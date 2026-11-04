@@ -11,7 +11,8 @@ import { json, sha256Hex, sql } from '../_shared/device.ts';
 
 const MAX_BATCH = 100;
 const SELFIE_BUCKET = 'shift-selfies';
-const MOST_SELFIE_BYTES = 400_000;
+// Some phones take a full-size photo whatever size the app asks for; until the app shrinks it, up to 3 MB is kept.
+const MOST_SELFIE_BYTES = 3_000_000;
 const LICENCE_PHOTO_BUCKET = 'licence-photos';
 // A licence photo is small: an 8-bit greyscale BMP of a few hundred pixels a side.
 const MOST_LICENCE_PHOTO_BYTES = 200_000;

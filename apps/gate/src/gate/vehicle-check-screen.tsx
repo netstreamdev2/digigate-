@@ -29,6 +29,7 @@ import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
 import { SupervisorOverride } from './supervisor-override';
+import { useCarPark } from './use-car-park';
 import { useKeepLicencePhoto } from './use-keep-licence-photo';
 import { useVehicleDocuments } from './use-vehicle-documents';
 import { recordDecision, type Decision, type Direction } from './decision';
@@ -55,6 +56,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   const { db } = useLocalDatabase();
   const { eventRecorded } = useSync();
   const post = usePost();
+  const carPark = useCarPark();
   const [checked, setChecked] = useState<CheckedVehicle | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
   const [overriding, setOverriding] = useState(false);
@@ -172,6 +174,13 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         {problem ? <ResultBanner tone="warning" title="Not saved" message={problem} /> : null}
         {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
+        {direction === 'entry' && !checked && carPark.kind === 'counted' && carPark.full ? (
+          <ResultBanner
+            tone="warning"
+            title="Car park full"
+            message={`All ${carPark.spaces} spaces are taken. Scan as normal: deliveries, drop-offs and emergencies still go in. Ask anyone looking for parking to wait or park outside.`}
+          />
+        ) : null}
 
         {licence ? <PersonCard document={{ kind: 'driver-licence', licence, photo }} onOpen={() => setDetails('licence')} /> : null}
 

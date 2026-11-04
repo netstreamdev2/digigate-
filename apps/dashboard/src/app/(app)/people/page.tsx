@@ -14,7 +14,7 @@ import { SegmentedLinks } from "@/components/report-controls";
 import { FilterSelect, SearchBox } from "@/components/search-box";
 import { StatusChip } from "@/components/status-chip";
 import { companyBrand } from "@/lib/company-brand";
-import { plural, shortDate } from "@/lib/format";
+import { plural, shortDate, usernameOf } from "@/lib/format";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { gateStaffBoard, gateStaffCounts, loginBoard, loginCounts, type GateStaffMember, type Login, type PeopleFilter, type RoleCounts } from "@/lib/people";
 import { must } from "@/lib/reads";
@@ -107,7 +107,7 @@ function loginRow(person: Login, ownId: string) {
   return {
     id: person.id,
     cells: {
-      person: <PersonCell name={person.name} sub={person.login} />,
+      person: <PersonCell name={person.name} sub={usernameOf(person.login)} />,
       role: <RoleChip role={person.role} label={roleName(person.role)} />,
       company: (
         <>
@@ -133,7 +133,7 @@ function loginRow(person: Login, ownId: string) {
           >
             {person.isActive ? "They're signed out and can't get back in. Nothing is deleted, and you can reactivate them at any time." : "They'll be able to sign in again with the same role and sites."}
           </ConfirmAction>
-          <ResetPasswordButton id={person.id} name={person.name} login={person.login} />
+          <ResetPasswordButton id={person.id} name={person.name} login={usernameOf(person.login)} />
         </span>
       ),
     },
@@ -277,8 +277,9 @@ async function People({ searchParams }: { searchParams: Promise<Query> }) {
       actions={
         companies.length ? (
           <div className="flex flex-wrap gap-2">
-            <AddGateStaffButton />
-            <AddPersonButton companies={companies} label="Add a dashboard login" />
+            {/* Inside a company, both add to that company without asking which. */}
+            <AddGateStaffButton orgId={company} />
+            <AddPersonButton companies={company ? companies.filter((row) => row.id === company) : companies} label="Add a dashboard login" />
           </div>
         ) : null
       }

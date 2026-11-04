@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { readShiftPeriods } from '@digigate/core';
 
-import { applySyncedPosts, applySyncedSite, isSyncedPost, type SyncedPost, type SyncedSite } from '@/site/site-config';
+import { applySyncedPosts, applySyncedSite, carParkOf, isSyncedPost, type SyncedPost, type SyncedSite } from '@/site/site-config';
 
 import { getValue, setValue } from './kv';
 
@@ -33,8 +33,8 @@ export async function loadSyncedSite(db: SQLiteDatabase): Promise<void> {
   if (!stored) return;
   const parsed: unknown = JSON.parse(stored);
   if (typeof parsed !== 'object' || parsed === null) return;
-  const { name, shiftPeriods } = parsed as Record<string, unknown>;
-  if (typeof name === 'string') applySyncedSite({ name, shiftPeriods: readShiftPeriods(shiftPeriods) });
+  const { name, shiftPeriods, parking } = parsed as Record<string, unknown>;
+  if (typeof name === 'string') applySyncedSite({ name, shiftPeriods: readShiftPeriods(shiftPeriods), parking: carParkOf(parking) });
 }
 
 /**

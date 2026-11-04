@@ -297,6 +297,9 @@ check('a control room user sees only their sites', (await board(ROOM_A)).rows.le
 check('another company sees its own alone', (await board(ADMIN_B)).rows.every((row) => row.site_id === SITE_B));
 check('no MFA sees an empty board', (await board(ADMIN_A, '', 'aal1')).rows.length === 0);
 check('anon cannot call the board', (await as('anon', '', '', `select * from digigate.site_board('', 25, 0)`)).error);
+const boardFor = (profile, org) => as('authenticated', profile, 'aal2', 'select * from digigate.site_board($1, 25, 0, $2)', ['', org]);
+check('a super user inside one company sees that company\x27s sites only', (await boardFor(SUPER, ORG_A)).rows.length === companySites && (await boardFor(SUPER, ORG_A)).rows.every((row) => row.site_id !== SITE_B));
+check('naming another company shows an admin nothing of it', (await boardFor(ADMIN_A, ORG_B)).rows.length === 0);
 
 const gates = (profile, site = SITE_A, aal = 'aal2') => as('authenticated', profile, aal, 'select * from digigate.gate_board($1)', [site]);
 const gateRows = (await gates(ROOM_A)).rows;
@@ -790,6 +793,10 @@ const brandBoard = (await as('authenticated', SUPER, 'aal2', `select * from digi
 const boardA = brandBoard.find((row) => row.id === ORG_A);
 check('the super user\x27s companies carry their look', boardA?.logo_path === LOGO && boardA.brand_color === '#1a7f5a');
 check('and how each is doing now', Number(boardA?.on_site) >= 0 && Number(boardA?.open_alerts) >= 0 && 'sites' in (boardA ?? {}));
+const peopleInside = (await one(`select coalesce(sum(case when v.kind = 'vehicle' then greatest(1, coalesce(v.occupants_in, 1)) else 1 end), 0)::int n, count(*) filter (where v.kind = 'vehicle')::int cars from digigate.visits v join digigate.sites s on s.id = v.site_id where s.org_id = '${ORG_A}' and v.exited_at is null`));
+check('on site counts people, passengers included, with the cars beside them', Number(boardA?.on_site) === peopleInside.n && Number(boardA?.cars_on_site) === peopleInside.cars && peopleInside.n > peopleInside.cars);
+const parkingSnapshot = (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.parking;
+check('the handheld gets the site\x27s car park', parkingSnapshot !== null && typeof parkingSnapshot.open === 'boolean' && 'spaces' in parkingSnapshot);
 check('an admin gets no company board', (await as('authenticated', ADMIN_A, 'aal2', `select * from digigate.company_board('', 25, 0)`)).rows.length === 0);
 check('an empty value clears the look', !(await brand(SUPER, ORG_A, '', '')).error && (await one('select logo_path, brand_color from digigate.organisations where id = $1', [ORG_A])).brand_color === null);
 
@@ -1043,6 +1050,35 @@ for (const fn of ['ingest_events(uuid, jsonb)', 'device_snapshot(uuid)', 'claim_
   const access = await one(`select has_function_privilege('authenticated', 'digigate.${fn}', 'execute') a, has_function_privilege('anon', 'digigate.${fn}', 'execute') b`);
   check(`dashboard users and anon cannot call ${fn}`, !access.a && !access.b);
 }
+
+// Usernames belong to a company: name@code.
+const codes = (await service('select id, code from digigate.organisations')).rows;
+check('every company has a code', codes.length > 0 && codes.every((row) => /^[a-z0-9]{2,16}$/.test(row.code)));
+check('no two companies share one', new Set(codes.map((row) => row.code)).size === codes.length);
+await db.exec(`insert into digigate.organisations (name, slug) values ('Fire Security', 'fire-security-test'), ('Fire Watch', 'fire-watch-test')`);
+const fireCodes = (await service(`select name, code from digigate.organisations where slug in ('fire-security-test', 'fire-watch-test') order by name`)).rows;
+check('a new company gets its code from its name', fireCodes[0]?.code === 'fire');
+check('and the next one with the same first word gets a number', fireCodes[1]?.code === 'fire2');
+const ORG_C_CODE = (await one('select code from digigate.organisations where id = $1', [ORG_C])).code;
+const MOVER = u(950), REAL = u(951), VIEWING = u(952);
+await db.exec(`
+  insert into auth.users (id, email) values ('${MOVER}', 'thandi@digigate.local'), ('${REAL}', 'thandi@example.co.za'), ('${VIEWING}', 'nomsa@digigate.local');
+  insert into digigate.profiles (id, org_id, client_id, full_name, login, roles) values
+    ('${MOVER}', '${ORG_C}', null, 'Thandi Zulu', 'thandi', '{control_room}'),
+    ('${REAL}', '${ORG_C}', null, 'Thandi Real', 'thandi@example.co.za', '{manager}'),
+    ('${VIEWING}', null, '${u(901)}', 'Nomsa Viewer', 'nomsa', '{client_viewer}');
+  update auth.users set email = 'super@digigate.local' where id = '${SUPER}';
+`);
+check('dashboard users cannot move logins', !(await one(`select has_function_privilege('authenticated', 'digigate.scope_logins()', 'execute') a`)).a);
+const loginsMoved = (await one('select digigate.scope_logins() as n')).n;
+const moverNow = await one(`select p.login, u.email from digigate.profiles p join auth.users u on u.id = p.id where p.id = '${MOVER}'`);
+check('a company login moves to name@code', moverNow.login === `thandi@${ORG_C_CODE}`);
+check('and its account with it, so the same password still signs in', moverNow.email === `thandi@${ORG_C_CODE}.digigate.local`);
+check('a client\x27s view-only login takes its company\x27s code', (await one(`select login from digigate.profiles where id = '${VIEWING}'`)).login === `nomsa@${ORG_C_CODE}`);
+check('a real email address is left as it is', (await one(`select p.login, u.email from digigate.profiles p join auth.users u on u.id = p.id where p.id = '${REAL}'`)).email === 'thandi@example.co.za');
+check('a super user keeps a plain username', (await one(`select login from digigate.profiles where id = '${SUPER}'`)).login === 'super' && (await one(`select email from auth.users where id = '${SUPER}'`)).email === 'super@digigate.local');
+check('moving again changes nothing', loginsMoved > 0 && (await one('select digigate.scope_logins() as n')).n === 0);
+check('two companies can each have the same name in front', !(await db.query(`insert into digigate.profiles (id, org_id, full_name, login, roles) values ('${NOBODY}', '${ORG_B}', 'Thandi B', 'thandi@company2', '{manager}')`).then(() => null, (error) => error)));
 
 console.log(`${passed} passed, ${failures.length} failed`);
 for (const failure of failures) console.log('FAILED:', failure);

@@ -28,16 +28,33 @@ async function companyOf(profileId: string): Promise<{ org_id: string | null; ro
   return row ? { org_id: row.org_id, roles: row.roles, full_name: row.full_name } : null;
 }
 
+/**
+ * A free name in front of the company's code, for when the one asked for is taken: the name with the person's
+ * initial, or with a number. Only this company's logins are looked at.
+ */
+async function freeUsername(name: string, code: string, fullName: string): Promise<string | null> {
+  const initial = fullName.trim().split(/\s+/).pop()?.[0]?.toLowerCase() ?? '';
+  const candidates = [...(/^[a-z0-9]$/.test(initial) ? [`${name}.${initial}`] : []), ...Array.from({ length: 8 }, (_, index) => `${name}${index + 2}`)]
+    .filter((candidate) => USERNAME.test(candidate))
+    .map((candidate) => `${candidate}@${code}`);
+  const used = await sql`select login from digigate.profiles where login = any(${sql.array(candidates)})`;
+  const taken = new Set(used.map((row) => row.login));
+  return candidates.find((candidate) => !taken.has(candidate)) ?? null;
+}
+
 async function createPerson(caller: Caller, body: Record<string, unknown>): Promise<Response> {
   const fullName = String(body.fullName ?? '').trim();
-  const login = String(body.login ?? '').trim().toLowerCase();
+  const typed = String(body.login ?? '').trim().toLowerCase();
   const role = String(body.role ?? '');
   const siteIds = Array.isArray(body.siteIds) ? body.siteIds.map(String) : [];
   const isClientLogin = role === 'client_viewer';
+  const isEmail = EMAIL.test(typed);
+  // A username belongs to the company: what's typed in front of any @ is the name, and the company's code goes after.
+  const name = isEmail ? typed : (typed.split('@')[0] ?? '');
 
   if (!fullName) return json({ error: 'name' }, 400);
   if (!ROLES.includes(role)) return json({ error: 'role' }, 400);
-  if (!USERNAME.test(login) && !EMAIL.test(login)) return json({ error: 'login' }, 400);
+  if (!isEmail && !USERNAME.test(name)) return json({ error: 'login' }, 400);
   if (!siteIds.every((id) => UUID.test(id))) return json({ error: 'sites' }, 400);
 
   let orgId: string | null = null;
@@ -57,14 +74,26 @@ async function createPerson(caller: Caller, body: Record<string, unknown>): Prom
     responsibleOrg = orgId;
   }
 
+  const [company] = await sql`select code from digigate.organisations where id = ${responsibleOrg}`;
+  if (!company) return json({ error: 'not-allowed' }, 403);
+  const login = isEmail ? typed : `${name}@${company.code}`;
+
+  // Taken within this company: say who has it, someone the caller looks after anyway, and offer a free one.
+  if (!isEmail) {
+    const [holder] = await sql`select full_name, roles::text[] as roles from digigate.profiles where login = ${login}`;
+    if (holder) {
+      return json({ error: 'taken', holder: { name: holder.full_name, role: holder.roles[0] ?? '' }, suggestion: await freeUsername(name, company.code, fullName) }, 409);
+    }
+  }
+
   const password = randomHex(8);
   const { data, error } = await admin.auth.admin.createUser({
-    email: login.includes('@') ? login : `${login}@${USERNAME_DOMAIN}`,
+    email: isEmail ? typed : `${name}@${company.code}.${USERNAME_DOMAIN}`,
     password,
     email_confirm: true,
     app_metadata: { must_change_password: true },
   });
-  if (error || !data.user) return json({ error: 'taken' }, 409);
+  if (error || !data.user) return json({ error: isEmail ? 'email-taken' : 'taken' }, 409);
 
   try {
     await sql`

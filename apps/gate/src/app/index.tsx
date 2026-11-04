@@ -1,4 +1,4 @@
-import { decodeDocument } from '@digigate/core';
+import { carParkState, decodeDocument } from '@digigate/core';
 import { colors, radius, shadow, space } from '@digigate/design';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -10,6 +10,7 @@ import { ActionTile } from '@/components/action-tile';
 import { Icon } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
 import { LastScanCard } from '@/components/last-scan-card';
+import { ParkingTile } from '@/components/parking-tile';
 import { Logo } from '@/components/logo';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
@@ -22,7 +23,7 @@ import { useHomeFigures } from '@/gate/use-home-figures';
 import type { ScanNotice } from '@/gate/use-vehicle-documents';
 import { fromBase64 } from '@/lib/bytes';
 import { formatDuration } from '@/lib/format';
-import { periodHours, type Lane } from '@/site/site-config';
+import { periodHours, siteCarPark, type Lane } from '@/site/site-config';
 import { PostStatus } from '@/shift/post-status';
 import { usePost, useShift } from '@/shift/shift-context';
 
@@ -207,8 +208,9 @@ export default function HomeScreen() {
               )}
             </View>
           ) : null}
+          {/* Open alerts are on the bell above; this space tells the guard whether there's anywhere to park. */}
           <View style={styles.tileSlot}>
-            <ActionTile icon="alerts" label="Alerts" detail={openAlerts === null ? 'Not synced yet' : `${openAlerts} open`} tint={colors.tileButter} />
+            <ParkingTile state={figures ? carParkState(siteCarPark(), figures.vehicles) : { kind: 'unknown' }} />
           </View>
         </View>
 

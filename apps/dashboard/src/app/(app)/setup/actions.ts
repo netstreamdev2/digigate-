@@ -222,10 +222,11 @@ export async function placeChoices(search: string): Promise<{ places: PlaceChoic
   }
 }
 
-/** Sites to add gate staff to, searched by name or code. Row security decides which come back. */
-export async function siteChoices(search: string): Promise<{ sites: SiteChoice[]; problem: string | null }> {
+/** Sites for a form, searched by name or code: one company's only, when it's named. Row security decides which come back. */
+export async function siteChoices(search: string, orgId = ""): Promise<{ sites: SiteChoice[]; problem: string | null }> {
   const supabase = await supabaseServer();
   let list = supabase.from("sites").select("id, org_id, name, code, site_type, organisations(name)").eq("is_active", true).order("name").limit(SITE_CHOICES_SHOWN);
+  if (orgId) list = list.eq("org_id", orgId);
   if (search.trim()) list = list.or(anyColumnLike(["name", "code"], search.trim()));
   const { data, error } = await list;
   if (error) return { sites: [], problem: "That didn't load. Try again." };

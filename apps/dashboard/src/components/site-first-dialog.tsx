@@ -14,6 +14,8 @@ type Props = {
   title: string;
   icon: IconName;
   pickLabel: string;
+  /** Only this company's sites are offered, for a super user working inside it. */
+  orgId?: string;
   /** The form, once a site is chosen. `close` shuts the popup; `changeSite` goes back to the search. */
   children: (site: SiteChoice, controls: { close: () => void; changeSite: () => void }) => ReactNode;
 };
@@ -22,7 +24,7 @@ type Props = {
  * A popup that starts by finding the site, which also says which company it's for, then shows the form. The page
  * catches up when it closes.
  */
-export function SiteFirstDialog({ label, title, icon, pickLabel, children }: Props) {
+export function SiteFirstDialog({ label, title, icon, pickLabel, orgId = "", children }: Props) {
   const dialog = useDialog();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -65,7 +67,7 @@ export function SiteFirstDialog({ label, title, icon, pickLabel, children }: Pro
           ) : (
             <>
               <div className="mt-5">
-                <SitePicker onPick={setSite} label={pickLabel} />
+                <SitePicker onPick={setSite} label={pickLabel} orgId={orgId} />
               </div>
               <div className="mt-5 flex justify-end">
                 <CancelButton onClick={dialog.close} />

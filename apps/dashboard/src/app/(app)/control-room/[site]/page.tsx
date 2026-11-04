@@ -1,7 +1,8 @@
-import { ruleTitle } from "@digigate/core";
+import Link from "next/link";
 import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { Icon } from "@/components/icon";
 import { PageSkeleton } from "@/components/skeleton";
 import { Card } from "@/components/card";
 import { DataTable, TwoLine } from "@/components/data-table";
@@ -23,17 +24,17 @@ import {
   type SiteDay,
   openAlerts,
   siteHeading,
-  type Check,
   type Gate,
   type Lane,
 } from "@/lib/control-room";
+import { checkRowOf } from "@/lib/check-rows";
 import { siteCompanyBrand } from "@/lib/company-brand";
 import { duration, labelFor, plural, timeOfDay, timeWithSeconds } from "@/lib/format";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
 
-import { CheckActivity, type CheckRow } from "../check-activity";
+import { CheckActivity } from "../check-activity";
 import { LiveAlerts } from "../live-alerts";
 import { SelfieButton } from "../selfie-button";
 
@@ -111,38 +112,6 @@ function CarParkTile({ vehicles, parking }: { vehicles: number; parking: { open:
 }
 
 /** How long the check's visit has lasted: so far while it's still going, in full once it's over. */
-function stayOf(check: Check, now: number): string {
-  if (!check.enteredAt || !check.visitOpened) return NO_VALUE;
-  return check.exitedAt ? duration(check.enteredAt, check.exitedAt) : `${duration(check.enteredAt, now)} so far`;
-}
-
-/**
- * A blocked or warned check stays that way on record. When its visit went ahead anyway (an entry whose visit opened,
- * an exit whose visit closed) someone let it through, and the chip says so.
- */
-function resultOf(check: Check): Pick<CheckRow, "result" | "resultLabel"> {
-  const went = check.direction === "in" ? check.visitOpened : check.exitedAt !== null;
-  if (check.outcome === "blocked") return went ? { result: "warning", resultLabel: "Overridden" } : { result: "blocked", resultLabel: null };
-  if (check.outcome === "warning") return { result: "warning", resultLabel: went ? "Let through" : null };
-  return { result: "clear", resultLabel: null };
-}
-
-function activityRow(check: Check, gateLabel: (post: string | null) => string, now: number): CheckRow {
-  return {
-    id: check.id,
-    time: timeOfDay(check.occurredAt),
-    person: check.person,
-    visitType: check.visitType ? labelFor(check.visitType) : NO_VALUE,
-    direction: check.direction,
-    vehicle: check.vehicle ?? "Pedestrian",
-    plate: check.plate ?? NO_VALUE,
-    gate: gateLabel(check.post),
-    stay: stayOf(check, now),
-    ...resultOf(check),
-    alerts: check.ruleCodes.map(ruleTitle),
-  };
-}
-
 async function LiveSite({ params, searchParams }: { params: Promise<{ site: string }>; searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
@@ -178,8 +147,18 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
   return (
     <AppShell
       company={await siteCompanyBrand(siteId)}
+      siteId={siteId}
       eyebrow={<Breadcrumbs items={[{ label: "Control room", href: "/control-room" }, { label: heading.name }]} />}
       title="Live at the gates"
+      actions={
+        <Link
+          href={`/control-room/${siteId}/evacuation`}
+          className="inline-flex h-11 items-center gap-2 rounded-pill bg-blocked px-5 text-sm font-semibold text-ink-inverse shadow-floating transition hover:bg-ink"
+        >
+          <Icon name="evacuation" className="size-5" />
+          Evacuation list
+        </Link>
+      }
       chips={<LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />}
     >
       <section aria-label="Key figures" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -234,9 +213,18 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
             />
           </Card>
 
-          <Card title="Latest checks" subtitle="Every scan, as it reaches the server">
+          <Card
+            title="Checks"
+            subtitle="The latest scans, as they reach the server"
+            action={
+              <Link href={`/checks?site=${siteId}`} className="inline-flex h-9 items-center gap-1.5 rounded-pill bg-surface/70 px-3.5 text-sm font-semibold text-ink transition hover:bg-surface">
+                Every check here
+                <Icon name="chevron-right" className="size-4" />
+              </Link>
+            }
+          >
             {checks.length ? (
-              <CheckActivity rows={checks.map((check) => activityRow(check, gateLabel, now))} />
+              <CheckActivity rows={checks.map((check) => checkRowOf(check, gateLabel(check.post), now))} />
             ) : (
               <p className="py-8 text-center text-sm text-ink-muted">No scans at this site yet.</p>
             )}

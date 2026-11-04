@@ -1,23 +1,28 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useState, type FormEvent } from "react";
 
-import { CancelButton, ConfirmButton } from "@/components/dialog";
+import { CancelButton, ConfirmButton, Dialog, DialogHeading, useDialog } from "@/components/dialog";
 import { Field, FormProblem, TextAreaField } from "@/components/form";
 import { Icon, type IconName } from "@/components/icon";
 import { SiteFirstDialog } from "@/components/site-first-dialog";
 import { FORM_START } from "@/lib/form-state";
 
 import type { SiteChoice } from "../setup/actions";
+import { SitePicker } from "../setup/gate-staff-form";
 import { addToHotlist } from "./actions";
 
 type Kind = "person" | "plate" | "vin";
+type Company = { id: string; name: string };
 
 const KINDS: readonly { kind: Kind; label: string; icon: IconName; field: string; placeholder: string }[] = [
   { kind: "person", label: "A person", icon: "user", field: "SA ID number", placeholder: "13 digits" },
   { kind: "plate", label: "A plate", icon: "number-plate", field: "Number plate", placeholder: "ND 123-456" },
   { kind: "vin", label: "A VIN", icon: "vehicle", field: "VIN", placeholder: "17 letters and numbers" },
 ];
+
+const BUTTON = "inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse shadow-floating transition hover:bg-ink";
 
 function Choice({ chosen, onChoose, icon, children }: { chosen: boolean; onChoose: () => void; icon?: IconName; children: string }) {
   return (
@@ -34,10 +39,12 @@ function Choice({ chosen, onChoose, icon, children }: { chosen: boolean; onChoos
   );
 }
 
-function HotlistForm({ site, close }: { site: SiteChoice; close: () => void }) {
+/** The entry itself. The company is known already; the site is asked for only when it's for one site. */
+function HotlistForm({ company, presetSite, close }: { company: Company; presetSite: SiteChoice | null; close: () => void }) {
   const [state, action, pending] = useActionState(addToHotlist, FORM_START);
   const [kind, setKind] = useState<Kind>("person");
   const [scope, setScope] = useState<"company" | "site">("company");
+  const [site, setSite] = useState<SiteChoice | null>(presetSite);
   const shown = KINDS.find((option) => option.kind === kind) ?? KINDS[0];
 
   useEffect(() => {
@@ -51,11 +58,13 @@ function HotlistForm({ site, close }: { site: SiteChoice; close: () => void }) {
     startTransition(() => action(form));
   };
 
+  const needsSite = scope === "site" && !site;
+
   return (
     <form onSubmit={submit} className="mt-5 flex flex-col gap-4">
       <FormProblem message={state.problem} />
-      <input type="hidden" name="orgId" value={site.orgId} />
-      <input type="hidden" name="siteId" value={site.id} />
+      <input type="hidden" name="orgId" value={company.id} />
+      <input type="hidden" name="siteId" value={site?.id ?? ""} />
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="scope" value={scope} />
 
@@ -85,12 +94,18 @@ function HotlistForm({ site, close }: { site: SiteChoice; close: () => void }) {
         <p className="text-sm font-medium">Where to stop them</p>
         <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Where to stop them">
           <Choice chosen={scope === "company"} onChoose={() => setScope("company")}>
-            {`Every ${site.detail || "company"} site`}
+            {`Every ${company.name} site`}
           </Choice>
           <Choice chosen={scope === "site"} onChoose={() => setScope("site")}>
-            {`Only ${site.name}`}
+            {site ? `Only ${site.name}` : "Only one site"}
           </Choice>
         </div>
+        {scope === "site" && site ? (
+          <button type="button" onClick={() => setSite(null)} className="w-fit text-xs font-semibold text-brand hover:underline">
+            Pick another site
+          </button>
+        ) : null}
+        {needsSite ? <SitePicker onPick={setSite} label={`Which ${company.name} site?`} orgId={company.id} autoFocus={false} /> : null}
       </div>
 
       <TextAreaField label="Why (the control room sees this, the guard doesn't)" name="reason" maxLength={500} placeholder="Reported stolen, SAPS case 12/11/2026" required />
@@ -104,16 +119,49 @@ function HotlistForm({ site, close }: { site: SiteChoice; close: () => void }) {
 
       <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <CancelButton onClick={close} />
-        <ConfirmButton label="Put on the hotlist" pendingLabel="Adding…" tone="danger" pending={pending} />
+        {needsSite ? null : <ConfirmButton label="Put on the hotlist" pendingLabel="Adding…" tone="danger" pending={pending} />}
       </div>
     </form>
   );
 }
 
-export function AddToHotlistButton() {
+/** Inside a company the form opens straight away; across every company, picking a site first says whose list it is. */
+export function AddToHotlistButton({ company = null }: { company?: Company | null }) {
+  const dialog = useDialog();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+
+  if (!company) {
+    return (
+      <SiteFirstDialog label="Add to the hotlist" title="Add to the hotlist" icon="watchlist" pickLabel="Which site's company is it for?">
+        {(site, { close }) => <HotlistForm company={{ id: site.orgId, name: site.detail || "this company's" }} presetSite={site} close={close} />}
+      </SiteFirstDialog>
+    );
+  }
+
   return (
-    <SiteFirstDialog label="Add to the hotlist" title="Add to the hotlist" icon="watchlist" pickLabel="Which site's company is it for?">
-      {(site, { close }) => <HotlistForm site={site} close={close} />}
-    </SiteFirstDialog>
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          dialog.open();
+        }}
+        className={BUTTON}
+      >
+        Add to the hotlist
+      </button>
+      <Dialog
+        dialogRef={dialog.ref}
+        wide
+        onClose={() => {
+          setOpen(false);
+          router.refresh();
+        }}
+      >
+        <DialogHeading icon="watchlist" tone="neutral" title={`Add to ${company.name}'s hotlist`} />
+        {open ? <HotlistForm company={company} presetSite={null} close={dialog.close} /> : null}
+      </Dialog>
+    </>
   );
 }

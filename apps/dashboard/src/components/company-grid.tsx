@@ -44,8 +44,8 @@ function CompanyCard({ company, href, index }: { company: CompanyCardData; href:
         </div>
 
         <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-ink/10 pt-4">
-          <Figure label="On site now" value={company.onSite} />
-          <Figure label="Sites" value={company.sites} />
+          <Figure label="People on site" value={company.onSite} />
+          <Figure label="Cars inside" value={company.carsOnSite} />
           <Figure label="Open blocks" value={company.openAlerts} alert />
         </dl>
       </Link>

@@ -25,6 +25,7 @@ import offline from '@digigate/design/icons/offline';
 import onSite from '@digigate/design/icons/on-site';
 import overviewFilled from '@digigate/design/icons/overview-filled';
 import override from '@digigate/design/icons/override';
+import parking from '@digigate/design/icons/parking';
 import patientDropoff from '@digigate/design/icons/patient-dropoff';
 import pedestrian from '@digigate/design/icons/pedestrian';
 import remove from '@digigate/design/icons/remove';
@@ -67,6 +68,7 @@ const icons = {
   occupants,
   offline,
   'on-site': onSite,
+  parking,
   'overview-filled': overviewFilled,
   override,
   'patient-dropoff': patientDropoff,

@@ -356,6 +356,24 @@ export type Database = {
           },
         ]
       }
+      erasure_files: {
+        Row: {
+          bucket: string
+          path: string
+          queued_at: string
+        }
+        Insert: {
+          bucket: string
+          path: string
+          queued_at?: string
+        }
+        Update: {
+          bucket?: string
+          path?: string
+          queued_at?: string
+        }
+        Relationships: []
+      }
       event_details: {
         Row: {
           erase_after: string | null
@@ -749,6 +767,7 @@ export type Database = {
       organisations: {
         Row: {
           brand_color: string | null
+          code: string
           created_at: string
           id: string
           is_active: boolean
@@ -758,6 +777,7 @@ export type Database = {
         }
         Insert: {
           brand_color?: string | null
+          code?: string
           created_at?: string
           id?: string
           is_active?: boolean
@@ -767,6 +787,7 @@ export type Database = {
         }
         Update: {
           brand_color?: string | null
+          code?: string
           created_at?: string
           id?: string
           is_active?: boolean
@@ -1527,6 +1548,7 @@ export type Database = {
         Args: { _limit: number; _offset: number; _search: string }
         Returns: {
           brand_color: string
+          cars_on_site: number
           clients: number
           gate_staff: number
           id: string
@@ -1584,6 +1606,12 @@ export type Database = {
           status: string
         }[]
       }
+      erase_due: { Args: { _batch?: number }; Returns: Json }
+      erasure_files_done: {
+        Args: { _bucket: string; _paths: string[] }
+        Returns: undefined
+      }
+      erasure_token_ok: { Args: { _token: string }; Returns: boolean }
       fleet: {
         Args: { _org: string; _search: string }
         Returns: {
@@ -1602,6 +1630,7 @@ export type Database = {
           status: string
         }[]
       }
+      free_company_code: { Args: { _name: string }; Returns: string }
       gate_board: {
         Args: { _site: string }
         Returns: {
@@ -1812,12 +1841,18 @@ export type Database = {
         }
         Returns: Json
       }
+      scope_logins: { Args: never; Returns: number }
       set_company_brand: {
         Args: { _color: string; _logo_path: string; _org: string }
         Returns: undefined
       }
       site_board: {
-        Args: { _limit: number; _offset: number; _search: string }
+        Args: {
+          _limit: number
+          _offset: number
+          _org?: string
+          _search: string
+        }
         Returns: {
           amber: number
           client_name: string

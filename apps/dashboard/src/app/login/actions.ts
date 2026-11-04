@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import QRCode from "qrcode";
 
+import { logoUrlOf } from "@/lib/company-brand";
 import { callPeople } from "@/lib/people-api";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -10,31 +11,71 @@ export type FormState = { problem: string | null };
 
 export type EnrolState = FormState & { factorId: string | null; qr: string | null; secret: string | null };
 
-// Supabase accounts always have an email. A username is an account on this private domain, so signing in needs no
-// lookup, and nobody can use the login to test which usernames exist.
+/** A company to pick, when one username and password open accounts at more than one. */
+export type SignInChoice = { code: string; company: string; logoUrl: string | null; color: string | null };
+
+export type SignInState = FormState & { choices: SignInChoice[] | null };
+
+// Supabase accounts always have an email. A username is an account on this private domain. Behind the scenes it
+// belongs to a company (lucy at Fire Security is lucy@fire.digigate.local, so Lion Security can have a lucy too), but
+// people only ever type and see "lucy": digigate-signin finds the account the password opens. Super users have plain
+// accounts on the domain itself, and a real email address signs in as it is.
 const USERNAME_DOMAIN = "digigate.local";
 // What the authenticator app lists the code under, like "Google: name@gmail.com".
 const AUTHENTICATOR_ISSUER = "DigiGate";
+const NO_MATCH = "That username or email and password don't match.";
 
+/** Straight to Supabase for a real email, or for name@code typed out in full. */
 function accountEmail(login: string): string {
-  const name = login.trim().toLowerCase();
-  return name.includes("@") ? name : `${name}@${USERNAME_DOMAIN}`;
+  const [local = "", domain = ""] = login.split("@");
+  return domain.includes(".") ? login : `${local}@${domain}.${USERNAME_DOMAIN}`;
 }
 
-export async function signIn(_previous: FormState, form: FormData): Promise<FormState> {
+export async function signIn(_previous: SignInState, form: FormData): Promise<SignInState> {
+  const login = String(form.get("login") ?? "").trim().toLowerCase();
+  const password = String(form.get("password") ?? "");
+  const company = String(form.get("company") ?? "");
   const supabase = await supabaseServer();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: accountEmail(String(form.get("login") ?? "")),
-    password: String(form.get("password") ?? ""),
-  });
-  if (error) return { problem: "That username or email and password don't match." };
+
+  if (login.includes("@")) {
+    const { error } = await supabase.auth.signInWithPassword({ email: accountEmail(login), password });
+    if (error) return { problem: NO_MATCH, choices: null };
+    redirect("/mfa");
+  }
+
+  const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/functions/v1/digigate-signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: login, password, ...(company ? { company } : {}) }),
+  }).catch(() => null);
+  if (!response) return { problem: "DigiGate couldn't be reached. Check your connection and try again.", choices: null };
+  if (response.status === 429) return { problem: "Too many tries. Wait a minute, then try again.", choices: null };
+  const body: unknown = await response.json().catch(() => null);
+  const result = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+
+  if (Array.isArray(result.choices)) {
+    const choices = result.choices.flatMap((choice: unknown): SignInChoice[] => {
+      const row = typeof choice === "object" && choice !== null ? (choice as Record<string, unknown>) : {};
+      return typeof row.code === "string" && typeof row.company === "string"
+        ? [{ code: row.code, company: row.company, logoUrl: logoUrlOf(typeof row.logoPath === "string" ? row.logoPath : null), color: typeof row.color === "string" ? row.color : null }]
+        : [];
+    });
+    return { problem: null, choices };
+  }
+
+  const session = typeof result.session === "object" && result.session !== null ? (result.session as Record<string, unknown>) : null;
+  if (!session || typeof session.accessToken !== "string" || typeof session.refreshToken !== "string") {
+    return { problem: response.status === 401 ? NO_MATCH : "That didn't work. Try again.", choices: null };
+  }
+  const { error } = await supabase.auth.setSession({ access_token: session.accessToken, refresh_token: session.refreshToken });
+  if (error) return { problem: "That didn't work. Try again.", choices: null };
   redirect("/mfa");
 }
 
-/** The name a person signs in with: their username, or their email when they have a real one. */
+/** The name a person signs in with: just their username, never the company code behind it, or their real email. */
 function loginName(email: string): string {
-  const suffix = `@${USERNAME_DOMAIN}`;
-  return email.endsWith(suffix) ? email.slice(0, -suffix.length) : email;
+  const [local = "", domain = ""] = email.split("@");
+  return domain === USERNAME_DOMAIN || domain.endsWith(`.${USERNAME_DOMAIN}`) ? local : email;
 }
 
 /**

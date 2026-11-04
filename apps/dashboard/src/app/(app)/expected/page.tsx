@@ -32,6 +32,21 @@ function days(row: BookingRow) {
   return from === until ? from : `${from} to ${until}`;
 }
 
+/**
+ * A message for the visitor, opened in WhatsApp for whoever books them to send. Nothing goes anywhere until they choose
+ * who it's for and press send: DigiGate keeps no phone numbers and sends nothing itself.
+ */
+function whatsAppLink(row: BookingRow): string {
+  const lines = [
+    `Hello ${row.name}. You're expected at ${row.site} on ${days(row)}.`,
+    row.plate
+      ? `Please bring your ID or driver's licence, and come in the car with plate ${row.plate}, so the gate can let you through quickly.`
+      : "Please bring your ID or driver's licence, so the gate can let you through quickly.",
+    row.note ?? "",
+  ].filter(Boolean);
+  return `https://wa.me/?text=${encodeURIComponent(lines.join("\n\n"))}`;
+}
+
 function Booking({ row, now, tab }: { row: BookingRow; now: number; tab: BookingTab }) {
   const today = Date.parse(row.from) <= now && now <= Date.parse(row.until);
   const knownBy = [row.idLastFour ? `ID ending ${row.idLastFour}` : null, row.plate].filter(Boolean).join(" · ");
@@ -51,6 +66,17 @@ function Booking({ row, now, tab }: { row: BookingRow; now: number; tab: Booking
         {row.note ? <p className="mt-1 text-sm">{row.note}</p> : null}
         <p className="mt-2 text-xs text-ink-subtle">{[knownBy ? `Known by ${knownBy}` : null, row.bookedBy ? `Booked by ${row.bookedBy}` : null].filter(Boolean).join(" · ")}</p>
       </div>
+      {tab === "coming" ? (
+        <a
+          href={whatsAppLink(row)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-pill bg-clear-soft px-3 py-1.5 text-xs font-semibold text-clear transition hover:bg-clear hover:text-ink-inverse"
+        >
+          <Icon name="external-link" className="size-3.5" />
+          Send on WhatsApp
+        </a>
+      ) : null}
       {tab === "coming" ? (
         <ConfirmAction
           label="Cancel"
@@ -81,6 +107,8 @@ async function Expected({ searchParams }: { searchParams: Promise<Query> }) {
   const company = user.roles.includes("super_user") ? textParam(query, "company") : "";
   const now = readClock();
   const [{ rows, total }, brand] = await Promise.all([bookingPage({ tab, search, company }, page, now), company ? companyBrand(company) : null]);
+  // The forms open on the company being looked at: the super user's chosen one, or the signed-in person's own.
+  const formCompany = brand ?? (user.orgId && !user.roles.includes("super_user") ? await companyBrand(user.orgId) : null);
 
   return (
     <AppShell
@@ -90,7 +118,7 @@ async function Expected({ searchParams }: { searchParams: Promise<Query> }) {
       chips={
         <>
           <SearchBox placeholder="Search a name, plate or note" />
-          <BookVisitorButton />
+          <BookVisitorButton orgId={formCompany?.id ?? ""} />
         </>
       }
     >

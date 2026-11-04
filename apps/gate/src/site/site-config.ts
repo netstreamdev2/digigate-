@@ -1,4 +1,4 @@
-import { DEFAULT_SHIFT_PERIODS, readShiftPeriods, shiftPeriodAt as periodAt, SITE_RULE_DEFAULTS, type Fence, type ShiftPeriod } from '@digigate/core';
+import { DEFAULT_SHIFT_PERIODS, readShiftPeriods, shiftPeriodAt as periodAt, SITE_RULE_DEFAULTS, type CarPark, type Fence, type ShiftPeriod } from '@digigate/core';
 import type { colors } from '@digigate/design';
 
 import type { IconName } from '@/components/icon';
@@ -40,12 +40,20 @@ export function isSyncedPost(value: unknown): value is SyncedPost {
 /** A shift period as the start-shift screen offers it: the site's times, with an icon and colour added here. */
 export type ShiftPeriodOption = ShiftPeriod & Pick<PostOption, 'icon' | 'tint'> & { hours: string };
 
-/** The site as the dashboard sends it with each sync: its name and its shift times. */
-export type SyncedSite = { name: string; shiftPeriods: readonly ShiftPeriod[] };
+/** The site as the dashboard sends it with each sync: its name, its shift times and its car park. */
+export type SyncedSite = { name: string; shiftPeriods: readonly ShiftPeriod[]; parking: CarPark | null };
+
+/** The car park as the server sends it. Anything else is no car park known, never a guess at one. */
+export function carParkOf(value: unknown): CarPark | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { open, spaces } = value as Record<string, unknown>;
+  if (typeof open !== 'boolean') return null;
+  return { open, spaces: typeof spaces === 'number' && Number.isInteger(spaces) ? spaces : null };
+}
 
 export function syncedSiteOf(body: Record<string, unknown>): SyncedSite | null {
   if (typeof body.siteName !== 'string' || !body.siteName) return null;
-  return { name: body.siteName, shiftPeriods: readShiftPeriods(body.shiftPeriods) };
+  return { name: body.siteName, shiftPeriods: readShiftPeriods(body.shiftPeriods), parking: carParkOf(body.parking) };
 }
 
 export type VisitTypeOption = {
@@ -132,11 +140,16 @@ const periodOptions = (periods: readonly ShiftPeriod[]): ShiftPeriodOption[] =>
 
 const DEFAULT_PERIODS = periodOptions(DEFAULT_SHIFT_PERIODS);
 
-let syncedSite: { name: string; periods: readonly ShiftPeriodOption[] } | null = null;
+let syncedSite: { name: string; periods: readonly ShiftPeriodOption[]; parking: CarPark | null } | null = null;
 
 /** The site's name and shift times from the dashboard. Null forgets them, as a wiped device must. */
 export function applySyncedSite(site: SyncedSite | null): void {
-  syncedSite = site ? { name: site.name, periods: periodOptions(site.shiftPeriods) } : null;
+  syncedSite = site ? { name: site.name, periods: periodOptions(site.shiftPeriods), parking: site.parking } : null;
+}
+
+/** The site's car park once it has synced; null until then, which the parking tile says plainly. */
+export function siteCarPark(): CarPark | null {
+  return syncedSite?.parking ?? null;
 }
 
 /** Where this device is, once it has synced; until then just the product's name. */

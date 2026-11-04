@@ -14,8 +14,10 @@ import download from "@digigate/design/icons/download";
 import duration from "@digigate/design/icons/duration";
 import edit from "@digigate/design/icons/edit";
 import entry from "@digigate/design/icons/entry";
+import evacuation from "@digigate/design/icons/evacuation";
 import exit from "@digigate/design/icons/exit";
 import exportIcon from "@digigate/design/icons/export";
+import externalLink from "@digigate/design/icons/external-link";
 import guard from "@digigate/design/icons/guard";
 import idCard from "@digigate/design/icons/id-card";
 import info from "@digigate/design/icons/info";
@@ -27,8 +29,10 @@ import offline from "@digigate/design/icons/offline";
 import onSite from "@digigate/design/icons/on-site";
 import override from "@digigate/design/icons/override";
 import overviewFilled from "@digigate/design/icons/overview-filled";
+import pedestrian from "@digigate/design/icons/pedestrian";
 import people from "@digigate/design/icons/people";
 import pin from "@digigate/design/icons/pin";
+import refresh from "@digigate/design/icons/refresh";
 import reports from "@digigate/design/icons/reports";
 import resultBlocked from "@digigate/design/icons/result-blocked";
 import resultClear from "@digigate/design/icons/result-clear";
@@ -68,8 +72,10 @@ const icons = {
   duration,
   edit,
   entry,
+  evacuation,
   exit,
   export: exportIcon,
+  "external-link": externalLink,
   guard,
   "id-card": idCard,
   info,
@@ -81,8 +87,10 @@ const icons = {
   "on-site": onSite,
   override,
   "overview-filled": overviewFilled,
+  pedestrian,
   people,
   pin,
+  refresh,
   reports,
   "result-blocked": resultBlocked,
   "result-clear": resultClear,

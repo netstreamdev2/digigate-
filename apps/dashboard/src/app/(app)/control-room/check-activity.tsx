@@ -3,6 +3,7 @@
 import { isExpired, ruleTitle } from "@digigate/core";
 import Image from "next/image";
 import { useRef, useState, useTransition, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import type { ActivityRow } from "@/components/activity-table";
 import { CancelButton, Dialog, useDialog } from "@/components/dialog";
@@ -25,16 +26,24 @@ const NO_VALUE = "—";
 
 const columns = ["Time", "Result", "Person", "Movement", "Vehicle", "Gate", "On site"];
 
-type Hover = { row: CheckRow; top: number; left: number };
+/** Placed from the viewport's top below the row, or from its bottom above the row. */
+type Hover = { row: CheckRow; left: number } & ({ top: number; bottom?: never } | { bottom: number; top?: never });
 
-/** A quick look that follows the row under the pointer. Never the only way in: a click or Enter opens the full details. */
+/** About the card's height, for deciding whether it fits below the row. */
+const HOVER_CARD_ROOM = 260;
+
+/**
+ * A quick look that follows the row under the pointer. Never the only way in: a click or Enter opens the full details.
+ * Drawn at the top of the page, not inside the table: a frosted panel, or one still settling into place, would carry a
+ * fixed position along with it and put the card at the bottom of the panel instead of beside the row.
+ */
 function HoverCard({ hover }: { hover: Hover }) {
   const { row } = hover;
-  return (
+  return createPortal(
     <div
       role="tooltip"
       className="pointer-events-none fixed z-30 rounded-lg border border-border bg-surface p-4 text-sm shadow-floating"
-      style={{ top: hover.top, left: hover.left, width: HOVER_CARD_WIDTH }}
+      style={{ top: hover.top, bottom: hover.bottom, left: hover.left, width: HOVER_CARD_WIDTH }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -55,7 +64,8 @@ function HoverCard({ hover }: { hover: Hover }) {
       </dl>
       {row.alerts.length > 0 ? <p className="mt-3 text-xs font-semibold text-warning">{row.alerts.join(" · ")}</p> : null}
       <p className="mt-3 border-t border-border pt-2 text-xs text-ink-muted">Click for the licence photo and everything scanned.</p>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -209,7 +219,9 @@ export function CheckActivity({ rows }: { rows: readonly CheckRow[] }) {
   const showHover = (row: CheckRow, event: MouseEvent<HTMLTableRowElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     const left = Math.min(Math.max(HOVER_GAP, box.left + 160), window.innerWidth - HOVER_CARD_WIDTH - HOVER_GAP);
-    setHover({ row, top: box.bottom + HOVER_GAP, left });
+    // Near the bottom of the screen the card opens above the row, so it's never cut off.
+    const roomBelow = window.innerHeight - box.bottom > HOVER_CARD_ROOM;
+    setHover(roomBelow ? { row, left, top: box.bottom + HOVER_GAP } : { row, left, bottom: window.innerHeight - box.top + HOVER_GAP });
   };
 
   const openRow = (row: CheckRow) => {
