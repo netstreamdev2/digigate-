@@ -1,4 +1,5 @@
 import { finalise, hit } from './hits';
+import { hotlistHit } from './hotlist';
 import { isOverstay } from './overstay';
 import type { GateState, OpenVehicleVisit, PersonKey, RuleConfig, RuleHit, VehicleExitScan } from './types';
 import { discChangedSince, findCloneOnSite, samePlate, sameVehicle, vehicleVisits } from './vehicles';
@@ -7,6 +8,12 @@ export function evaluateVehicleExit(scan: VehicleExitScan, state: GateState, con
   const { disc } = scan;
   const hits: RuleHit[] = [];
   const visit = vehicleVisits(state.openVisits).find((candidate) => sameVehicle(candidate.vehicle, disc));
+
+  // Added to the hotlist while the car was inside still stops it on the way out.
+  const hotlisted = hotlistHit({ personKeys: [scan.driver.personKey], plates: [disc.plate, scan.typedPlate], vins: [disc.vin] }, state.hotlist);
+  if (hotlisted) {
+    hits.push(hotlisted);
+  }
 
   if (!samePlate({ plate: scan.typedPlate }, disc)) {
     hits.push(hit('PLATE_DISC_MISMATCH'));

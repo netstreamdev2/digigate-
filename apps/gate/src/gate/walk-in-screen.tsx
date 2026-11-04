@@ -167,6 +167,8 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
             outcome={checked.outcome}
             hits={checked.hits}
             related={checked.related}
+            hotlistNotes={checked.hotlistNotes}
+            expected={checked.expected}
             settled={settled}
             clearMessage={copy.clear}
             letThroughMessage={copy.through}

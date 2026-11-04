@@ -8,7 +8,7 @@ import { anyColumnLike, rangeOf } from "./paging";
 import { counted, must } from "./reads";
 import { supabaseServer } from "./supabase/server";
 
-export const AUDIT_CATEGORIES = ["access", "people", "setup", "devices", "alerts", "reports", "gate"] as const;
+export const AUDIT_CATEGORIES = ["access", "people", "setup", "devices", "alerts", "reports", "gate", "privacy"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
@@ -20,6 +20,7 @@ export const CATEGORY_LOOK: Record<AuditCategory, { label: string; icon: IconNam
   alerts: { label: "Alerts", icon: "alerts", tint: "bg-warning-soft" },
   reports: { label: "Reports", icon: "reports", tint: "bg-tile-butter" },
   gate: { label: "At the gate", icon: "guard", tint: "bg-tile-mint" },
+  privacy: { label: "Erasure", icon: "delete", tint: "bg-blocked-soft" },
 };
 
 export const asAuditCategory = (value: string): AuditCategory | null => AUDIT_CATEGORIES.find((category) => category === value) ?? null;
@@ -79,6 +80,12 @@ const WORDS: Readonly<Record<string, string>> = {
   "gate.stepping_away": "said they were stepping away from",
   "shift.selfie_viewed": "looked at the shift photo of",
   "check.licence_photo_viewed": "looked at the licence photo of",
+  "gate.post_located": "set the location of",
+  "hotlist.added": "added to the hotlist:",
+  "hotlist.removed": "took off the hotlist:",
+  "expected.added": "booked in",
+  "expected.cancelled": "cancelled the booking of",
+  "erasure.ran": "erased the personal details in",
 };
 
 export type AuditEntry = {

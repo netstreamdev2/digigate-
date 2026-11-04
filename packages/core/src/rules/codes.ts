@@ -1,6 +1,7 @@
 export type Severity = 'red' | 'amber' | 'info';
 
 export const RULE_SEVERITY = {
+  HOTLIST_MATCH: 'red',
   DRIVER_VEHICLE_MISMATCH: 'red',
   WALKED_IN_DRIVING_OUT: 'red',
   UNKNOWN_DRIVER: 'red',

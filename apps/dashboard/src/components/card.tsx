@@ -10,7 +10,7 @@ type Props = {
 
 export function Card({ title, subtitle, action, children, className = "" }: Props) {
   return (
-    <section className={`rounded-lg border border-border bg-surface p-6 shadow-card ${className}`}>
+    <section className={`dg-glass p-6 ${className}`}>
       <header className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 className="font-display text-lg font-semibold tracking-tight">{title}</h2>

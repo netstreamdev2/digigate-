@@ -773,6 +773,149 @@ check('nor another company\x27s admin', (await guardList(ADMIN_B)).rows.length =
 check('nor anyone without MFA', (await as('authenticated', ADMIN_A, 'aal1', 'select * from digigate.guard_board($1, \x27\x27, \x27\x27, 25, 0)', [ORG_A])).rows.length === 0);
 await setShifts(ADMIN_A, [{ code: 'day', label: 'Day', start: '06:00', end: '18:00' }, { code: 'night', label: 'Night', start: '18:00', end: '06:00' }]);
 
+// A company's logo and colour.
+const brand = (profile, org, path, colour) => as('authenticated', profile, 'aal2', 'select digigate.set_company_brand($1, $2, $3)', [org, path, colour]);
+const LOGO = ORG_A + '/logo-1730700000000.webp';
+check('an admin sets their company\x27s logo and colour', !(await brand(ADMIN_A, ORG_A, LOGO, '#1A7F5A')).error);
+const branded = await one('select logo_path, brand_color from digigate.organisations where id = $1', [ORG_A]);
+check('the colour is kept in lower case', branded.logo_path === LOGO && branded.brand_color === '#1a7f5a');
+check('the change is in the audit log', (await count(`digigate.audit_log where action = 'company.changed' and org_id = '${ORG_A}' and detail = 'brand_color, logo_path'`)) === 1);
+check('another company\x27s admin cannot', (await brand(ADMIN_B, ORG_A, '', '#000000')).error);
+check('nor the control room', (await brand(ROOM_A, ORG_A, '', '#000000')).error);
+check('nor without MFA', (await as('authenticated', ADMIN_A, 'aal1', 'select digigate.set_company_brand($1, $2, $3)', [ORG_A, '', ''])).error);
+check('a logo from another company\x27s folder is refused', (await brand(ADMIN_A, ORG_A, ORG_B + '/logo-1.webp', '')).error);
+check('a logo that is not one of ours is refused', (await brand(ADMIN_A, ORG_A, ORG_A + '/../evil.svg', '')).error);
+check('so is a colour that is not a colour', (await brand(ADMIN_A, ORG_A, LOGO, 'red')).error);
+const brandBoard = (await as('authenticated', SUPER, 'aal2', `select * from digigate.company_board('', 25, 0)`)).rows;
+const boardA = brandBoard.find((row) => row.id === ORG_A);
+check('the super user\x27s companies carry their look', boardA?.logo_path === LOGO && boardA.brand_color === '#1a7f5a');
+check('and how each is doing now', Number(boardA?.on_site) >= 0 && Number(boardA?.open_alerts) >= 0 && 'sites' in (boardA ?? {}));
+check('an admin gets no company board', (await as('authenticated', ADMIN_A, 'aal2', `select * from digigate.company_board('', 25, 0)`)).rows.length === 0);
+check('an empty value clears the look', !(await brand(SUPER, ORG_A, '', '')).error && (await one('select logo_path, brand_color from digigate.organisations where id = $1', [ORG_A])).brand_color === null);
+
+// Person keys made in the database match the handheld's.
+const { createHmac } = await import('node:crypto');
+const sqlHmac = async (keyHex, message) => (await one(`select encode(digigate.hmac_sha256(decode($1, 'hex'), convert_to($2, 'UTF8')), 'hex') as h`, [keyHex, message])).h;
+const nodeHmac = (keyHex, message) => createHmac('sha256', Buffer.from(keyHex, 'hex')).update(message).digest('hex');
+const shortKey = 'ab'.repeat(32);
+const longKey = 'cd'.repeat(80);
+check('the database\x27s HMAC is the standard one', (await sqlHmac(shortKey, '02:8001015009087')) === nodeHmac(shortKey, '02:8001015009087'));
+check('also for a key longer than a block', (await sqlHmac(longKey, 'any message at all')) === nodeHmac(longKey, 'any message at all'));
+// A handheld's key is 32 random bytes in hex; the pairing tests above used a short stand-in.
+await db.exec(`update digigate.person_keys set key = '${'5a'.repeat(32)}' where org_id = '${ORG_A}'`);
+const orgKey = (await one('select key from digigate.person_keys where org_id = $1', [ORG_A])).key;
+check('a person key from an ID number is the one a handheld makes', (await one('select digigate.person_key_for($1, $2) as k', [ORG_A, '8001015009087'])).k === nodeHmac(orgKey, '02:8001015009087'));
+const ORG_C = u(900);
+await db.exec(`insert into digigate.organisations (id, name, slug) values ('${ORG_C}', 'C', 'c'); insert into digigate.clients (id, org_id, name) values ('${u(901)}', '${ORG_C}', 'C1'); insert into digigate.sites (id, org_id, client_id, name, site_type) values ('${u(902)}', '${ORG_C}', '${u(901)}', 'C1', 'hospital');`);
+const madeKey = (await one('select digigate.org_person_key($1) as k', [ORG_C])).k;
+check('a company with no handheld yet gets a key of its own', /^[0-9a-f]{64}$/.test(madeKey));
+check('asked again, it is the same key', (await one('select digigate.org_person_key($1) as k', [ORG_C])).k === madeKey);
+await db.exec(`insert into digigate.pairing_codes (org_id, site_id, device_name, code_hash, expires_at, created_by) values ('${ORG_C}', '${u(902)}', 'C DT50', 'c-code', now() + interval '10 minutes', '${SUPER}')`);
+check('its first handheld is given that key, not its own', (await service('select * from digigate.claim_pairing_code($1, $2, $3)', ['c-code', 'c-token', 'ee'.repeat(32)])).rows[0]?.person_key === madeKey);
+for (const fn of ['hmac_sha256(bytea, bytea)', 'org_person_key(uuid)', 'person_key_for(uuid, text)', 'hotlist_in_force(uuid, uuid)']) {
+  check(`dashboard users cannot call ${fn}`, !(await one(`select has_function_privilege('authenticated', 'digigate.${fn}', 'execute') a`)).a);
+}
+
+// The hotlist.
+const addHot = (profile, site, kind, value, label, expires = null) =>
+  as('authenticated', profile, 'aal2', 'select digigate.add_hotlist_entry($1, $2, $3, $4, $5, $6, $7, $8) as id', [ORG_A, kind, value, label, 'Reported stolen, SAPS case 12/11/2026', 'Keep the boom down and call the supervisor', site, expires]);
+const wantedPerson = await addHot(ADMIN_A, null, 'person', '8001015009087', 'Sipho Ndlovu');
+check('an admin hotlists a person by ID number', !wantedPerson.error);
+const HOT_PERSON = wantedPerson.rows[0]?.id;
+const hotRow = await one('select * from digigate.hotlist where id = $1', [HOT_PERSON]);
+check('only the last four digits are kept', hotRow.id_last_four === '9087' && !JSON.stringify(hotRow).includes('8001015009087'));
+check('the person is kept by the key a handheld makes', hotRow.match_key === nodeHmac(orgKey, '02:8001015009087'));
+const wantedPlate = await addHot(ROOM_A, SITE_A, 'plate', 'ca 123-456', '');
+check('the control room hotlists a plate at its own site', !wantedPlate.error);
+const HOT_PLATE = wantedPlate.rows[0]?.id;
+check('the plate is kept as it reads and as it matches', (await one('select label, match_key from digigate.hotlist where id = $1', [HOT_PLATE])).match_key === 'CA123456');
+check('but not at a site it does not watch', (await addHot(ROOM_A, SITE_A2, 'plate', 'CA 999', '')).error);
+check('the same plate twice is refused', (await addHot(ADMIN_A, SITE_A, 'plate', 'CA123456', '')).error);
+check('another company cannot hotlist for this one', (await as('authenticated', ADMIN_B, 'aal2', 'select digigate.add_hotlist_entry($1, $2, $3, $4, $5, $6)', [ORG_A, 'plate', 'XX 1', '', 'r', 'n'])).error);
+check('a dashboard supervisor cannot either', (await addHot(SUP_A2, null, 'plate', 'SUP 1', '')).error);
+check('an ID number that is not 13 digits is refused', (await addHot(ADMIN_A, null, 'person', '80010150', 'Short')).error);
+check('a person needs a name', (await addHot(ADMIN_A, null, 'person', '8202025009081', ' ')).error);
+check('an empty plate is refused', (await addHot(ADMIN_A, null, 'plate', ' - ', '')).error);
+check('an end date already past is refused', (await addHot(ADMIN_A, null, 'vin', 'TESTVINPAST', '', new Date(Date.now() - 60_000).toISOString())).error);
+const HOT_VIN = (await addHot(ADMIN_A, SITE_A2, 'vin', 'TESTVIN0000000009', '')).rows[0]?.id;
+const HOT_SOON = (await addHot(ADMIN_A, null, 'vin', 'TESTVINSOON', '', new Date(Date.now() + 3_600_000).toISOString())).rows[0]?.id;
+check('an entry with an end date is erased three years after it', (await one(`select erase_after = expires_at + interval '3 years' as ok from digigate.hotlist where id = $1`, [HOT_SOON])).ok === true);
+const roomList = (await as('authenticated', ROOM_A, 'aal2', 'select id, label, reason from digigate.hotlist')).rows.map((row) => row.id);
+check('the control room sees the company-wide entries and its own site\x27s', roomList.includes(HOT_PERSON) && roomList.includes(HOT_PLATE) && !roomList.includes(HOT_VIN));
+check('nobody reads the match keys', (await as('authenticated', ADMIN_A, 'aal2', 'select match_key from digigate.hotlist')).error);
+check('another company sees none of it', (await as('authenticated', ADMIN_B, 'aal2', 'select id from digigate.hotlist')).rows.length === 0);
+check('nobody writes to it directly', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.hotlist (org_id, kind, match_key, label, reason, guard_note) values ('${ORG_A}', 'plate', 'X', 'X', 'r', 'n')`)).error);
+const hotSnapshot = (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.hotlist;
+const snapIds = hotSnapshot.map((entry) => entry.id);
+check('the handheld gets the entries for its site', snapIds.includes(HOT_PERSON) && snapIds.includes(HOT_PLATE) && snapIds.includes(HOT_SOON) && !snapIds.includes(HOT_VIN));
+const snapPerson = hotSnapshot.find((entry) => entry.id === HOT_PERSON);
+check('with the key to match and what to tell the guard, never the reason', snapPerson?.key === hotRow.match_key && snapPerson.guardNote.length > 0 && !('reason' in snapPerson) && !JSON.stringify(hotSnapshot).includes('SAPS'));
+check('and when an entry runs out', typeof hotSnapshot.find((entry) => entry.id === HOT_SOON)?.expiresAt === 'number');
+check('the server re-checks against the same entries', (await service('select id from digigate.hotlist_in_force($1, $2)', [ORG_A, SITE_A])).rows.length === snapIds.length);
+const hotAudit = (await service(`select target, detail from digigate.audit_log where action = 'hotlist.added' and org_id = '${ORG_A}'`)).rows;
+check('each entry is logged, saying what kind and never whose', hotAudit.length === 4 && hotAudit.every((row) => ['a person', 'a plate', 'a VIN'].includes(row.target)) && !JSON.stringify(hotAudit).includes('Ndlovu'));
+
+const hotCheck = event('vehicle_entry', {
+  visit_id: null, outcome: 'blocked', hits: [{ code: 'HOTLIST_MATCH', severity: 'red', related_visit_id: null, hotlist_entry_id: HOT_PLATE }],
+  vehicle: { ...vehicle, plate: 'CA123456' }, typed_plate: 'CA123456', driver, occupants: 1, visit_type: 'visitor',
+});
+await ingest([hotCheck]);
+check('a hotlist match raises a red alert', (await count(`digigate.alerts where event_id = '${hotCheck.id}' and rule_code = 'HOTLIST_MATCH' and severity = 'red'`)) === 1);
+const hotDetail = (await as('authenticated', ADMIN_A, 'aal2', 'select digigate.check_detail($1) as d', [hotCheck.id])).rows[0]?.d;
+check('the control room sees which entry stopped it, and why', hotDetail?.hotlist?.reason === 'Reported stolen, SAPS case 12/11/2026' && hotDetail.hotlist.label === 'CA 123-456');
+
+check('the control room takes a plate off', !(await as('authenticated', ROOM_A, 'aal2', 'select digigate.remove_hotlist_entry($1)', [HOT_PLATE])).error);
+check('then it reaches no handheld', !(await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.hotlist.some((entry) => entry.id === HOT_PLATE));
+check('and is erased three years on', (await one(`select erase_after > now() + interval '1094 days' as ok from digigate.hotlist where id = $1`, [HOT_PLATE])).ok === true);
+check('the control room cannot take off an entry for a site it does not watch', (await as('authenticated', ROOM_A, 'aal2', 'select digigate.remove_hotlist_entry($1)', [HOT_VIN])).error);
+check('nor another company', (await as('authenticated', ADMIN_B, 'aal2', 'select digigate.remove_hotlist_entry($1)', [HOT_PERSON])).error);
+check('nor take one off twice', (await as('authenticated', ADMIN_A, 'aal2', 'select digigate.remove_hotlist_entry($1)', [HOT_PLATE])).error);
+
+// Expected visitors.
+const inAnHour = new Date(Date.now() + 3_600_000).toISOString();
+const tomorrow = new Date(Date.now() + 86_400_000).toISOString();
+const book = (profile, site, name, idNumber, plate, from = new Date(Date.now() - 3_600_000).toISOString(), until = tomorrow) =>
+  as('authenticated', profile, 'aal2', 'select digigate.add_expected_visitor($1, $2, $3, $4, $5, $6, $7, $8, $9) as id', [ORG_A, site, name, idNumber, plate, 'contractor', from, until, 'Fixing the lifts']);
+const bookedIn = await book(ADMIN_A, SITE_A, 'Lerato Dlamini', '9002025009083', 'nd 456-789');
+check('an admin books a visitor in', !bookedIn.error);
+const BOOKING = bookedIn.rows[0]?.id;
+const bookedRow = await one('select * from digigate.expected_visitors where id = $1', [BOOKING]);
+check('kept by key and last four digits, never the ID number', bookedRow.person_key === nodeHmac(orgKey, '02:9002025009083') && bookedRow.id_last_four === '9083' && !JSON.stringify(bookedRow).includes('9002025009083'));
+check('with the plate as it matches', bookedRow.plate_key === 'ND456789');
+check('erased three years after the booking ends', (await one(`select erase_after = valid_until + interval '3 years' as ok from digigate.expected_visitors where id = $1`, [BOOKING])).ok === true);
+check('the control room books one at its own site', !(await book(ROOM_A, SITE_A, 'Plate only', '', 'GP 1')).error);
+check('but not at a site it does not watch', (await book(ROOM_A, SITE_A2, 'Elsewhere', '', 'GP 2')).error);
+check('a booking needs an ID number or a plate', (await book(ADMIN_A, SITE_A, 'Nobody', '', ' ')).error);
+check('a booking is at most a month', (await book(ADMIN_A, SITE_A, 'Long', '', 'GP 3', new Date().toISOString(), new Date(Date.now() + 40 * 86_400_000).toISOString())).error);
+check('a booking already over is refused', (await book(ADMIN_A, SITE_A, 'Late', '', 'GP 4', new Date(Date.now() - 7_200_000).toISOString(), new Date(Date.now() - 3_600_000).toISOString())).error);
+check('another company cannot book here', (await as('authenticated', ADMIN_B, 'aal2', 'select digigate.add_expected_visitor($1, $2, $3, $4, $5, null, now(), now() + interval \x271 day\x27, null)', [ORG_A, SITE_A, 'X', '', 'X1'])).error);
+const LATER = (await book(ADMIN_A, SITE_A, 'Next week', '', 'GP 5', new Date(Date.now() + 7 * 86_400_000).toISOString(), new Date(Date.now() + 8 * 86_400_000).toISOString())).rows[0]?.id;
+const OTHER_SITE = (await book(ADMIN_A, SITE_A2, 'Other site', '', 'GP 6')).rows[0]?.id;
+const expectedSnap = (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.expectedVisitors;
+const expectedIds = expectedSnap.map((booking) => booking.id);
+check('the handheld gets today\x27s bookings for its site', expectedIds.includes(BOOKING) && !expectedIds.includes(OTHER_SITE));
+check('not the ones a week away', !expectedIds.includes(LATER));
+const snapBooking = expectedSnap.find((booking) => booking.id === BOOKING);
+check('with the key, the plate, the name and the window', snapBooking?.personKey === bookedRow.person_key && snapBooking.plate === 'ND456789' && snapBooking.name === 'Lerato Dlamini' && snapBooking.until > snapBooking.from);
+check('the control room sees its bookings', (await as('authenticated', ROOM_A, 'aal2', 'select id from digigate.expected_visitors')).rows.length === 3);
+check('but no keys', (await as('authenticated', ADMIN_A, 'aal2', 'select person_key from digigate.expected_visitors')).error);
+
+const arrival = event('pedestrian_entry', {
+  visit_id: u(910), outcome: 'clear', hits: [], expected_visitor_id: BOOKING,
+  person: { person_key: bookedRow.person_key, names: 'LERATO', surname: 'DLAMINI' }, visit_type: 'contractor',
+});
+const wrongSite = event('pedestrian_entry', {
+  visit_id: u(911), outcome: 'clear', hits: [], expected_visitor_id: OTHER_SITE,
+  person: { person_key: 'key-other', names: 'OTHER', surname: 'SITE' }, visit_type: 'visitor',
+});
+await ingest([arrival, wrongSite]);
+check('an entry the handheld matched marks the booking arrived', (await one('select arrived_at, arrived_event from digigate.expected_visitors where id = $1', [BOOKING])).arrived_event === arrival.id);
+check('a booking at another site is not marked by this gate', (await one('select arrived_at from digigate.expected_visitors where id = $1', [OTHER_SITE])).arrived_at === null);
+check('a booking is cancelled', !(await as('authenticated', ADMIN_A, 'aal2', 'select digigate.cancel_expected_visitor($1)', [LATER])).error);
+check('and not twice', (await as('authenticated', ADMIN_A, 'aal2', 'select digigate.cancel_expected_visitor($1)', [LATER])).error);
+check('nor by another company', (await as('authenticated', ADMIN_B, 'aal2', 'select digigate.cancel_expected_visitor($1)', [BOOKING])).error);
+check('bookings are logged without names', (await count(`digigate.audit_log where action in ('expected.added', 'expected.cancelled') and target = 'a visitor'`)) === 5);
+
 // Append-only and erasure.
 const change = async (sql) => (await service(sql)).error;
 check('service role cannot change an event', await change(`update digigate.events set type = 'x'`));
@@ -789,6 +932,47 @@ check('service role cannot delete details', await change('delete from digigate.v
 await db.exec(`delete from digigate.visit_details where visit_id = '${OLD}'`);
 const erased = (await visits(ADMIN_A, 'aal2')).rows.find((row) => row.id === OLD);
 check('an erased visit stays as a bare row, marked erased', erased?.details_erased === true && erased.person_name === null);
+
+// The nightly erasure: three years after a visit ends, its people's details go for good.
+const PAST = "now() - interval '1 day'";
+const ENDED_SHIFT = u(920);
+const arrivalVisit = u(910);
+await db.exec(`
+  update digigate.event_details set erase_after = ${PAST}, licence_photo_path = '${ORG_A}/${SITE_A}/${hotCheck.id}.bmp' where event_id = '${hotCheck.id}';
+  update digigate.alerts set status = 'resolved', resolution = 'Spoke to Sipho Ndlovu at the gate' where event_id = '${hotCheck.id}';
+  update digigate.visit_details set erase_after = ${PAST} where visit_id = '${arrivalVisit}';
+  insert into digigate.shifts (id, org_id, site_id, device_id, gate_user_id, post, period, started_at, ended_at, end_reason, erase_after, selfie, selfie_path)
+    values ('${ENDED_SHIFT}', '${ORG_A}', '${SITE_A}', '${DEVICE}', '${GUARD}', 'back-gate', 'day', now() - interval '3 years 2 days', now() - interval '3 years 1 day', 'ended', ${PAST}, 'taken', '${ORG_A}/${SITE_A}/${ENDED_SHIFT}.jpg');
+  update digigate.hotlist set erase_after = ${PAST} where id = '${HOT_PLATE}';
+  update digigate.expected_visitors set erase_after = ${PAST} where id = '${LATER}';
+`);
+const detailsBefore = await count('digigate.event_details');
+check('nobody signed in can run the erasure', (await as('authenticated', SUPER, 'aal2', 'select digigate.erase_due(10)')).error);
+for (const fn of ['erase_due(integer)', 'erasure_files_done(text, text[])', 'erasure_token_ok(text)']) {
+  check(`dashboard users cannot call ${fn}`, !(await one(`select has_function_privilege('authenticated', 'digigate.${fn}', 'execute') a`)).a);
+}
+const erasedNow = (await service('select digigate.erase_due(5000) as r')).rows[0]?.r;
+check('the job reports what it erased', erasedNow?.checks === 1 && erasedNow.visits === 1 && erasedNow.shifts === 1 && erasedNow.hotlist === 1 && erasedNow.bookings === 1);
+check('only what was due goes', (await count('digigate.event_details')) === detailsBefore - 1);
+check('the check itself stays, with nothing in it about anyone', (await count(`digigate.events where id = '${hotCheck.id}'`)) === 1 && (await count(`digigate.event_details where event_id = '${hotCheck.id}'`)) === 0);
+check('the visit stays as a bare row', (await count(`digigate.visits where id = '${arrivalVisit}'`)) === 1 && (await count(`digigate.visit_details where visit_id = '${arrivalVisit}'`)) === 0);
+check('a note written about the check goes with it', (await one('select resolution from digigate.alerts where event_id = $1', [hotCheck.id])).resolution === null);
+check('the ended shift goes, its selfie with it', (await count(`digigate.shifts where id = '${ENDED_SHIFT}'`)) === 0);
+check('an open shift stays', (await count(`digigate.shifts where id = '${SHIFT}'`)) === 1);
+check('the hotlist entry and the booking are gone', (await count(`digigate.hotlist where id = '${HOT_PLATE}'`)) === 0 && (await count(`digigate.expected_visitors where id = '${LATER}'`)) === 0);
+check('entries still in force are untouched', (await count(`digigate.hotlist where id = '${HOT_PERSON}'`)) === 1);
+const queuedFiles = (await service('select bucket, path from digigate.erasure_files order by bucket')).rows;
+check('the licence photo and the selfie wait to be removed from storage', queuedFiles.map((row) => row.bucket).join() === 'licence-photos,shift-selfies');
+const erasureLog = (await service(`select org_id, actor_name, target, detail from digigate.audit_log where action = 'erasure.ran'`)).rows;
+check('the company\x27s log says what was erased, in counts', erasureLog.length === 1 && erasureLog[0].org_id === ORG_A && erasureLog[0].detail === '1 checks, 1 visits, 1 licence photos, 1 shifts, 1 hotlist entries, 1 bookings');
+check('and never whose', !JSON.stringify(erasureLog).includes('Ndlovu') && !JSON.stringify(erasureLog).includes('Dlamini'));
+check('the admin sees it in their log', (await as('authenticated', ADMIN_A, 'aal2', `select id from digigate.audit_log where action = 'erasure.ran'`)).rows.length === 1);
+check('another company does not', (await as('authenticated', ADMIN_B, 'aal2', `select id from digigate.audit_log where action = 'erasure.ran'`)).rows.length === 0);
+const quietNight = (await service('select digigate.erase_due(5000) as r')).rows[0]?.r;
+check('a night with nothing due erases nothing and logs nothing', quietNight?.checks === 0 && (await count(`digigate.audit_log where action = 'erasure.ran'`)) === 1);
+await service('select digigate.erasure_files_done($1, $2)', ['licence-photos', [queuedFiles[0]?.path]]);
+check('a file storage has removed leaves the queue', (await count('digigate.erasure_files')) === 1);
+check('without the secret, nobody may trigger the storage clean-up', (await service('select digigate.erasure_token_ok($1) as ok', ['guess'])).rows[0]?.ok === false);
 
 // A client viewer, and a client changing security company.
 const VIEWER = u(17);

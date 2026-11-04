@@ -150,6 +150,8 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
             outcome={checked.outcome}
             hits={checked.hits}
             related={checked.related}
+            hotlistNotes={checked.hotlistNotes}
+            expected={checked.expected}
             settled={settled}
             clearMessage={
               direction === 'entry'

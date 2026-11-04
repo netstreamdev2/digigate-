@@ -70,6 +70,7 @@ export function gateState(overrides: Partial<GateState> = {}): GateState {
     openVisits: [],
     vehicleHistory: [],
     registeredPeople: new Map(),
+    hotlist: [],
     ...overrides,
   };
 }

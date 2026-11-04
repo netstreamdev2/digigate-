@@ -19,7 +19,17 @@ export type CheckDetail = {
   typedPlate: string | null;
   occupants: number | null;
   hasLicencePhoto: boolean;
+  /** The hotlist entry that stopped the check, inside the 365 days records are shown in full. */
+  hotlist: { label: string; reason: string; guardNote: string; removed: boolean } | null;
 };
+
+function hotlistOf(value: unknown): CheckDetail["hotlist"] {
+  const entry = record(value);
+  const label = text(entry.label);
+  const reason = text(entry.reason);
+  const guardNote = text(entry.guardNote);
+  return label && reason && guardNote ? { label, reason, guardNote, removed: entry.removed === true } : null;
+}
 
 const record = (value: unknown): Record<string, unknown> => (typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const text = (value: unknown) => (typeof value === "string" && value ? value : null);
@@ -63,5 +73,6 @@ export function readCheckDetail(value: unknown): CheckDetail | null {
     typedPlate: text(row.typedPlate),
     occupants: typeof row.occupants === "number" ? row.occupants : null,
     hasLicencePhoto: row.hasLicencePhoto === true,
+    hotlist: hotlistOf(row.hotlist),
   };
 }

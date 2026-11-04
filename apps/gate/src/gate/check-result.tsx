@@ -7,6 +7,7 @@ import { Icon } from '@/components/icon';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import type { VisitDetails } from '@/db/visits';
+import type { SyncedBooking } from '@/db/watch-lists';
 import { formatPlate, titleCase } from '@/lib/format';
 import { ruleCopy } from '@/lib/rule-copy';
 
@@ -24,10 +25,16 @@ type Props = {
   clearMessage: string;
   /** Said when the guard lets them through after a warning or override. */
   letThroughMessage: string;
+  /** What the company asked the guard to do, by hotlist entry. */
+  hotlistNotes?: ReadonlyMap<string, string>;
+  /** The booking that expects them, on the way in. */
+  expected?: SyncedBooking | null;
 };
 
+const NO_NOTES: ReadonlyMap<string, string> = new Map();
+
 /** The result, first on screen: a banner the guard reads at a glance, then every hit and the visits behind it. */
-export function CheckResult({ outcome, hits, related, settled, clearMessage, letThroughMessage }: Props) {
+export function CheckResult({ outcome, hits, related, settled, clearMessage, letThroughMessage, hotlistNotes = NO_NOTES, expected = null }: Props) {
   const top = hits[0];
   const banner =
     settled === 'turned-away'
@@ -43,15 +50,31 @@ export function CheckResult({ outcome, hits, related, settled, clearMessage, let
   return (
     <>
       <ResultBanner tone={banner.tone} title={banner.title} message={banner.message} />
+      {expected ? (
+        <Card style={styles.expected}>
+          <Icon name="visitor" size={22} color={colors.brand} />
+          <View style={styles.hitCopy}>
+            <Text variant="bodyStrong">{`Expected: ${titleCase(expected.name)}`}</Text>
+            <Text variant="label" color={colors.inkMuted}>
+              {[expected.visitType ? titleCase(expected.visitType.replace(/_/g, ' ')) : null, expected.note, 'Check the name on their document matches.']
+                .filter((part): part is string => part !== null && part !== '')
+                .join(' · ')}
+            </Text>
+          </View>
+        </Card>
+      ) : null}
       {hits.length > 0 ? (
         <Card style={styles.hits}>
           {hits.map((ruleHit) => {
             const visit = ruleHit.relatedVisitId ? related.get(ruleHit.relatedVisitId) : undefined;
-            const context = visit
-              ? [titleCase(visit.personName), visit.vehicleDescription, visit.plate ? formatPlate(visit.plate) : null, `in at ${timeOf(visit.enteredAt)}`]
-                  .filter((part): part is string => part !== null)
-                  .join(' · ')
-              : null;
+            const note = ruleHit.hotlistEntryId ? hotlistNotes.get(ruleHit.hotlistEntryId) : undefined;
+            const context = note
+              ? `The company says: ${note}`
+              : visit
+                ? [titleCase(visit.personName), visit.vehicleDescription, visit.plate ? formatPlate(visit.plate) : null, `in at ${timeOf(visit.enteredAt)}`]
+                    .filter((part): part is string => part !== null)
+                    .join(' · ')
+                : null;
             const tone =
               ruleHit.severity === 'red'
                 ? { icon: 'result-blocked' as const, color: colors.blocked }
@@ -59,7 +82,7 @@ export function CheckResult({ outcome, hits, related, settled, clearMessage, let
                   ? { icon: 'result-warning' as const, color: colors.warning }
                   : { icon: 'info' as const, color: colors.brand };
             return (
-              <View key={`${ruleHit.code}-${ruleHit.relatedVisitId ?? ''}`} style={styles.hit}>
+              <View key={`${ruleHit.code}-${ruleHit.relatedVisitId ?? ruleHit.hotlistEntryId ?? ''}`} style={styles.hit}>
                 <Icon name={tone.icon} size={20} color={tone.color} />
                 <View style={styles.hitCopy}>
                   <Text variant="bodyStrong">{ruleCopy[ruleHit.code].title}</Text>
@@ -80,6 +103,11 @@ export function CheckResult({ outcome, hits, related, settled, clearMessage, let
 
 const styles = StyleSheet.create({
   hits: {
+    gap: space.sm,
+  },
+  expected: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: space.sm,
   },
   hit: {

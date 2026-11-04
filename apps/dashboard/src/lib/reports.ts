@@ -4,6 +4,7 @@ import { percentChange, priorLabel, type ReportData, type ReportFrequency } from
 
 import type { Trend } from "@/components/glass";
 
+import { brandOf, type CompanyBrand } from "./company-brand";
 import { likePattern } from "./paging";
 import { must } from "./reads";
 import { supabaseServer } from "./supabase/server";
@@ -26,6 +27,7 @@ export type CompanyDay = {
   warnings: number;
   overrides: number;
   trend: readonly number[];
+  brand: CompanyBrand;
 };
 
 export type DayTotals = { checks: number; entries: number; blocked: number; warnings: number; companies: number };
@@ -54,9 +56,15 @@ export type ReportSend = {
 export async function reportBoard(day: string, search: string, page: number): Promise<{ companies: CompanyDay[]; total: number }> {
   const supabase = await supabaseServer();
   const rows = must(await supabase.rpc("report_board", { _day: day, _search: search ? likePattern(search) : "", _limit: BOARD_PAGE_SIZE, _offset: (page - 1) * BOARD_PAGE_SIZE }));
+  // Each card wears its company's logo: one read for the page of companies shown, never one per card.
+  const looks = rows.length
+    ? must(await supabase.from("organisations").select("id, name, logo_path, brand_color").in("id", rows.map((row) => row.org_id)))
+    : [];
+  const brands = new Map(looks.map((look) => [look.id, brandOf(look)]));
   return {
     total: rows[0]?.total ?? 0,
     companies: rows.map((row) => ({
+      brand: brands.get(row.org_id) ?? { id: row.org_id, name: row.company, logoUrl: null, color: null },
       id: row.org_id,
       company: row.company,
       sites: row.sites,

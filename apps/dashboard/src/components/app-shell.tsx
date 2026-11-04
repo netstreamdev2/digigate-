@@ -1,84 +1,48 @@
-import Image from "next/image";
 import type { ReactNode } from "react";
 
-import { Icon } from "./icon";
-import { Sidebar, type NavItem } from "./sidebar";
+import type { CompanyBrand } from "@/lib/company-brand";
+import { currentUser } from "@/lib/session";
+
+import { CompanyBanner } from "./company-banner";
+import { CompanyTheme } from "./company-theme";
 
 type Props = {
-  nav: readonly NavItem[];
-  user: { name: string; role: string };
   /** A short line above the title, or breadcrumbs. */
   eyebrow: ReactNode;
   title: string;
-  /** Chips under the title, e.g. the time range and live status. */
+  /** Chips under the title, e.g. search and the live status. */
   chips?: ReactNode;
   /** The page's main buttons, level with the title. */
   actions?: ReactNode;
-  alertCount?: number;
-  /** Leaves out search and alerts, for pages that aren't about the live gate. */
-  plain?: boolean;
-  /** Frosted panels over a wash of colour, for the report pages. */
-  glass?: boolean;
+  /**
+   * The company whose records these are. Its colours repaint the page, and a super user gets a banner saying whose
+   * company they're working inside. People who work for the company have its logo in the sidebar instead.
+   */
+  company?: CompanyBrand | null;
   children: ReactNode;
 };
 
-/** The frame every dashboard page shares: sidebar, page title, search and alerts. */
-export function AppShell({ nav, user, eyebrow, title, chips, actions, alertCount, plain = false, glass = false, children }: Props) {
+/** The top of every dashboard page and what's under it. The sidebar around it lives in the layout and stays put. */
+export async function AppShell({ eyebrow, title, chips, actions, company = null, children }: Props) {
+  const user = company ? await currentUser() : null;
+  const asSuperUser = user?.roles.includes("super_user") ?? false;
+
   return (
-    <div className="flex min-h-screen">
-      {glass ? (
-        <div className="dg-wash" aria-hidden="true">
-          <i />
-          <i />
-          <i />
+    <div className="dg-page">
+      {company ? <CompanyTheme company={company} /> : null}
+      {company && asSuperUser ? <CompanyBanner company={company} /> : null}
+
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-ink-muted">{eyebrow}</div>
+          <h1 className="dg-page-title mt-1 font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
         </div>
-      ) : null}
-      <Sidebar items={nav} userName={user.name} userRole={user.role} glass={glass} />
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      </header>
 
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-10 lg:py-8">
-        <Image src="/logo.svg" alt="DigiGate" width={104} height={33} unoptimized className="mb-6 lg:hidden" />
+      {chips ? <div className="mt-6 flex flex-wrap items-center gap-2">{chips}</div> : null}
 
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="text-sm font-medium text-ink-muted">{eyebrow}</div>
-            <h1 className="mt-1 font-display text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
-          </div>
-          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-          <div className={plain ? "hidden" : "flex w-full items-center gap-2 sm:w-auto"}>
-            <label className="flex h-11 flex-1 items-center gap-2 rounded-pill border border-border bg-surface px-4 sm:w-80 sm:flex-none">
-              <Icon name="search" className="size-5 shrink-0 text-ink-subtle" />
-              <span className="sr-only">Search</span>
-              <input
-                type="search"
-                placeholder="Search a plate, name or visit"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-subtle"
-              />
-            </label>
-            <button
-              type="button"
-              aria-label={alertCount ? `${alertCount} open alerts` : "Alerts"}
-              className="relative grid size-11 shrink-0 place-items-center rounded-pill bg-surface text-ink shadow-card"
-            >
-              <Icon name="bell" />
-              {alertCount ? (
-                <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-pill border-2 border-surface-muted bg-badge px-1 text-[11px] font-semibold text-ink-inverse">
-                  {alertCount}
-                </span>
-              ) : null}
-            </button>
-          </div>
-        </header>
-
-        {chips ? <div className="mt-6 flex flex-wrap items-center gap-2">{chips}</div> : null}
-
-        {children}
-      </main>
+      {children}
     </div>
-  );
-}
-
-export function RangeChip({ label }: { label: string }) {
-  return (
-    <span className="inline-flex h-9 items-center rounded-pill bg-ink px-4 text-sm font-semibold text-ink-inverse">{label}</span>
   );
 }

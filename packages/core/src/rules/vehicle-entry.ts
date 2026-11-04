@@ -1,11 +1,17 @@
 import { isExpired } from './dates';
 import { finalise, hit } from './hits';
+import { hotlistHit } from './hotlist';
 import type { GateState, RuleConfig, RuleHit, VehicleEntryScan } from './types';
 import { findCloneOnSite, hasHistoryConflict, samePlate, sameVehicle, sameVin, vehicleVisits } from './vehicles';
 
 export function evaluateVehicleEntry(scan: VehicleEntryScan, state: GateState, config: RuleConfig): RuleHit[] {
   const { disc, driver } = scan;
   const hits: RuleHit[] = [];
+
+  const hotlisted = hotlistHit({ personKeys: [driver.personKey], plates: [disc.plate, scan.typedPlate], vins: [disc.vin] }, state.hotlist);
+  if (hotlisted) {
+    hits.push(hotlisted);
+  }
 
   if (!samePlate({ plate: scan.typedPlate }, disc)) {
     hits.push(hit('PLATE_DISC_MISMATCH'));

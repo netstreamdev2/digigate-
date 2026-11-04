@@ -3,6 +3,10 @@ import type { RuleCode } from '@digigate/core';
 // What the guard reads when a rule fires: what happened and what to do next. Titles match the dashboard's.
 // Typed as a full record, so adding a rule to core fails the build until it has copy here.
 export const ruleCopy: Record<RuleCode, { title: string; message: string }> = {
+  HOTLIST_MATCH: {
+    title: 'On the hotlist',
+    message: 'The company has asked for this person or car to be stopped. Keep the boom closed and call your supervisor.',
+  },
   DRIVER_VEHICLE_MISMATCH: {
     title: 'Vehicle swap',
     message: 'This driver arrived in a different car. Keep the boom closed and call your supervisor.',

@@ -11,6 +11,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getValue, removeValue, setValue } from './kv';
 import { appendEvent } from './outbox';
+import { loadHotlist } from './watch-lists';
 
 const GENERATION_KEY = 'site-visits:generation';
 /** How long a visit this device ended stays hidden from the server's list, which can lag by a sync or two. */
@@ -115,8 +116,10 @@ async function siteRows(db: SQLiteDatabase): Promise<VisitRow[]> {
 export async function loadGateState(
   db: SQLiteDatabase,
   vehicle: { vin: string; plate: string } | null,
-): Promise<{ state: GateState; details: ReadonlyMap<string, VisitDetails> }> {
+  at: number,
+): Promise<{ state: GateState; details: ReadonlyMap<string, VisitDetails>; hotlistNotes: ReadonlyMap<string, string> }> {
   const rows = await siteRows(db);
+  const hotlist = await loadHotlist(db, at);
   const sightings = vehicle
     ? await db.getAllAsync<VehicleSighting>('SELECT vin, plate FROM vehicle_sightings WHERE vin = ? OR plate = ?', [
         normaliseIdentifier(vehicle.vin),
@@ -129,7 +132,11 @@ export async function loadGateState(
       { personName: row.person_name, vehicleDescription: row.vehicle_description, plate: row.plate, enteredAt: row.entered_at },
     ]),
   );
-  return { state: { openVisits: rows.map(toOpenVisit), vehicleHistory: sightings, registeredPeople: new Map() }, details };
+  return {
+    state: { openVisits: rows.map(toOpenVisit), vehicleHistory: sightings, registeredPeople: new Map(), hotlist: hotlist.entries },
+    details,
+    hotlistNotes: hotlist.notes,
+  };
 }
 
 /** One of a person's open visits, as the guard's screen shows it. */

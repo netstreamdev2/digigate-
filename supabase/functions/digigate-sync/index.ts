@@ -59,7 +59,14 @@ async function siteState(orgId: string, siteId: string, payload: unknown) {
         where d.org_id = ${orgId} and d.vin is not null and d.plate is not null
           and (regexp_replace(upper(d.vin), '[^A-Z0-9]', '', 'g') = ${vin} or regexp_replace(upper(d.plate), '[^A-Z0-9]', '', 'g') = ${plate})`
     : [];
-  return { openVisits, vehicleHistory: vehicleHistory.map((row) => ({ vin: row.vin, plate: row.plate })), registeredPeople: new Map() };
+  // The entries in force now, so a scan from a handheld that hadn't synced the newest ones is still caught.
+  const hotlist = await sql`select id, kind, match_key from digigate.hotlist_in_force(${orgId}, ${siteId})`;
+  return {
+    openVisits,
+    vehicleHistory: vehicleHistory.map((row) => ({ vin: row.vin, plate: row.plate })),
+    registeredPeople: new Map(),
+    hotlist: hotlist.map((row) => ({ id: row.id, kind: row.kind, key: row.match_key })),
+  };
 }
 
 /**

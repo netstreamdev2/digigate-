@@ -12,7 +12,7 @@ export type Kpi = {
 export function StatTile({ label, value, icon, detail, tone = "neutral" }: Kpi) {
   const toneClass = tone === "blocked" ? "bg-blocked-soft text-blocked" : tone === "warning" ? "bg-warning-soft text-warning" : "bg-tile-sky text-brand shadow-glow";
   return (
-    <div className="rounded-lg border border-border bg-surface p-5 shadow-card">
+    <div className="dg-glass p-5">
       <div className="flex items-center gap-3">
         <span
           className={`grid size-10 place-items-center rounded-pill ${toneClass}`}

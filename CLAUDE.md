@@ -218,7 +218,12 @@ An authorised co-driver was scanned in with the car, so leaving on foot raises n
 
 | Code | Fires when | Sev |
 |---|---|---|
+| `HOTLIST_MATCH` | The person (by person key), a plate seen (on the disc or read off the car) or the VIN is on the company's hotlist for this site | RED |
 | `UNFAMILIAR_VEHICLE` | A registered person arrives in a vehicle not on their known-vehicles list | INFO |
+
+`HOTLIST_MATCH` fires at entry and exit, in a car and on foot, and comes first among the hits. The guard sees the company's instruction for that entry, never the reason; the control room's check popup shows both. Entries are added on the dashboard's Hotlist page by admins, managers, the control room and super users, for every site of a company or one site, until taken off or until a date. An ID number becomes the same person key the handheld makes (`digigate.person_key_for`, an HMAC in plain SQL on the company's own key); only its last four digits are kept to show.
+
+**Expected visitors** aren't a rule: a booking made on the dashboard (by ID number, plate or both, for up to 31 days at one site) shows on the guard's result as "Expected" with its note, the entry event carries `expected_visitor_id`, and the server marks the booking arrived. No host is recorded.
 
 ### Guards
 
@@ -233,7 +238,7 @@ An authorised co-driver was scanned in with the car, so leaving on foot raises n
 - The device's SQLite database is the source of truth for the gate; Supabase is the source of truth for the organisation.
 - Every gate action writes an immutable event: UUIDv7 generated on the device, `device_id`, `guard_id`, device timestamp, payload. The server adds `received_at`.
 - **Up:** an outbox uploads events in order. Inserts are idempotent (`on conflict do nothing`), so retries are always safe.
-- **Down:** each device keeps everything it needs to run every rule offline: open visits across all gates, registered people with their known vehicles, users and PIN hashes, site config. Refreshed on an interval and on reconnect.
+- **Down:** each device keeps everything it needs to run every rule offline: open visits across all gates, registered people with their known vehicles, users and PIN hashes, site config, the hotlist entries in force for its site (`hotlist`) and the bookings for today and the next three days (`expectedVisitors`). Refreshed on an interval and on reconnect. An entry that runs out stops matching on the device at that moment, synced or not.
 - **Limits of offline:** a device only knows what it has synced, and two offline devices can't see each other. The server re-runs the rules over incoming events and raises alerts for anything a device missed. The dashboard marks these as server-detected.
 - **Shared visits (built):** `device_snapshot` sends the site's open visits (`openVisits`, this company's, newest 5,000) and the day's figures (`siteToday`). The gate keeps them in `site_visits` apart from its own `visits`: each sync writes a new generation and switches to it with one write, so a scan never reads half a sync. `closed_visits` hides what this device ended until the server stops listing it, and a visit this device opened is dropped once the server stops listing it, unless an event about it is still waiting to upload.
 - **Server re-check (built):** `digigate-sync` runs each new check through `recheck` from `packages/core` against every gate's open visits, before storing the batch, and raises what the handheld didn't as alerts with `source = 'server'`. A check it can't judge is still stored. The rules reach Deno as a bundle: run `pnpm functions:bundle` before deploying `digigate-sync`.
@@ -297,6 +302,7 @@ A decode failure prompts a rescan. Never guess fields.
 - Dashboard: Supabase Auth with MFA required for every role. PII is fetched server-side only.
 - Audit events are append-only. No update or delete grants for anyone. So the server splits each event on arrival: a permanent part with no identifiers (time, gate, device, rule codes) and a separate erasable part (names, ID details, plates, VINs, photo, person key). One logged function is the only thing allowed to delete from the erasable part.
 - Retention: day 0 to 365 everything is shown in full; year 1 to 3 it's kept but masked, with full values only through the super user or a site admin they grant, all logged; **3 years after a visit's exit it is permanently erased**, including the keyed person hash. There is no hold, even for an open police case. Staff lose old visits one at a time but keep their staff record. Anonymous counts survive for the KPI charts. After 3 years an empty search proves nothing, so the dashboard must say so.
+- **Erasure (built, migration 24):** `digigate.erase_due()` runs nightly at 01:30 SAST (pg_cron) and deletes what is past `erase_after`: check and visit details, ended shifts with their selfie, hotlist entries (3 years after they end) and bookings (3 years after their last day), and the free-text note on alerts about erased checks. The bare events and visits stay, with nothing that identifies anyone. Photo paths go onto `digigate.erasure_files` in the same transaction, and `digigate-erasure` removes them from Storage at 01:45, called by the schedule with a token kept in Vault; a file it can't remove stays queued for the next night. Each company's audit log gets one "Erasure" line a night, in counts only.
 - Demographics: sex and an age band (never an exact age) are read from the documents of scanned people only, so reports cover drivers and walk-ins. Passengers are a head count and guards never guess at them.
 - Schema changes live in `supabase/migrations/`, never made through the Supabase dashboard UI. Everything is in the `digigate` schema: nothing there is reachable unless a migration grants it.
 - Secrets live in env vars, EAS secrets and Vercel env. Never committed.
@@ -337,6 +343,9 @@ A decode failure prompts a rescan. Never guess fields.
   - make RED / AMBER / GREEN results unmistakable through colour **and** icon, sound and vibration, never colour alone;
   - put the result first on screen, with nothing animating in front of it;
   - keep manual entry one tap away.
+- Dashboard frame (built 2026-11-04): every signed-in page lives under `app/(app)/`, whose layout holds the sidebar, so it stays put between pages and only the page changes. Pages render `AppShell` (title, chips, actions) and a `PageSkeleton` while they load, never "Loading…".
+  - Motion lives in `components/motion.tsx` and `globals.css`: page changes run through view transitions (the sidebar's pill and the chosen tab slide, the title travels, a company's logo grows from its card into the company banner via `data-morph`), glass catches the pointer's light, company cards tilt. Reduced motion gets plain fades. Nothing animates in front of a live alert.
+  - A company's look: admins and super users add a logo and colour on its setup page. The browser redraws the logo as a small WebP or PNG (`lib/logo-image.ts`) into the public `company-logos` bucket; `lib/company-theme.ts` turns the colour into an accent darkened to pass WCAG AA and a wash for the glass. People who work for a company see it everywhere, with its logo in the sidebar; a super user sees it inside that company's pages, under a banner saying whose company they're working in.
 
 ## Roadmap
 
@@ -421,6 +430,7 @@ Run from the repo root unless noted.
 | Link the Supabase project (once) | From the repo root: `pnpm dlx supabase init` (creates `supabase/config.toml`, keeps the existing migrations), `pnpm dlx supabase login`, then `pnpm dlx supabase link --project-ref <ref>` |
 | Apply database migrations | Paste each new file from `supabase/migrations/`, in order, into the SQL Editor of the DigiGate project. `digigate.schema_version` shows what has run |
 | Deploy the device functions | `pnpm functions:bundle`, then `pnpm dlx supabase functions deploy digigate-pair digigate-sync --project-ref fgtuednylvrknqeyxizz --no-verify-jwt`. They have no user login: pairing proves itself with the code, sync with the device token |
+| Start the nightly erasure on a project (once) | Apply `20261104160000_digigate_erasure.sql`, then run `supabase/setup/erasure-schedule.sql` (with the project's own address in it) and deploy `digigate-erasure` with `--no-verify-jwt`. Both SQL steps write to Vault, so run them in your own terminal |
 | Set up a handheld before it ships | With it on USB and DigiGate installed, in `apps/gate`: `node scripts/provision-device.mjs` (set `ADB` to adb's path). Grants camera, location and notifications, so a guard can't refuse them to dodge the selfie or the geofence |
 | Standalone test build | `npx eas-cli@latest build --platform android --profile preview` in `apps/gate`. Runs with no PC, on the `preview` update channel |
 | Ship a code-only change over the air | `npx eas-cli@latest update --channel preview --environment preview --message "<what changed>"` in `apps/gate` (`production` for real sites). Handhelds check every 30 minutes and restart onto it only when nobody is signed in or the screen is locked (`src/lib/app-updates.ts`); the shift screen shows which version runs. The fingerprint runtime means an update reaches only builds with the same native code: a new native library, the Urovo SDK or kiosk mode still need a new build |

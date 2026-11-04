@@ -60,11 +60,23 @@ export type RegisteredPerson = {
   knownVins: readonly string[];
 };
 
+/**
+ * Someone or something a company wants stopped at its gates. `key` is a person key for a person, and the plate or VIN
+ * itself for a car, in any form: it's compared normalised.
+ */
+export type HotlistEntry = {
+  id: string;
+  kind: 'person' | 'plate' | 'vin';
+  key: string;
+};
+
 /** Everything the rules read. On a gate device this comes from the local database. */
 export type GateState = {
   openVisits: readonly OpenVisit[];
   vehicleHistory: readonly VehicleSighting[];
   registeredPeople: ReadonlyMap<PersonKey, RegisteredPerson>;
+  /** The company's hotlist entries for this site that are in force now. */
+  hotlist: readonly HotlistEntry[];
 };
 
 /** Per-site rule settings, from site config. */
@@ -110,6 +122,8 @@ export type RuleHit = {
   severity: Severity;
   /** The open visit that explains the hit, e.g. the other car this driver arrived in. */
   relatedVisitId?: string;
+  /** The hotlist entry behind a HOTLIST_MATCH. */
+  hotlistEntryId?: string;
 };
 
 export type Outcome = 'clear' | 'warning' | 'blocked';

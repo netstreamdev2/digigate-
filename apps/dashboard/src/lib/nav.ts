@@ -2,19 +2,25 @@ import type { NavItem } from "@/components/sidebar";
 
 import type { CurrentUser } from "./session";
 
-type AppPage = "control-room" | "devices" | "reports" | "audit" | "setup" | "people" | "admin";
+/** Who looks after the hotlist and books visitors in: the people running a company's sites day to day. */
+export const canWatchGates = (user: CurrentUser) => ["super_user", "admin", "manager", "control_room"].some((role) => user.roles.includes(role));
 
-/** The sidebar for the pages that run on real data. Setting things up is for administrators. */
-export function appNav(user: CurrentUser, active: AppPage): readonly NavItem[] {
-  const items: NavItem[] = [{ label: "Control room", icon: "on-site", href: "/control-room", active: active === "control-room" }];
-  if (user.roles.includes("super_user") || user.roles.includes("admin")) {
+const isAdministrator = (user: CurrentUser) => user.roles.includes("super_user") || user.roles.includes("admin");
+
+/** The sidebar for the signed-in dashboard. Setting things up is for administrators. */
+export function appNav(user: CurrentUser): readonly NavItem[] {
+  const items: NavItem[] = [{ label: "Control room", icon: "on-site", href: "/control-room" }];
+  if (canWatchGates(user)) {
+    items.push({ label: "Hotlist", icon: "watchlist", href: "/hotlist" }, { label: "Expected visitors", icon: "invite", href: "/expected" });
+  }
+  if (isAdministrator(user)) {
     items.push(
-      { label: "Devices", icon: "device", href: "/devices", active: active === "devices" },
-      { label: "Reports", icon: "reports", href: "/reports", active: active === "reports" },
-      { label: "Audit log", icon: "audit-log", href: "/audit", active: active === "audit" },
-      { label: "Companies", icon: "sites", href: "/setup", active: active === "setup" },
-      { label: "People", icon: "people", href: "/people", active: active === "people" },
-      { label: "Admin", icon: "settings", href: "/admin", active: active === "admin" },
+      { label: "Devices", icon: "device", href: "/devices" },
+      { label: "Reports", icon: "reports", href: "/reports" },
+      { label: "Audit log", icon: "audit-log", href: "/audit" },
+      { label: "Companies", icon: "sites", href: "/setup" },
+      { label: "People", icon: "people", href: "/people" },
+      { label: "Admin", icon: "settings", href: "/admin" },
     );
   }
   return items;

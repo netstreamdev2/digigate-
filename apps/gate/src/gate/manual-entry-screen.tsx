@@ -200,6 +200,8 @@ function ManualEntry({ guard }: { guard: GateUser }) {
             outcome={checked.outcome}
             hits={checked.hits}
             related={checked.related}
+            hotlistNotes={checked.hotlistNotes}
+            expected={checked.expected}
             settled={settled}
             clearMessage={RESULT_COPY[movement].clear}
             letThroughMessage={RESULT_COPY[movement].through}

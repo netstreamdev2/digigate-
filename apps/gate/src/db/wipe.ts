@@ -24,6 +24,8 @@ export async function wipeRevokedDevice(db: SQLiteDatabase): Promise<void> {
     await db.runAsync('DELETE FROM licence_photos');
     await db.runAsync('DELETE FROM site_visits');
     await db.runAsync('DELETE FROM closed_visits');
+    await db.runAsync('DELETE FROM hotlist');
+    await db.runAsync('DELETE FROM expected_visitors');
     await removeValue(db, SITE_POSTS_KEY);
     await removeValue(db, SITE_DETAILS_KEY);
     await removeValue(db, SITE_TODAY_KEY);

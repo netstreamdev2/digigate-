@@ -13,7 +13,6 @@ import {
   type LicenceDisc,
   type Outcome,
   type ParsedLicenceDisc,
-  type RuleHit,
 } from '@digigate/core';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
@@ -22,7 +21,7 @@ import { newEventId } from '@/lib/ids';
 import { personKeyFor } from '@/lib/person-key';
 import { siteConfig } from '@/site/site-config';
 
-import type { GateCheck } from './decision';
+import { bookingFor, hitsPayload, notesFor, type GateCheck } from './decision';
 import { demographicsPayload } from './demographics';
 import { typedPersonPayload, type TypedPerson } from './typed-identity';
 
@@ -119,10 +118,6 @@ export function typedSubject(car: TypedCar, driver: TypedPerson, reason: string)
   };
 }
 
-function hitsPayload(hits: readonly RuleHit[]) {
-  return hits.map((ruleHit) => ({ code: ruleHit.code, severity: ruleHit.severity, related_visit_id: ruleHit.relatedVisitId ?? null }));
-}
-
 /**
  * Runs the rules for a vehicle at the entry or exit and writes the result before it is shown. A clear entry opens
  * its visit and a clear exit closes it in the same transaction; anything else waits for the guard's decision.
@@ -132,7 +127,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
   const at = Date.now();
   const personKey = await personKeyFor(subject.idType, subject.idNumber);
   const { vehicle } = subject;
-  const { state, details } = await loadGateState(db, vehicle);
+  const { state, details, hotlistNotes } = await loadGateState(db, vehicle, at);
   const driver = subject.licenceExpiresOn ? { personKey, licenceExpiresOn: subject.licenceExpiresOn } : { personKey };
 
   const hits =
@@ -171,6 +166,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
         }
       : null;
   const visitId = pendingVisit?.id ?? openVisit?.id ?? null;
+  const expected = direction === 'entry' ? await bookingFor(db, at, personKey, [vehicle.plate, input.typedPlate]) : null;
 
   const event: GateEvent = {
     id: newEventId(at),
@@ -187,6 +183,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
       occupants: input.occupants,
       exit_checks: input.direction === 'exit' ? { ignition_restart: input.ignitionRestart, boot_check: input.bootCheck } : null,
       visit_type: direction === 'entry' ? input.visitType : (openVisit?.visitType ?? null),
+      expected_visitor_id: expected?.id ?? null,
     },
   };
 
@@ -203,5 +200,5 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
     if (own) related.set(openVisit.id, own);
   }
 
-  return { direction, event, hits, outcome, visitId, pendingVisit, related };
+  return { direction, event, hits, outcome, visitId, pendingVisit, related, hotlistNotes: notesFor(hits, hotlistNotes), expected };
 }

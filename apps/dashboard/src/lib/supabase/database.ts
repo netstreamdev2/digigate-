@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -461,6 +461,90 @@ export type Database = {
           },
         ]
       }
+      expected_visitors: {
+        Row: {
+          arrived_at: string | null
+          arrived_event: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          erase_after: string
+          id: string
+          id_last_four: string | null
+          note: string | null
+          org_id: string
+          person_key: string | null
+          plate: string | null
+          plate_key: string | null
+          site_id: string
+          valid_from: string
+          valid_until: string
+          visit_type: string | null
+          visitor_name: string
+        }
+        Insert: {
+          arrived_at?: string | null
+          arrived_event?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          erase_after: string
+          id?: string
+          id_last_four?: string | null
+          note?: string | null
+          org_id: string
+          person_key?: string | null
+          plate?: string | null
+          plate_key?: string | null
+          site_id: string
+          valid_from: string
+          valid_until: string
+          visit_type?: string | null
+          visitor_name: string
+        }
+        Update: {
+          arrived_at?: string | null
+          arrived_event?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          erase_after?: string
+          id?: string
+          id_last_four?: string | null
+          note?: string | null
+          org_id?: string
+          person_key?: string | null
+          plate?: string | null
+          plate_key?: string | null
+          site_id?: string
+          valid_from?: string
+          valid_until?: string
+          visit_type?: string | null
+          visitor_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expected_visitors_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expected_visitors_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gate_user_records: {
         Row: {
           gate_user_id: string
@@ -590,25 +674,103 @@ export type Database = {
           },
         ]
       }
+      hotlist: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          erase_after: string | null
+          expires_at: string | null
+          guard_note: string
+          id: string
+          id_last_four: string | null
+          kind: string
+          label: string
+          match_key: string
+          org_id: string
+          reason: string
+          removed_at: string | null
+          removed_by: string | null
+          site_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          erase_after?: string | null
+          expires_at?: string | null
+          guard_note: string
+          id?: string
+          id_last_four?: string | null
+          kind: string
+          label: string
+          match_key: string
+          org_id: string
+          reason: string
+          removed_at?: string | null
+          removed_by?: string | null
+          site_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          erase_after?: string | null
+          expires_at?: string | null
+          guard_note?: string
+          id?: string
+          id_last_four?: string | null
+          kind?: string
+          label?: string
+          match_key?: string
+          org_id?: string
+          reason?: string
+          removed_at?: string | null
+          removed_by?: string | null
+          site_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotlist_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hotlist_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organisations: {
         Row: {
+          brand_color: string | null
           created_at: string
           id: string
           is_active: boolean
+          logo_path: string | null
           name: string
           slug: string
         }
         Insert: {
+          brand_color?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
+          logo_path?: string | null
           name: string
           slug: string
         }
         Update: {
+          brand_color?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
+          logo_path?: string | null
           name?: string
           slug?: string
         }
@@ -1268,6 +1430,33 @@ export type Database = {
     }
     Functions: {
       add_counts: { Args: { _a: Json; _b: Json }; Returns: Json }
+      add_expected_visitor: {
+        Args: {
+          _from: string
+          _id_number: string
+          _name: string
+          _note: string
+          _org: string
+          _plate: string
+          _site: string
+          _until: string
+          _visit_type: string
+        }
+        Returns: string
+      }
+      add_hotlist_entry: {
+        Args: {
+          _expires_at?: string
+          _guard_note: string
+          _kind: string
+          _label: string
+          _org: string
+          _reason: string
+          _site?: string
+          _value: string
+        }
+        Returns: string
+      }
       admin_org: { Args: never; Returns: string }
       apply_passage: {
         Args: {
@@ -1308,6 +1497,8 @@ export type Database = {
         }[]
       }
       can_manage_org: { Args: { _org: string }; Returns: boolean }
+      can_watch_org: { Args: { _org: string }; Returns: boolean }
+      cancel_expected_visitor: { Args: { _id: string }; Returns: undefined }
       check_detail: { Args: { _event: string }; Returns: Json }
       claim_pairing_code: {
         Args: {
@@ -1335,11 +1526,15 @@ export type Database = {
       company_board: {
         Args: { _limit: number; _offset: number; _search: string }
         Returns: {
+          brand_color: string
           clients: number
           gate_staff: number
           id: string
           is_active: boolean
+          logo_path: string
           name: string
+          on_site: number
+          open_alerts: number
           sites: number
           total: number
         }[]
@@ -1485,6 +1680,16 @@ export type Database = {
           total: number
         }[]
       }
+      hmac_sha256: { Args: { _key: string; _message: string }; Returns: string }
+      hotlist_in_force: {
+        Args: { _org: string; _site: string }
+        Returns: {
+          guard_note: string
+          id: string
+          kind: string
+          match_key: string
+        }[]
+      }
       in_org: { Args: { _org: string }; Returns: boolean }
       ingest_events: {
         Args: { _device_id: string; _events: Json }
@@ -1500,6 +1705,7 @@ export type Database = {
           site_id: string
         }[]
       }
+      logo_company: { Args: { _name: string }; Returns: string }
       mask: { Args: { _value: string }; Returns: string }
       mfa_passed: { Args: never; Returns: boolean }
       next_report_run: {
@@ -1507,6 +1713,7 @@ export type Database = {
         Returns: string
       }
       note_sign_in: { Args: never; Returns: undefined }
+      org_person_key: { Args: { _org: string }; Returns: string }
       people_board: {
         Args: {
           _limit: number
@@ -1538,6 +1745,11 @@ export type Database = {
           role: string
         }[]
       }
+      person_key_for: {
+        Args: { _id_number: string; _org: string }
+        Returns: string
+      }
+      plate_key: { Args: { _value: string }; Returns: string }
       post_code_for: {
         Args: { _label: string; _site: string }
         Returns: string
@@ -1546,6 +1758,7 @@ export type Database = {
         Args: { _device: string; _health: Json }
         Returns: undefined
       }
+      remove_hotlist_entry: { Args: { _id: string }; Returns: undefined }
       report_board: {
         Args: { _day: string; _limit: number; _offset: number; _search: string }
         Returns: {
@@ -1598,6 +1811,10 @@ export type Database = {
           _org: string
         }
         Returns: Json
+      }
+      set_company_brand: {
+        Args: { _color: string; _logo_path: string; _org: string }
+        Returns: undefined
       }
       site_board: {
         Args: { _limit: number; _offset: number; _search: string }

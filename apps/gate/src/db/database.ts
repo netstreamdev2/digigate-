@@ -122,6 +122,27 @@ const MIGRATIONS: readonly string[] = [
     bmp_base64 TEXT NOT NULL
   );
   `,
+  // The company's hotlist and the visitors booked in, from the server, so both work offline. Each sync replaces them
+  // whole. match_key and person_key are keyed hashes or normalised plates and VINs, never ID numbers.
+  `
+  CREATE TABLE hotlist (
+    id TEXT PRIMARY KEY NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('person', 'plate', 'vin')),
+    match_key TEXT NOT NULL,
+    guard_note TEXT NOT NULL,
+    expires_at INTEGER
+  );
+  CREATE TABLE expected_visitors (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    person_key TEXT,
+    plate TEXT,
+    visit_type TEXT,
+    note TEXT,
+    valid_from INTEGER NOT NULL,
+    valid_until INTEGER NOT NULL
+  );
+  `,
 ];
 
 export type LocalDatabase = {

@@ -9,6 +9,7 @@ import { pendingSelfie, removeSelfie } from '@/db/shifts';
 import { saveSyncedPosts, saveSyncedSite } from '@/db/site-posts';
 import { isSiteToday, saveSiteToday } from '@/db/site-today';
 import { saveSiteVisits, type SiteVisit } from '@/db/visits';
+import { saveBookings, saveHotlist, type SyncedBooking, type SyncedHotlistEntry } from '@/db/watch-lists';
 import { wipeRevokedDevice } from '@/db/wipe';
 import { isSyncedPost, syncedSiteOf, type SyncedPost } from '@/site/site-config';
 
@@ -78,6 +79,28 @@ function toSiteVisit(value: unknown): SiteVisit | null {
     discExpiresOn: textOrNull(value.discExpiresOn),
     vehicleDescription: textOrNull(value.vehicleDescription),
   };
+}
+
+const isHotlistKind = (value: unknown): value is SyncedHotlistEntry['kind'] => value === 'person' || value === 'plate' || value === 'vin';
+
+/** A hotlist entry from the server, checked like the rest: a bad row is dropped, never the reason to lose them all. */
+function toHotlistEntry(value: unknown): SyncedHotlistEntry | null {
+  if (!isRecord(value)) return null;
+  const { id, kind, key, guardNote, expiresAt } = value;
+  if (typeof id !== 'string' || !isHotlistKind(kind) || typeof key !== 'string' || key === '' || typeof guardNote !== 'string') {
+    return null;
+  }
+  return { id, kind, key, guardNote, expiresAt: typeof expiresAt === 'number' ? expiresAt : null };
+}
+
+function toBooking(value: unknown): SyncedBooking | null {
+  if (!isRecord(value)) return null;
+  const { id, name, from, until } = value;
+  if (typeof id !== 'string' || typeof name !== 'string' || typeof from !== 'number' || typeof until !== 'number') return null;
+  const personKey = textOrNull(value.personKey);
+  const plate = textOrNull(value.plate);
+  if (personKey === null && plate === null) return null;
+  return { id, name, personKey, plate, visitType: textOrNull(value.visitType), note: textOrNull(value.note), from, until };
 }
 
 function acceptedIds(body: unknown): string[] {
@@ -162,6 +185,19 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
     await saveSiteVisits(db, body.openVisits.flatMap((row) => {
       const visit = toSiteVisit(row);
       return visit ? [visit] : [];
+    }));
+  }
+  // An older server sends neither list; then the device keeps what it had.
+  if (Array.isArray(body.hotlist)) {
+    await saveHotlist(db, body.hotlist.flatMap((row) => {
+      const entry = toHotlistEntry(row);
+      return entry ? [entry] : [];
+    }));
+  }
+  if (Array.isArray(body.expectedVisitors)) {
+    await saveBookings(db, body.expectedVisitors.flatMap((row) => {
+      const booking = toBooking(row);
+      return booking ? [booking] : [];
     }));
   }
   if (isSiteToday(body.siteToday)) await saveSiteToday(db, body.siteToday, Date.now());

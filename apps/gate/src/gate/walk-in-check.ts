@@ -15,7 +15,7 @@ import { newEventId } from '@/lib/ids';
 import { personKeyFor } from '@/lib/person-key';
 import { siteConfig } from '@/site/site-config';
 
-import type { Direction, GateCheck } from './decision';
+import { bookingFor, hitsPayload, notesFor, type Direction, type GateCheck } from './decision';
 import { demographicsPayload } from './demographics';
 import { personIdOf } from './person-id';
 import { typedPersonPayload } from './typed-identity';
@@ -77,7 +77,7 @@ export async function checkPerson(
   const at = Date.now();
   const identity = personIdOf(input.person);
   const personKey = await personKeyFor(identity.idType, identity.idNumber);
-  const { state, details } = await loadGateState(db, null);
+  const { state, details, hotlistNotes } = await loadGateState(db, null, at);
 
   const scan = { at, personKey };
   const hits =
@@ -91,6 +91,7 @@ export async function checkPerson(
       ? { id: newEventId(at), kind: 'pedestrian', personKey, visitType: input.visitType, enteredAt: at, personName: identity.name }
       : null;
   const visitId = pendingVisit?.id ?? openVisit?.id ?? null;
+  const expected = direction === 'entry' ? await bookingFor(db, at, personKey, []) : null;
 
   const event: GateEvent = {
     id: newEventId(at),
@@ -100,9 +101,10 @@ export async function checkPerson(
     payload: {
       visit_id: visitId,
       outcome,
-      hits: hits.map((ruleHit) => ({ code: ruleHit.code, severity: ruleHit.severity, related_visit_id: ruleHit.relatedVisitId ?? null })),
+      hits: hitsPayload(hits),
       person: personPayload(input.person, personKey, at),
       visit_type: direction === 'entry' ? input.visitType : (openVisit?.visitType ?? null),
+      expected_visitor_id: expected?.id ?? null,
     },
   };
 
@@ -114,5 +116,5 @@ export async function checkPerson(
     const visitDetails = ruleHit.relatedVisitId ? details.get(ruleHit.relatedVisitId) : undefined;
     if (ruleHit.relatedVisitId && visitDetails) related.set(ruleHit.relatedVisitId, visitDetails);
   }
-  return { direction, event, hits, outcome, visitId, pendingVisit, related };
+  return { direction, event, hits, outcome, visitId, pendingVisit, related, hotlistNotes: notesFor(hits, hotlistNotes), expected };
 }

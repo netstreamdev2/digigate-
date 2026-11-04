@@ -53,6 +53,7 @@ export type ReportData = {
 export type ReportBucket = { label: string; detail: string; value: number };
 
 export const RULE_TITLES: Readonly<Record<string, string>> = {
+  HOTLIST_MATCH: 'On the hotlist',
   DRIVER_VEHICLE_MISMATCH: 'Vehicle swap',
   WALKED_IN_DRIVING_OUT: 'Walked in, driving out',
   UNKNOWN_DRIVER: 'Unknown driver',

@@ -2,6 +2,7 @@ export { ageBand, type AgeBand } from './demographics';
 export * from './geofence';
 export * from './guard-record';
 export * from './shift-periods';
+export * from './site-types';
 export { decodeDocument, type DecodedDocument } from './documents/decode';
 export {
   decodeDriverLicence,
@@ -18,6 +19,8 @@ export { factsFromSaIdNumber, type SaIdNumberFacts } from './documents/id-number
 export { parseSmartId, type SmartIdCard, type SmartIdResult } from './documents/smart-id';
 export { checkSmartId, smartIdPassesChecks, type SmartIdChecks } from './documents/smart-id-checks';
 export type { GateEvent, GateEventPayload, GateEventType, JsonValue } from './events';
+export { expectedVisitorFor, type ExpectedVisitor } from './expected-visitors';
+export { hotlistEntryFor, hotlistHit, type HotlistSubject } from './rules/hotlist';
 export { isExpired } from './rules/dates';
 export { normaliseIdentifier } from './identifiers';
 export { sameVehicle, sameVin, vehicleVisits } from './rules/vehicles';
@@ -33,6 +36,7 @@ export type {
   Driver,
   EpochMs,
   GateState,
+  HotlistEntry,
   IgnitionRestart,
   IsoDate,
   LicenceDisc,
