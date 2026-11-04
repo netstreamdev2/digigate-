@@ -361,6 +361,7 @@ export type Database = {
           erase_after: string | null
           event_id: string
           gate_user_id: string | null
+          licence_photo_path: string | null
           org_id: string
           payload: Json
           site_id: string
@@ -370,6 +371,7 @@ export type Database = {
           erase_after?: string | null
           event_id: string
           gate_user_id?: string | null
+          licence_photo_path?: string | null
           org_id: string
           payload: Json
           site_id: string
@@ -379,6 +381,7 @@ export type Database = {
           erase_after?: string | null
           event_id?: string
           gate_user_id?: string | null
+          licence_photo_path?: string | null
           org_id?: string
           payload?: Json
           site_id?: string
@@ -454,6 +457,85 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gate_user_records: {
+        Row: {
+          gate_user_id: string
+          home_address: string | null
+          id_number_cipher: string | null
+          id_number_hmac: string | null
+          id_number_last4: string | null
+          id_type: string | null
+          next_of_kin_name: string | null
+          next_of_kin_phone: string | null
+          next_of_kin_relationship: string | null
+          org_id: string
+          phone: string | null
+          photo_path: string | null
+          psira_grade: string | null
+          psira_number: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          gate_user_id: string
+          home_address?: string | null
+          id_number_cipher?: string | null
+          id_number_hmac?: string | null
+          id_number_last4?: string | null
+          id_type?: string | null
+          next_of_kin_name?: string | null
+          next_of_kin_phone?: string | null
+          next_of_kin_relationship?: string | null
+          org_id: string
+          phone?: string | null
+          photo_path?: string | null
+          psira_grade?: string | null
+          psira_number?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          gate_user_id?: string
+          home_address?: string | null
+          id_number_cipher?: string | null
+          id_number_hmac?: string | null
+          id_number_last4?: string | null
+          id_type?: string | null
+          next_of_kin_name?: string | null
+          next_of_kin_phone?: string | null
+          next_of_kin_relationship?: string | null
+          org_id?: string
+          phone?: string | null
+          photo_path?: string | null
+          psira_grade?: string | null
+          psira_number?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gate_user_records_gate_user_id_fkey"
+            columns: ["gate_user_id"]
+            isOneToOne: true
+            referencedRelation: "gate_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gate_user_records_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gate_user_records_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -596,40 +678,55 @@ export type Database = {
       }
       posts: {
         Row: {
+          anpr: boolean
+          booms: string[]
+          cctv_cameras: number
           code: string
           created_at: string
+          gate_type: string
           id: string
           is_active: boolean
           label: string
           lanes: string[]
           latitude: number | null
           longitude: number | null
+          manned: boolean
           org_id: string
           radius_m: number
           site_id: string
         }
         Insert: {
+          anpr?: boolean
+          booms?: string[]
+          cctv_cameras?: number
           code: string
           created_at?: string
+          gate_type?: string
           id?: string
           is_active?: boolean
           label: string
           lanes: string[]
           latitude?: number | null
           longitude?: number | null
+          manned?: boolean
           org_id: string
           radius_m?: number
           site_id: string
         }
         Update: {
+          anpr?: boolean
+          booms?: string[]
+          cctv_cameras?: number
           code?: string
           created_at?: string
+          gate_type?: string
           id?: string
           is_active?: boolean
           label?: string
           lanes?: string[]
           latitude?: number | null
           longitude?: number | null
+          manned?: boolean
           org_id?: string
           radius_m?: number
           site_id?: string
@@ -929,35 +1026,59 @@ export type Database = {
       }
       sites: {
         Row: {
+          address: string | null
           client_id: string
+          code: string | null
           created_at: string
           id: string
           is_active: boolean
+          latitude: number | null
+          longitude: number | null
           name: string
+          open_parking: boolean
           org_id: string
           overrides: Json
+          parking_spaces: number | null
+          radius_m: number | null
+          shift_periods: Json
           site_type: string
           updated_at: string
         }
         Insert: {
+          address?: string | null
           client_id: string
+          code?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
+          latitude?: number | null
+          longitude?: number | null
           name: string
+          open_parking?: boolean
           org_id: string
           overrides?: Json
+          parking_spaces?: number | null
+          radius_m?: number | null
+          shift_periods?: Json
           site_type: string
           updated_at?: string
         }
         Update: {
+          address?: string | null
           client_id?: string
+          code?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
+          latitude?: number | null
+          longitude?: number | null
           name?: string
+          open_parking?: boolean
           org_id?: string
           overrides?: Json
+          parking_spaces?: number | null
+          radius_m?: number | null
+          shift_periods?: Json
           site_type?: string
           updated_at?: string
         }
@@ -1159,6 +1280,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      attach_licence_photo: {
+        Args: { _device: string; _event: string; _path: string }
+        Returns: boolean
+      }
       attach_selfie: {
         Args: { _device: string; _path: string; _shift: string }
         Returns: undefined
@@ -1183,6 +1308,7 @@ export type Database = {
         }[]
       }
       can_manage_org: { Args: { _org: string }; Returns: boolean }
+      check_detail: { Args: { _event: string }; Returns: Json }
       claim_pairing_code: {
         Args: {
           _code_hash: string
@@ -1217,6 +1343,15 @@ export type Database = {
           sites: number
           total: number
         }[]
+      }
+      create_site: {
+        Args: {
+          _access_points: Json
+          _client?: string
+          _org: string
+          _site: Json
+        }
+        Returns: string
       }
       device_board: {
         Args: {
@@ -1325,12 +1460,46 @@ export type Database = {
           role: string
         }[]
       }
+      guard_board: {
+        Args: {
+          _limit: number
+          _offset: number
+          _org: string
+          _search: string
+          _status: string
+        }
+        Returns: {
+          employee_number: string
+          first_name: string
+          has_address: boolean
+          has_id: boolean
+          has_next_of_kin: boolean
+          has_photo: boolean
+          has_psira: boolean
+          id: string
+          is_active: boolean
+          last_name: string
+          psira_grade: string
+          role: string
+          sites: string
+          total: number
+        }[]
+      }
       in_org: { Args: { _org: string }; Returns: boolean }
       ingest_events: {
         Args: { _device_id: string; _events: Json }
         Returns: string[]
       }
       is_super_user: { Args: never; Returns: boolean }
+      licence_photo_for: {
+        Args: { _event: string }
+        Returns: {
+          org_id: string
+          path: string
+          person: string
+          site_id: string
+        }[]
+      }
       mask: { Args: { _value: string }; Returns: string }
       mfa_passed: { Args: never; Returns: boolean }
       next_report_run: {
@@ -1368,6 +1537,10 @@ export type Database = {
           people: number
           role: string
         }[]
+      }
+      post_code_for: {
+        Args: { _label: string; _site: string }
+        Returns: string
       }
       record_device_health: {
         Args: { _device: string; _health: Json }
@@ -1466,6 +1639,7 @@ export type Database = {
         Args: { _client: string; _new_org: string }
         Returns: undefined
       }
+      valid_shift_periods: { Args: { _periods: Json }; Returns: boolean }
       viewer_client: { Args: never; Returns: string }
       viewer_org: { Args: never; Returns: string }
       visible_site_ids: { Args: never; Returns: string[] }

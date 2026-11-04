@@ -114,6 +114,14 @@ const MIGRATIONS: readonly string[] = [
     closed_at INTEGER NOT NULL
   );
   `,
+  // The photo from a driver's licence waits here, encrypted with the rest, until the server has it, tied to its check.
+  `
+  CREATE TABLE licence_photos (
+    event_id TEXT PRIMARY KEY NOT NULL,
+    taken_at INTEGER NOT NULL,
+    bmp_base64 TEXT NOT NULL
+  );
+  `,
 ];
 
 export type LocalDatabase = {

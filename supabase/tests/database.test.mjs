@@ -46,7 +46,7 @@ async function as(role, profile, aal, sql, params = []) {
 const service = (sql, params) => as('service_role', '', '', sql, params);
 
 const u = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-const ORG_A = u(1), ORG_B = u(2), SITE_A = u(3), SITE_A2 = u(4), SITE_B = u(5), CLIENT_A = u(6), CLIENT_B = u(7);
+const ORG_A = u(1), ORG_B = u(2), SITE_A = u(3), SITE_A2 = u(4), SITE_B = u(5), CLIENT_A = u(6), CLIENT_B = u(7), CLIENT_A2 = u(8), CLIENT_SPARE = u(9);
 const SUPER = u(10), ADMIN_A = u(11), ROOM_A = u(12), SUP_A2 = u(13), ADMIN_B = u(14), OFF = u(15), NOBODY = u(16);
 const GUARD = u(20), SUPERVISOR = u(21), ELSEWHERE = u(22), GONE = u(23);
 const PIN = `'{"algorithm":"pbkdf2-sha256","iterations":20000,"salt":"a","hash":"b"}'`;
@@ -54,9 +54,9 @@ const PIN = `'{"algorithm":"pbkdf2-sha256","iterations":20000,"salt":"a","hash":
 await db.exec(`
   insert into auth.users (id) values ('${SUPER}'), ('${ADMIN_A}'), ('${ROOM_A}'), ('${SUP_A2}'), ('${ADMIN_B}'), ('${OFF}'), ('${NOBODY}');
   insert into digigate.organisations (id, name, slug) values ('${ORG_A}','A','a'), ('${ORG_B}','B','b');
-  insert into digigate.clients (id, org_id, name) values ('${CLIENT_A}','${ORG_A}','Hospital A'), ('${CLIENT_B}','${ORG_B}','Estate B');
+  insert into digigate.clients (id, org_id, name) values ('${CLIENT_A}','${ORG_A}','Hospital A'), ('${CLIENT_A2}','${ORG_A}','Hospital A2'), ('${CLIENT_SPARE}','${ORG_A}','Not set up'), ('${CLIENT_B}','${ORG_B}','B1');
   insert into digigate.sites (id, org_id, client_id, name, site_type) values
-    ('${SITE_A}','${ORG_A}','${CLIENT_A}','A1','hospital'), ('${SITE_A2}','${ORG_A}','${CLIENT_A}','A2','hospital'), ('${SITE_B}','${ORG_B}','${CLIENT_B}','B1','estate');
+    ('${SITE_A}','${ORG_A}','${CLIENT_A}','A1','hospital'), ('${SITE_A2}','${ORG_A}','${CLIENT_A2}','A2','hospital'), ('${SITE_B}','${ORG_B}','${CLIENT_B}','B1','estate');
   insert into digigate.profiles (id, org_id, full_name, login, roles, site_ids, is_active) values
     ('${SUPER}', null, 'Super', 'super', '{super_user}', '{}', true),
     ('${ADMIN_A}', '${ORG_A}', 'Admin A', 'admin-a', '{admin}', '{}', true),
@@ -85,13 +85,13 @@ check('admin adds a client', !(await as('authenticated', ADMIN_A, 'aal2', `inser
 check('a new client starts an engagement', (await count(`digigate.engagements e join digigate.clients c on c.id = e.client_id where c.name = 'Second client' and e.ended_at is null`)) === 1);
 check('admin of another organisation cannot add one', (await as('authenticated', ADMIN_B, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}','Sneaky')`)).error);
 // The dashboard reads a new row straight back, which row security has to allow at the moment it's created.
-check('admin adds a site and reads it back', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_A}','New','hospital') returning id`)).rows.length === 1);
-check('super user adds a site and reads it back', (await as('authenticated', SUPER, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_A}','New by super','hospital') returning id`)).rows.length === 1);
+check('admin adds a site and reads it back', (await as('authenticated', ADMIN_A, 'aal2', `with c as (insert into digigate.clients (org_id, name) values ('${ORG_A}','New') returning id) insert into digigate.sites (org_id, client_id, name, site_type) select '${ORG_A}', id, 'New', 'hospital' from c returning id`)).rows.length === 1);
+check('super user adds a site and reads it back', (await as('authenticated', SUPER, 'aal2', `with c as (insert into digigate.clients (org_id, name) values ('${ORG_A}','New by super') returning id) insert into digigate.sites (org_id, client_id, name, site_type) select '${ORG_A}', id, 'New by super', 'hospital' from c returning id`)).rows.length === 1);
 check('admin adds a client and reads it back', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}','Read back') returning id`)).rows.length === 1);
 check('super user adds a company and reads it back', (await as('authenticated', SUPER, 'aal2', `insert into digigate.organisations (name, slug) values ('Read back','read-back') returning id`)).rows.length === 1);
 check('a site cannot go under another company\'s client', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_B}','Wrong','hospital')`)).error);
-check('admin of another organisation cannot add a site', (await as('authenticated', ADMIN_B, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_A}','New2','hospital')`)).error);
-check('deactivated admin cannot', (await as('authenticated', OFF, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_A}','New3','hospital')`)).error);
+check('admin of another organisation cannot add a site', (await as('authenticated', ADMIN_B, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_SPARE}','New2','hospital')`)).error);
+check('deactivated admin cannot', (await as('authenticated', OFF, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_SPARE}','New3','hospital')`)).error);
 check('admin adds a post', !(await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_A}','main','Main','{vehicle,pedestrian}')`)).error);
 check('a post cannot point at another organisation', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_B}','x','X','{vehicle}')`)).error);
 check('control room cannot change posts', (await as('authenticated', ROOM_A, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_A}','y','Y','{vehicle}')`)).error);
@@ -434,8 +434,8 @@ check('the send history cannot be written from the dashboard', (await as('authen
 
 // The audit log.
 const auditFor = (where) => one(`select * from digigate.audit_log where ${where} order by at desc limit 1`);
-await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}', 'Audited Client')`);
-const added = await auditFor(`action = 'client.added' and target = 'Audited Client'`);
+await as('authenticated', ADMIN_A, 'aal2', `with c as (insert into digigate.clients (org_id, name) values ('${ORG_A}', 'Audited Site') returning id) insert into digigate.sites (org_id, client_id, name, site_type) select '${ORG_A}', id, 'Audited Site', 'hospital' from c`);
+const added = await auditFor(`action = 'site.added' and target = 'Audited Site'`);
 check('a dashboard change is logged with who did it', added?.actor_id === ADMIN_A && added.category === 'setup' && added.org_id === ORG_A);
 check('the audit names them', added?.actor_name?.length > 0);
 const seenBefore = await count(`digigate.audit_log where device_id = '${DEVICE}'`);
@@ -647,6 +647,131 @@ check('a visit that has ended leaves the list', !(await service('select digigate
 check('a revoked device gets no visits', (await service('select digigate.device_snapshot($1) as s', [u(999)])).rows[0].s.openVisits.length === 0);
 // The visit at the other site was only there to prove it stays out; the later company-change checks count visits.
 await db.exec(`delete from digigate.visit_details where visit_id = '${OTHER_SITE_VISIT}'; delete from digigate.visits where id = '${OTHER_SITE_VISIT}';`);
+
+// A site and its access points, created together by the site wizard.
+const newSite = (profile, site, points, org = ORG_A, client = null) =>
+  as('authenticated', profile, 'aal2', 'select digigate.create_site($1, $2::jsonb, $3::jsonb, $4) as id', [org, JSON.stringify(site), JSON.stringify(points), client]);
+const wizardSite = { name: 'Riverside Wing', siteType: 'hospital', code: 'RVW', address: '12 Riverside Road, Durban', latitude: -29.85, longitude: 31.02, radiusM: 400, openParking: false, parkingSpaces: 120 };
+const wizardPoints = [
+  { label: 'Main Gate', gateType: 'main', lanes: ['vehicle'], booms: ['automatic', 'automatic', 'manual', 'automatic'], manned: true, cctvCameras: 4, anpr: true, latitude: -29.851, longitude: 31.021, radiusM: 50 },
+  { label: 'Main Gate', gateType: 'pedestrian', lanes: ['pedestrian'], booms: [], manned: false, cctvCameras: 0, anpr: false },
+];
+const created = await newSite(ADMIN_A, wizardSite, wizardPoints);
+const createdId = created.rows[0]?.id;
+check('an admin creates a site with its access points in one go', Boolean(createdId) && !created.error);
+const createdRow = await one('select * from digigate.sites where id = $1', [createdId]);
+check('the site keeps its code, address, geofence and parking', createdRow.code === 'RVW' && createdRow.address === '12 Riverside Road, Durban' && createdRow.radius_m === 400 && createdRow.open_parking === false && createdRow.parking_spaces === 120);
+const createdPoints = (await db.query('select * from digigate.posts where site_id = $1 order by created_at, code', [createdId])).rows;
+check('every access point is there, with its booms, cameras and staffing', createdPoints.length === 2 && createdPoints[0].booms.length === 4 && createdPoints[0].booms.filter((boom) => boom === 'manual').length === 1 && createdPoints[0].anpr === true && createdPoints[1].manned === false);
+check('two access points with one name still get their own codes', new Set(createdPoints.map((point) => point.code)).size === 2 && createdPoints.some((point) => point.code === 'main-gate-2'));
+check('the site comes with a client of the same name', (await one('select c.name from digigate.clients c where c.id = $1', [createdRow.client_id])).name === 'Riverside Wing');
+check('which is logged once, as the site', (await count(`digigate.audit_log where target = 'Riverside Wing'`)) === 1);
+check('a client has one site only', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${createdRow.client_id}','Second','hospital')`)).error);
+await as('authenticated', ADMIN_A, 'aal2', `update digigate.sites set name = 'Riverside Hospital' where id = '${createdId}'`);
+check('renaming the site renames its client', (await one('select name from digigate.clients where id = $1', [createdRow.client_id])).name === 'Riverside Hospital');
+check('a pedestrian gate has no booms', createdPoints.find((point) => point.gate_type === 'pedestrian').booms.length === 0);
+
+const sitesBefore = await count('digigate.sites');
+check('the control room cannot create a site', (await newSite(ROOM_A, { ...wizardSite, code: 'CRM' }, wizardPoints)).error);
+check('another company cannot create one in this company', (await newSite(ADMIN_B, { ...wizardSite, code: 'OTH' }, wizardPoints)).error);
+check('a site needs at least one access point', (await newSite(ADMIN_A, { ...wizardSite, code: 'NOP' }, [])).error);
+check('an unknown kind of boom is refused', (await newSite(ADMIN_A, { ...wizardSite, code: 'BAD' }, [{ ...wizardPoints[0], booms: ['flying'] }])).error);
+check('ANPR needs at least one camera', (await newSite(ADMIN_A, { ...wizardSite, code: 'ANP' }, [{ ...wizardPoints[0], cctvCameras: 0 }])).error);
+check('a site code is used once in a company', (await newSite(ADMIN_A, wizardSite, wizardPoints)).error);
+check('a refused site leaves nothing half made', (await count('digigate.sites')) === sitesBefore);
+check('managed parking needs a number of spaces', (await newSite(ADMIN_A, { ...wizardSite, code: 'PRK', parkingSpaces: null }, wizardPoints)).error);
+check('a place set up already cannot get a second site', (await newSite(ADMIN_A, { ...wizardSite, code: 'TWO' }, wizardPoints, ORG_A, CLIENT_A)).error);
+check('a place in another company cannot be finished from here', (await newSite(ADMIN_A, { ...wizardSite, code: 'OTB' }, wizardPoints, ORG_A, CLIENT_B)).error);
+const adopted = await newSite(ADMIN_A, { ...wizardSite, name: 'Spare Hospital', code: 'SPR' }, wizardPoints, ORG_A, CLIENT_SPARE);
+check('a place with no site yet is finished by the wizard', !adopted.error && (await one('select client_id from digigate.sites where id = $1', [adopted.rows[0]?.id])).client_id === CLIENT_SPARE);
+check('and is renamed after the site', (await one('select name from digigate.clients where id = $1', [CLIENT_SPARE])).name === 'Spare Hospital');
+check('anon cannot create a site', (await as('anon', '', '', `select digigate.create_site('${ORG_A}', '{}', '[]')`)).error);
+
+// The later company-change checks count this client's sites, so the wizard's site goes again.
+await db.exec(`delete from digigate.posts where site_id in ('${createdId}', '${adopted.rows[0]?.id}'); delete from digigate.sites where id in ('${createdId}', '${adopted.rows[0]?.id}');`);
+
+// One check in full, for the control room's popup, and the licence photo the handheld sends after it.
+const attach = (device, eventId) => service('select digigate.attach_licence_photo($1, $2, $3) as ok', [device, eventId, `a/b/${eventId}.bmp`]);
+check('the device that made a check attaches its licence photo', (await attach(DEVICE, entry.id)).rows[0].ok === true);
+check('no other device can', (await attach(SECOND_DEVICE, entry.id)).rows[0].ok === false);
+check('the dashboard cannot attach one', (await as('authenticated', ADMIN_A, 'aal2', 'select digigate.attach_licence_photo($1, $2, $3)', [DEVICE, entry.id, 'x.bmp'])).error);
+const detailFor = async (profile, eventId) => (await as('authenticated', profile, 'aal2', 'select digigate.check_detail($1) as d', [eventId])).rows[0]?.d ?? null;
+const shown = await detailFor(ADMIN_A, entry.id);
+check('the control room sees the driver and the car', shown?.person.name === 'T KHUMALO' && shown.vehicle.plate === 'TT00TTGP' && shown.vehicle.make === 'TOYOTA' && shown.typedPlate === 'TT00TTGP');
+check('and that there is a licence photo', shown?.hasLicencePhoto === true && shown.inFull === true);
+check('and who scanned it', shown?.guard === 'Thabo Khumalo' && shown.occupants === 3);
+check('a control room login for the site sees it too', (await detailFor(ROOM_A, entry.id))?.person.name === 'T KHUMALO');
+check('another company sees nothing', (await detailFor(ADMIN_B, entry.id)) === null);
+check('nor does anyone without MFA', (await as('authenticated', ADMIN_A, 'aal1', 'select digigate.check_detail($1) as d', [entry.id])).rows[0]?.d == null);
+const agedDetail = await detailFor(ADMIN_A, OLD_CHECK);
+check('after 365 days the driver is masked, with no photo', agedDetail !== null && agedDetail.inFull === false && agedDetail.person.name !== null && !agedDetail.person.name.includes('KHUMALO') && agedDetail.hasLicencePhoto === false);
+const photoFor = async (profile, eventId) => (await as('authenticated', profile, 'aal2', 'select * from digigate.licence_photo_for($1)', [eventId])).rows;
+const photoRow = (await photoFor(ROOM_A, entry.id))[0];
+check('the photo is found for whoever may see the check', photoRow?.path === `a/b/${entry.id}.bmp` && photoRow.org_id === ORG_A);
+check('named only masked in the log', photoRow !== undefined && photoRow.person !== 'T KHUMALO');
+check('but not for another company', (await photoFor(ADMIN_B, entry.id)).length === 0);
+
+// An access point's location, set on the handheld by a supervisor standing at it.
+const backGateNow = () => one(`select latitude, longitude, radius_m from digigate.posts where site_id = '${SITE_A}' and code = 'back-gate'`);
+const locate = (gateUserId, payload) => ingest([event('post_location_set', payload, gateUserId)]);
+const beforeLocating = await backGateNow();
+await locate(GUARD, { post: 'back-gate', latitude: -29.61, longitude: 30.31, radius_m: 60, accuracy_m: 6 });
+check('a guard alone cannot move an access point', (await backGateNow()).latitude === beforeLocating.latitude);
+await locate(SUPERVISOR, { post: 'back-gate', latitude: -29.61, longitude: 30.31, radius_m: 5000, accuracy_m: 6 });
+check('nor can a geofence be set beyond the limits', (await backGateNow()).latitude === beforeLocating.latitude);
+await locate(SUPERVISOR, { post: 'back-gate', latitude: 'here', longitude: 30.31, radius_m: 60, accuracy_m: 6 });
+check('nonsense coordinates change nothing, and fail nothing', (await backGateNow()).latitude === beforeLocating.latitude);
+const locatedResult = await locate(SUPERVISOR, { post: 'back-gate', latitude: -29.61, longitude: 30.31, radius_m: 60, accuracy_m: 6 });
+const relocated = await backGateNow();
+check('a supervisor sets it from the device', !locatedResult.error && relocated.latitude === -29.61 && relocated.longitude === 30.31 && relocated.radius_m === 60);
+const locatedLog = await one(`select actor_id, actor_name, target, category from digigate.audit_log where action = 'gate.post_located' order by at desc limit 1`);
+check('logged under the supervisor who confirmed it', locatedLog?.actor_name === 'Kagiso Mokoena' && locatedLog.target === 'Back Gate' && locatedLog.category === 'gate');
+await locate(SUPERVISOR, { post: 'no-such-gate', latitude: -29.7, longitude: 30.4, radius_m: 60, accuracy_m: 6 });
+check('an access point the site does not have is left alone', (await backGateNow()).latitude === -29.61);
+const snapshotFence = (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.posts.find((post) => post.code === 'back-gate');
+check('and the handheld gets the new location back', snapshotFence?.latitude === -29.61 && snapshotFence.radiusM === 60);
+await db.exec(`update digigate.posts set latitude = ${beforeLocating.latitude ?? 'null'}, longitude = ${beforeLocating.longitude ?? 'null'}, radius_m = ${beforeLocating.radius_m} where site_id = '${SITE_A}' and code = 'back-gate'`);
+
+// The Admin tab: each site's shift times, and guards' personal records.
+const shiftsOf = async (site) => (await one('select shift_periods from digigate.sites where id = $1', [site])).shift_periods;
+check('a site starts with day and night shifts', (await shiftsOf(SITE_A)).map((period) => period.code).join() === 'day,night');
+const setShifts = (profile, periods) => as('authenticated', profile, 'aal2', 'update digigate.sites set shift_periods = $1::jsonb where id = $2 returning id', [JSON.stringify(periods), SITE_A]);
+const threeShifts = [{ code: 'early', label: 'Early', start: '05:00', end: '08:00' }, { code: 'day', label: 'Day', start: '08:00', end: '18:00' }, { code: 'night', label: 'Night', start: '18:00', end: '05:00' }];
+check('an admin sets the site\x27s shift times', (await setShifts(ADMIN_A, threeShifts)).rows.length === 1 && (await shiftsOf(SITE_A)).length === 3);
+check('the control room cannot', (await setShifts(ROOM_A, [threeShifts[0]])).rows.length === 0 && (await shiftsOf(SITE_A)).length === 3);
+check('nor another company', (await setShifts(ADMIN_B, [threeShifts[0]])).rows.length === 0);
+check('a time that is not HH:MM is refused', (await setShifts(ADMIN_A, [{ ...threeShifts[0], start: '5am' }])).error);
+check('a shift that starts when it ends is refused', (await setShifts(ADMIN_A, [{ ...threeShifts[0], end: '05:00' }])).error);
+check('two shifts with one code are refused', (await setShifts(ADMIN_A, [threeShifts[0], threeShifts[0]])).error);
+check('a site needs a shift', (await setShifts(ADMIN_A, [])).error);
+check('and no more than six', (await setShifts(ADMIN_A, Array.from({ length: 7 }, (_, index) => ({ ...threeShifts[0], code: `s${index}` })))).error);
+const adminSnapshot = (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s;
+check('the handheld gets the site\x27s shifts', adminSnapshot.shiftPeriods.map((period) => period.code).join() === 'early,day,night');
+check('and its name', adminSnapshot.siteName === 'A1');
+
+const recordsDenied = async (profile) =>
+  (await as('authenticated', profile, 'aal2', 'select * from digigate.gate_user_records')).error &&
+  (await as('authenticated', profile, 'aal2', `insert into digigate.gate_user_records (gate_user_id, org_id) values ('${GUARD}', '${ORG_A}')`)).error;
+check('nobody reads guard records directly, not even an admin', await recordsDenied(ADMIN_A));
+check('nor a super user', await recordsDenied(SUPER));
+await service(`insert into digigate.gate_user_records (gate_user_id, org_id, photo_path, home_address, id_type, id_number_hmac, id_number_cipher, id_number_last4, psira_number, psira_grade, next_of_kin_name, next_of_kin_phone)
+  values ('${GUARD}', '${ORG_A}', 'a/b.jpg', '14 Example Street', 'sa_id', 'h1', 'c1', '9087', '1234567', 'C', 'Nomsa', '0821234567')`);
+check('an ID number is stored whole or not at all', (await service(`insert into digigate.gate_user_records (gate_user_id, org_id, id_type) values ('${SUPERVISOR}', '${ORG_A}', 'sa_id')`)).error);
+check('one ID number belongs to one guard in a company', (await service(`insert into digigate.gate_user_records (gate_user_id, org_id, id_type, id_number_hmac, id_number_cipher, id_number_last4) values ('${SUPERVISOR}', '${ORG_A}', 'sa_id', 'h1', 'c2', '9087')`)).error);
+const guardList = (profile, status = '', search = '') => as('authenticated', profile, 'aal2', 'select * from digigate.guard_board($1, $2, $3, 25, 0)', [ORG_A, search, status]);
+const boardRows = (await guardList(ADMIN_A)).rows;
+const thabo = boardRows.find((row) => row.id === GUARD);
+check('an admin lists the company\x27s guards', boardRows.length === 4 && Number(boardRows[0].total) === 4);
+check('with what each record holds', thabo?.has_photo === true && thabo.has_id === true && thabo.psira_grade === 'C' && thabo.has_next_of_kin === true && thabo.has_address === true);
+check('but none of what it says', thabo !== undefined && !('home_address' in thabo) && !('id_number_last4' in thabo) && !('pin' in thabo));
+check('complete records are found', (await guardList(ADMIN_A, 'complete')).rows.map((row) => row.id).join() === GUARD);
+check('and the ones still to fill in', (await guardList(ADMIN_A, 'incomplete')).rows.length === 3);
+check('searched by name', (await guardList(ADMIN_A, '', '%khumalo%')).rows.length === 1);
+check('a super user lists them too', (await guardList(SUPER)).rows.length === 4);
+check('the control room gets none', (await guardList(ROOM_A)).rows.length === 0);
+check('nor another company\x27s admin', (await guardList(ADMIN_B)).rows.length === 0);
+check('nor anyone without MFA', (await as('authenticated', ADMIN_A, 'aal1', 'select * from digigate.guard_board($1, \x27\x27, \x27\x27, 25, 0)', [ORG_A])).rows.length === 0);
+await setShifts(ADMIN_A, [{ code: 'day', label: 'Day', start: '06:00', end: '18:00' }, { code: 'night', label: 'Night', start: '18:00', end: '06:00' }]);
 
 // Append-only and erasure.
 const change = async (sql) => (await service(sql)).error;

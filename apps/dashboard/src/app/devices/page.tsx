@@ -113,7 +113,7 @@ function deviceRow(device: FleetDevice, now: number) {
         <TwoLine
           main={
             <Link href={`/control-room/${device.siteId}`} className="transition-colors hover:text-brand">
-              <Clipped text={`${device.client} · ${device.site}`} />
+              <Clipped text={device.site} />
             </Link>
           }
           sub={<Clipped text={device.company} />}
@@ -173,7 +173,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
       plain
       chips={
         <>
-          <SearchBox placeholder="Search a device, site, client or company" />
+          <SearchBox placeholder="Search a device, site or company" />
           {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />
           <div className="sm:ml-auto">

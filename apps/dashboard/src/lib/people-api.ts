@@ -2,7 +2,8 @@ import "server-only";
 
 import { supabaseServer } from "./supabase/server";
 
-type PeopleResult = { status: number; data: { error?: string; login?: string; password?: string; url?: string } };
+type PeopleData = { error?: string; problem?: string; login?: string; password?: string; url?: string; [field: string]: unknown };
+type PeopleResult = { status: number; data: PeopleData };
 
 /** Calls digigate-people as the signed-in person. The service key lives there, never in the dashboard. */
 export async function callPeople(body: Record<string, unknown>): Promise<PeopleResult> {

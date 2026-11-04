@@ -85,6 +85,14 @@
         "projectId": "9706fd7a-960f-4e1b-9587-f0e96e9a8282"
       }
     },
-    "owner": "netstreamdevtests-team"
+    "owner": "netstreamdevtests-team",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9706fd7a-960f-4e1b-9587-f0e96e9a8282",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }

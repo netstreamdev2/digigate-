@@ -1,22 +1,22 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { AddedNotice } from "@/components/added-notice";
 import { AppShell } from "@/components/app-shell";
-import { Field } from "@/components/form";
-import { FormDialog } from "@/components/form-dialog";
 import { Breadcrumbs, ListCard, ListRow, Pagination } from "@/components/list";
 import { NoAccess } from "@/components/no-access";
 import { SearchBox } from "@/components/search-box";
+import { StatusChip } from "@/components/status-chip";
 import { appNav } from "@/lib/nav";
 import { likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
 import { counted, maybe, must } from "@/lib/reads";
 import { currentUser, roleLabel } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
-import { addClient } from "../actions";
-
 import { CompanyChecklist } from "./company-checklist";
+
+const SITE_TYPES: Record<string, string> = { hospital: "Hospital", estate: "Residential estate" };
 
 async function Company({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<Query> }) {
   const user = await currentUser();
@@ -35,10 +35,11 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
   if (!company) notFound();
   const justAdded = textParam(query, "added") === "1";
 
-  let list = supabase.from("clients").select("id, name, sites(count)", { count: "exact" }).eq("org_id", org).order("name").range(from, to);
+  // Each place is a client with its one site; a client with none is a place added before the two were one, not set up yet.
+  let list = supabase.from("clients").select("id, name, sites(id, code, site_type, posts(count))", { count: "exact" }).eq("org_id", org).order("name").range(from, to);
   if (search) list = list.ilike("name", likePattern(search));
   const listed = await list;
-  const clients = must(listed);
+  const places = must(listed);
   const count = counted(listed);
   const path = `/setup/${org}`;
 
@@ -51,24 +52,42 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
       plain
       chips={
         <>
-          <SearchBox placeholder="Search clients" />
-          <FormDialog label="Add client" title={`Add a client to ${company.name}`} icon="sites" submitLabel="Add client" pendingLabel="Adding…" action={addClient} fields={{ orgId: org }}>
-            <Field label="Client name" name="name" placeholder="A hospital, an estate" autoFocus required />
-            <p className="text-sm text-ink-muted">Records stay with the client, even if it changes security company.</p>
-          </FormDialog>
+          <SearchBox placeholder="Search sites" />
+          <Link href={`${path}/new-site`} className="inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink">
+            Add site
+          </Link>
         </>
       }
     >
       {justAdded ? <AddedNotice title={`${company.name} is added`} next="Work down the checklist to get its first gate running." /> : null}
       <CompanyChecklist company={company} />
       <ListCard
-        isEmpty={clients.length === 0}
-        empty={search ? "Nothing matches that search." : "No clients yet. Add the first one."}
+        isEmpty={places.length === 0}
+        empty={search ? "Nothing matches that search." : "No sites yet. Add the first one."}
         footer={<Pagination page={page} total={count ?? 0} hrefFor={(next) => pageHref(path, query, next)} />}
       >
-        {clients.map((client) => {
-          const sites = client.sites[0]?.count ?? 0;
-          return <ListRow key={client.id} href={`${path}/${client.id}`} title={client.name} detail={`${sites} site${sites === 1 ? "" : "s"}`} />;
+        {places.map((place) => {
+          const [site] = place.sites;
+          if (!site) {
+            return (
+              <ListRow
+                key={place.id}
+                href={`${path}/new-site?place=${place.id}`}
+                title={place.name}
+                detail="Not set up yet. Open it to add its details and access points."
+                trailing={<StatusChip status="warning" label="Not set up" />}
+              />
+            );
+          }
+          const points = site.posts[0]?.count ?? 0;
+          return (
+            <ListRow
+              key={place.id}
+              href={`${path}/${site.id}`}
+              title={site.code ? `${place.name} · ${site.code}` : place.name}
+              detail={`${SITE_TYPES[site.site_type] ?? site.site_type} · ${points} access point${points === 1 ? "" : "s"}`}
+            />
+          );
         })}
       </ListCard>
     </AppShell>

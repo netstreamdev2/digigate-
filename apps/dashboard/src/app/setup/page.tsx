@@ -62,7 +62,7 @@ async function Companies({ searchParams }: { searchParams: Promise<Query> }) {
             key={company.id}
             href={`/setup/${company.id}`}
             title={company.name}
-            detail={`${plural(company.clients, "client")} · ${plural(company.sites, "site")} · ${company.gate_staff} gate staff`}
+            detail={`${plural(company.sites, "site")} · ${company.gate_staff} gate staff`}
             trailing={company.is_active ? null : <StatusChip status="blocked" label="Inactive" />}
           />
         ))}

@@ -1,14 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Field } from "@/components/form";
-import { FormDialog } from "@/components/form-dialog";
 import { Icon } from "@/components/icon";
 import { counted, must } from "@/lib/reads";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { AddPersonButton } from "../../people/people-forms";
-import { addClient } from "../actions";
+import { AddGateStaffButton } from "../gate-staff-form";
 import { PairDeviceButton } from "../pair-device";
 
 /** `keep` leaves the action in place once the step is done, for one that can be repeated and has a popup worth keeping open. */
@@ -34,10 +32,11 @@ function StepLink({ href, label }: { href: string; label: string }) {
 export async function CompanyChecklist({ company }: { company: { id: string; name: string } }) {
   const supabase = await supabaseServer();
   const head = { count: "exact", head: true } as const;
-  const [admins, clients, sites, posts, located, staff, devices] = await Promise.all([
+  const [admins, places, sites, posts, located, staff, devices] = await Promise.all([
     supabase.from("profiles").select("id", head).eq("org_id", company.id).contains("roles", ["admin"]).eq("is_active", true),
-    supabase.from("clients").select("id, name", { count: "exact" }).eq("org_id", company.id).order("created_at").limit(1),
-    supabase.from("sites").select("id, name, client_id, clients(name)", { count: "exact" }).eq("org_id", company.id).order("created_at").limit(1),
+    // The earliest place, which may have been added before sites and clients were one and so have no site yet.
+    supabase.from("clients").select("id, name, sites(count)").eq("org_id", company.id).order("created_at").limit(1),
+    supabase.from("sites").select("id, name", { count: "exact" }).eq("org_id", company.id).order("created_at").limit(1),
     supabase.from("posts").select("id", head).eq("org_id", company.id).eq("is_active", true),
     supabase.from("posts").select("id", head).eq("org_id", company.id).eq("is_active", true).not("latitude", "is", null),
     supabase.from("gate_users").select("id", head).eq("org_id", company.id).eq("is_active", true),
@@ -46,16 +45,17 @@ export async function CompanyChecklist({ company }: { company: { id: string; nam
 
   const counts = {
     admins: counted(admins),
-    clients: counted(clients),
     sites: counted(sites),
     posts: counted(posts),
     located: counted(located),
     staff: counted(staff),
     devices: counted(devices),
   };
-  const [firstClient] = must(clients);
+  const [firstPlace] = must(places);
   const [firstSite] = must(sites);
-  const sitePath = firstSite ? `/setup/${company.id}/${firstSite.client_id}/${firstSite.id}` : null;
+  const sitePath = firstSite ? `/setup/${company.id}/${firstSite.id}` : null;
+  const unfinished = firstPlace && (firstPlace.sites[0]?.count ?? 0) === 0 ? firstPlace : null;
+  const wizardPath = `/setup/${company.id}/new-site${unfinished ? `?place=${unfinished.id}` : ""}`;
   const afterSite = "Comes once there's a site.";
 
   const steps: Step[] = [
@@ -71,31 +71,24 @@ export async function CompanyChecklist({ company }: { company: { id: string; nam
       keep: true,
     },
     {
-      title: "First client",
-      done: counts.clients > 0,
-      detail: counts.clients > 0 ? `${plural(counts.clients, "client")}.` : "The hospital or estate they guard. Its records stay with it, even if it changes security company.",
-      action: (
-        <FormDialog compact label="Add client" title={`Add a client to ${company.name}`} icon="sites" submitLabel="Add client" pendingLabel="Adding…" action={addClient} fields={{ orgId: company.id }}>
-          <Field label="Client name" name="name" placeholder="A hospital, an estate" autoFocus required />
-        </FormDialog>
-      ),
-    },
-    {
       title: "First site",
       done: counts.sites > 0,
-      detail: counts.sites > 0 ? `${plural(counts.sites, "site")}.` : firstClient ? `Where the gates are. Add it inside ${firstClient.name}.` : "Comes once there's a client.",
-      action: firstClient ? <StepLink href={`/setup/${company.id}/${firstClient.id}`} label={`Open ${firstClient.name}`} /> : null,
+      detail:
+        counts.sites > 0
+          ? `${plural(counts.sites, "site")}.`
+          : "The hospital, estate or mall they guard: its details, then each access point, in one go. Its records stay with it, even if it changes security company.",
+      action: counts.sites === 0 ? <StepLink href={wizardPath} label={unfinished ? `Set up ${unfinished.name}` : "Add the site"} /> : null,
     },
     {
-      title: "Posts, with their locations",
+      title: "Access points, with their locations",
       done: counts.posts > 0,
       detail:
         counts.posts > 0
-          ? `${plural(counts.posts, "post")}${counts.located < counts.posts ? `, ${counts.posts - counts.located} still without a location, so their geofence is off` : ", every one with its location"}.`
+          ? `${plural(counts.posts, "access point")}${counts.located < counts.posts ? `, ${counts.posts - counts.located} still without a location, so their geofence is off` : ", every one with its location"}.`
           : firstSite
             ? "Each gate a guard stands at. Set where it is, so a guard who walks off is noticed."
             : afterSite,
-      action: sitePath ? <StepLink href={sitePath} label={counts.posts > 0 ? "Open posts" : "Add posts"} /> : null,
+      action: sitePath ? <StepLink href={sitePath} label={counts.posts > 0 ? "Open access points" : "Add access points"} /> : null,
     },
     {
       title: "Gate staff",
@@ -106,22 +99,21 @@ export async function CompanyChecklist({ company }: { company: { id: string; nam
           : firstSite
             ? "Guards and supervisors, each with an employee number and a 6-digit PIN."
             : afterSite,
-      action: sitePath ? <StepLink href={`${sitePath}?tab=staff`} label="Add gate staff" /> : null,
+      action: firstSite ? (
+        <AddGateStaffButton compact site={{ id: firstSite.id, orgId: company.id, name: firstSite.name, detail: company.name }} />
+      ) : null,
+      keep: true,
     },
     {
       title: "A paired handheld",
       done: counts.devices > 0,
       detail: counts.devices > 0 ? `${plural(counts.devices, "handheld")} working.` : firstSite ? "Pair the DT50 at the gate. Guards then sign in on it with their employee number and PIN." : afterSite,
       action:
-        firstSite && firstClient ? (
+        firstSite ? (
           <PairDeviceButton
             compact
             label={counts.devices > 0 ? "Pair another" : "Pair a device"}
-            place={{
-              company,
-              client: { id: firstSite.client_id, name: firstSite.clients?.name ?? firstClient.name },
-              site: { id: firstSite.id, name: firstSite.name },
-            }}
+            place={{ company, site: { id: firstSite.id, name: firstSite.name } }}
           />
         ) : null,
       keep: true,

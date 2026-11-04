@@ -27,7 +27,9 @@ export type GateEventType =
   | 'left_post'
   | 'returned_to_post'
   /** The guard said why they're leaving their post, which pauses the geofence for a while. */
-  | 'stepping_away';
+  | 'stepping_away'
+  /** A supervisor, standing at the access point, set where it is from the device's GPS. */
+  | 'post_location_set';
 
 export type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 

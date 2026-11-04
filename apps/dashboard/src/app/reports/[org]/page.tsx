@@ -166,7 +166,7 @@ async function CompanyReport({ params, searchParams }: { params: Promise<{ org: 
               </span>
             )}
           </div>
-          {clients.length > 0 ? <FilterSelect name="client" label="All clients" options={clients.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+          {clients.length > 0 ? <FilterSelect name="client" label="All sites" options={clients.map((row) => ({ value: row.id, label: row.name }))} /> : null}
         </>
       }
     >

@@ -1,6 +1,5 @@
 import { englishPart, isExpired, type ParsedLicenceDisc } from '@digigate/core';
 import { colors, radius, space } from '@digigate/design';
-import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatDate } from '@/lib/format';
@@ -10,30 +9,22 @@ import { Card } from './card';
 import { Chip } from './chip';
 import { Icon } from './icon';
 import { Text } from './text';
-import { vehicleArtFor } from './vehicle-art';
 
 /**
- * The car behind a scanned disc: its body shape, and the make, model and colour in the disc's own words for the guard
- * to check against the car. The plate is left out so the guard reads it off the car. Tapping it opens every detail on
+ * The car behind a scanned disc: the make, model, colour and body type in the disc's own words for the guard to check
+ * against the car. No picture of a car: one that doesn't quite match could make a genuine car look stolen. The plate is left out so the guard reads it off the car. Tapping it opens every detail on
  * the disc, and the round disc button draws the disc itself.
  */
 export function VehicleCard({ disc, onOpen, onShowDisc }: { disc: ParsedLicenceDisc; onOpen?: () => void; onShowDisc?: () => void }) {
-  const art = vehicleArtFor(disc.description);
   const expired = isExpired(disc.expiresOn, Date.now(), siteConfig.rules.utcOffsetMinutes);
   const name = `${disc.make} ${disc.model}`;
 
   const card = (pressed: boolean) => (
     <Card style={[styles.card, pressed && styles.pressed]}>
       <View style={styles.top}>
-        {art ? (
-          <View style={styles.art}>
-            <Image source={art} style={styles.artImage} contentFit="contain" accessibilityLabel={englishPart(disc.description)} />
-          </View>
-        ) : (
-          <View style={styles.icon}>
-            <Icon name="vehicle" size={40} color={colors.brand} />
-          </View>
-        )}
+        <View style={styles.icon}>
+          <Icon name="vehicle" size={40} color={colors.brand} />
+        </View>
         <View style={styles.identity}>
           <Text variant="overline" color={colors.inkMuted}>
             Licence disc
@@ -70,9 +61,7 @@ export function VehicleCard({ disc, onOpen, onShowDisc }: { disc: ParsedLicenceD
       <View style={styles.compare}>
         <Icon name="info" size={20} color={colors.brand} />
         <Text variant="label" style={styles.compareCopy}>
-          {art
-            ? 'Check the make, model and colour against the car. The drawing shows the body shape only.'
-            : 'Check the make, model and colour against the car.'}
+          Check the make, model and colour against the car.
         </Text>
       </View>
 
@@ -107,18 +96,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-  },
-  // The drawings are 480 by 300 pixels; this keeps their 8:5 shape.
-  art: {
-    width: 128,
-    height: 80,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceMuted,
-  },
-  artImage: {
-    width: '100%',
-    height: '100%',
   },
   icon: {
     paddingHorizontal: space.xxs,

@@ -10,7 +10,7 @@ export type PinProblem = {
 export function pinProblem(result: Exclude<SignInResult, { ok: true }>): PinProblem {
   if (result.reason === 'locked-out') {
     const time = new Date(result.retryAt).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
-    return { tone: 'blocked', title: 'Locked out', message: `Too many wrong PINs. Try again after ${time}, or ask a supervisor.` };
+    return { tone: 'blocked', title: 'Locked out', message: `Three wrong PINs. This employee number can try again after ${time}. A supervisor or another guard can still sign in with their own number.` };
   }
   const tries = `${result.attemptsLeft} ${result.attemptsLeft === 1 ? 'try' : 'tries'} left`;
   return { tone: 'warning', title: 'Try again', message: `That employee number and PIN don't match. ${tries}.` };

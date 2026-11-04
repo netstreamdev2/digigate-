@@ -5,18 +5,17 @@ export type Kpi = {
   value: string;
   icon: IconName;
   detail?: string;
-  tone?: "neutral" | "blocked";
+  /** Warning is for something nearing its limit, such as a car park almost full; blocked is for one past it. */
+  tone?: "neutral" | "warning" | "blocked";
 };
 
 export function StatTile({ label, value, icon, detail, tone = "neutral" }: Kpi) {
-  const blocked = tone === "blocked";
+  const toneClass = tone === "blocked" ? "bg-blocked-soft text-blocked" : tone === "warning" ? "bg-warning-soft text-warning" : "bg-tile-sky text-brand shadow-glow";
   return (
     <div className="rounded-lg border border-border bg-surface p-5 shadow-card">
       <div className="flex items-center gap-3">
         <span
-          className={`grid size-10 place-items-center rounded-pill ${
-            blocked ? "bg-blocked-soft text-blocked" : "bg-tile-sky text-brand shadow-glow"
-          }`}
+          className={`grid size-10 place-items-center rounded-pill ${toneClass}`}
         >
           <Icon name={icon} />
         </span>

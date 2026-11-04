@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import QRCode from "qrcode";
 
 import { callPeople } from "@/lib/people-api";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -12,6 +13,8 @@ export type EnrolState = FormState & { factorId: string | null; qr: string | nul
 // Supabase accounts always have an email. A username is an account on this private domain, so signing in needs no
 // lookup, and nobody can use the login to test which usernames exist.
 const USERNAME_DOMAIN = "digigate.local";
+// What the authenticator app lists the code under, like "Google: name@gmail.com".
+const AUTHENTICATOR_ISSUER = "DigiGate";
 
 function accountEmail(login: string): string {
   const name = login.trim().toLowerCase();
@@ -28,18 +31,36 @@ export async function signIn(_previous: FormState, form: FormData): Promise<Form
   redirect("/mfa");
 }
 
+/** The name a person signs in with: their username, or their email when they have a real one. */
+function loginName(email: string): string {
+  const suffix = `@${USERNAME_DOMAIN}`;
+  return email.endsWith(suffix) ? email.slice(0, -suffix.length) : email;
+}
+
+/**
+ * The authenticator link, made here rather than taken from Supabase, whose own names the entry after the web address
+ * and the hidden username email. The secret is Supabase's, so its codes still verify.
+ */
+function authenticatorLink(account: string, secret: string): string {
+  const label = `${encodeURIComponent(AUTHENTICATOR_ISSUER)}:${encodeURIComponent(account)}`;
+  const options = new URLSearchParams({ secret, issuer: AUTHENTICATOR_ISSUER, algorithm: "SHA1", digits: "6", period: "30" });
+  return `otpauth://totp/${label}?${options.toString()}`;
+}
+
 /** Starts setting up an authenticator app, clearing any attempt that was never finished. */
 export async function startEnrolment(_previous: EnrolState): Promise<EnrolState> {
   const supabase = await supabaseServer();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) return { problem: "Your session has ended. Sign in again.", factorId: null, qr: null, secret: null };
   const { data: factors } = await supabase.auth.mfa.listFactors();
   for (const factor of factors?.all ?? []) {
     if (factor.status === "unverified") await supabase.auth.mfa.unenroll({ factorId: factor.id });
   }
-  const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: "DigiGate" });
+  const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: AUTHENTICATOR_ISSUER, issuer: AUTHENTICATOR_ISSUER });
   if (error) return { problem: "Couldn't start the setup. Try again.", factorId: null, qr: null, secret: null };
-  // Supabase sends the QR as raw SVG text; encoded, it's safe to use as an image source.
-  const svg = data.totp.qr_code.slice(data.totp.qr_code.indexOf(",") + 1);
-  const qr = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+  const qr = await QRCode.toDataURL(authenticatorLink(loginName(user.email), data.totp.secret), { margin: 1, width: 240 });
   return { problem: null, factorId: data.id, qr, secret: data.totp.secret };
 }
 

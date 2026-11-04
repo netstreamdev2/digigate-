@@ -17,10 +17,33 @@ type Props = {
   onPress?: () => void;
   /** Icon above the text, for labels too long to sit beside it. */
   stacked?: boolean;
+  /** The whole row to itself, for a name too long for half: the text then wraps instead of being cut off. */
+  wide?: boolean;
 };
 
-/** One choice as a colour-coded tile with its own icon, two to a row, large enough for a gloved thumb. */
-export function OptionTile({ label, detail, icon, tint, selected, onPress, stacked = false }: Props) {
+// About as many characters as fit on one line of a half-width tile on the DT50.
+const HALF_TILE_CHARACTERS = 14;
+
+/**
+ * Which tiles in a list get the whole row: any whose name is too long for half, and any short one that would otherwise
+ * sit alone in its row, so rows stay even. The order stays as it was set up.
+ */
+export function wideTiles(labels: readonly string[]): boolean[] {
+  const wide = labels.map((label) => label.trim().length > HALF_TILE_CHARACTERS);
+  for (let index = 0; index < labels.length; index++) {
+    if (wide[index]) continue;
+    if (index + 1 < labels.length && !wide[index + 1]) {
+      index++;
+      continue;
+    }
+    wide[index] = true;
+  }
+  return wide;
+}
+
+/** One choice as a colour-coded tile with its own icon, two to a row or one when `wide`, large enough for a gloved thumb. */
+export function OptionTile({ label, detail, icon, tint, selected, onPress, stacked = false, wide = false }: Props) {
+  const upright = stacked && !wide;
   return (
     <Pressable
       onPress={onPress}
@@ -30,7 +53,8 @@ export function OptionTile({ label, detail, icon, tint, selected, onPress, stack
       accessibilityLabel={label}
       style={({ pressed }) => [
         styles.tile,
-        stacked && styles.tileStacked,
+        upright && styles.tileStacked,
+        wide && styles.tileWide,
         { backgroundColor: colors[tint] },
         selected && styles.selected,
         pressed && styles.pressed,
@@ -38,18 +62,18 @@ export function OptionTile({ label, detail, icon, tint, selected, onPress, stack
       <View style={styles.badge}>
         <Icon name={icon} size={22} />
       </View>
-      <View style={stacked ? null : styles.copy}>
-        <Text variant="bodyStrong" numberOfLines={1}>
+      <View style={upright ? null : styles.copy}>
+        <Text variant="bodyStrong" numberOfLines={wide ? 3 : 2}>
           {label}
         </Text>
         {detail ? (
-          <Text variant="label" color={colors.inkMuted} numberOfLines={1}>
+          <Text variant="label" color={colors.inkMuted} numberOfLines={wide ? 2 : 1}>
             {detail}
           </Text>
         ) : null}
       </View>
       {selected ? (
-        <View style={[styles.tick, stacked && styles.tickStacked]}>
+        <View style={[styles.tick, upright && styles.tickStacked]}>
           <Icon name="check" size={14} color={colors.inkInverse} />
         </View>
       ) : null}
@@ -72,6 +96,10 @@ const styles = StyleSheet.create({
   tileStacked: {
     flexDirection: 'column',
     alignItems: 'flex-start',
+    paddingVertical: space.sm,
+  },
+  tileWide: {
+    width: '100%',
     paddingVertical: space.sm,
   },
   selected: {

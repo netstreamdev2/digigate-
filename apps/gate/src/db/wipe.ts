@@ -2,11 +2,11 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { forgetPersonKeySecret } from '@/lib/person-key';
 import { stopPostFence } from '@/shift/post-fence';
-import { applySyncedPosts } from '@/site/site-config';
+import { applySyncedPosts, applySyncedSite } from '@/site/site-config';
 import { forgetDeviceToken } from '@/sync/device-api';
 
 import { removeValue } from './kv';
-import { SITE_POSTS_KEY } from './site-posts';
+import { SITE_DETAILS_KEY, SITE_POSTS_KEY } from './site-posts';
 import { SITE_TODAY_KEY } from './site-today';
 
 /**
@@ -21,12 +21,15 @@ export async function wipeRevokedDevice(db: SQLiteDatabase): Promise<void> {
     await db.runAsync('DELETE FROM vehicle_sightings');
     await db.runAsync('DELETE FROM shifts');
     await db.runAsync('DELETE FROM shift_selfies');
+    await db.runAsync('DELETE FROM licence_photos');
     await db.runAsync('DELETE FROM site_visits');
     await db.runAsync('DELETE FROM closed_visits');
     await removeValue(db, SITE_POSTS_KEY);
+    await removeValue(db, SITE_DETAILS_KEY);
     await removeValue(db, SITE_TODAY_KEY);
   });
   applySyncedPosts([]);
+  applySyncedSite(null);
   await stopPostFence();
   await forgetDeviceToken();
   await forgetPersonKeySecret();

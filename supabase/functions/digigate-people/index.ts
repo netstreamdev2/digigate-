@@ -1,10 +1,11 @@
-// Manages dashboard accounts, which only the service key can create, and opens guards' shift selfies, which only it can
-// read. Called by the dashboard's server code with the signed-in person's session, so the service key stays in Supabase
+// Manages dashboard accounts, which only the service key can create, opens guards' shift selfies and drivers' licence
+// photos, which only it can read, and keeps guards' personal records (see ../_shared/guard-records.ts). Called by the dashboard's server code with the signed-in person's session, so the service key stays in Supabase
 // and never reaches the dashboard. Deployed with --no-verify-jwt: the session is checked below, and it must have passed
 // MFA. Super users are never created here.
 // Logs carry error names only: requests hold names and temporary passwords.
-import { admin, audit, callerOf, canManage, isSuper, type Caller } from '../_shared/caller.ts';
+import { admin, asCaller, audit, callerOf, canManage, isSuper, type Caller } from '../_shared/caller.ts';
 import { json, randomHex, sql } from '../_shared/device.ts';
+import { readGuardRecord, revealGuardIdNumber, saveGuardPhoto, saveGuardRecord } from '../_shared/guard-records.ts';
 
 const USERNAME_DOMAIN = 'digigate.local';
 const ROLES = ['admin', 'manager', 'control_room', 'supervisor', 'client_viewer'];
@@ -14,6 +15,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BANNED_FOR_GOOD = '876000h';
 const SELFIE_BUCKET = 'shift-selfies';
 const SELFIE_LINK_SECONDS = 60;
+const LICENCE_PHOTO_BUCKET = 'licence-photos';
+const LICENCE_PHOTO_LINK_SECONDS = 60;
 
 /** The company responsible for an account: its own, or for a client's login, the client's. */
 async function companyOf(profileId: string): Promise<{ org_id: string | null; roles: string[]; full_name: string } | null> {
@@ -119,6 +122,24 @@ async function selfieLink(caller: Caller, body: Record<string, unknown>): Promis
   return json({ url: data.signedUrl });
 }
 
+/**
+ * A one-minute link to the photo from a driver's licence, for anyone whose dashboard shows that check, logged each
+ * time. The database decides who may see it, asked as the caller; the log names the driver only masked.
+ */
+async function licencePhotoLink(caller: Caller, request: Request, body: Record<string, unknown>): Promise<Response> {
+  const eventId = String(body.eventId ?? '');
+  if (!UUID.test(eventId)) return json({ error: 'not-allowed' }, 403);
+  const { data, error } = await asCaller(request).rpc('licence_photo_for', { _event: eventId });
+  if (error) throw new Error('licence photo lookup failed');
+  const [photo] = (data ?? []) as { path: string; org_id: string; person: string | null }[];
+  if (!photo) return json({ error: 'no-photo' }, 404);
+
+  const { data: link, error: linkError } = await admin.storage.from(LICENCE_PHOTO_BUCKET).createSignedUrl(photo.path, LICENCE_PHOTO_LINK_SECONDS);
+  if (linkError || !link) throw new Error('licence photo link failed');
+  await audit(caller, photo.org_id, 'gate', 'check.licence_photo_viewed', photo.person, eventId);
+  return json({ url: link.signedUrl });
+}
+
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -133,9 +154,14 @@ Deno.serve(async (request) => {
       return json({ ok: true });
     }
     if (body.action === 'selfie-link') return await selfieLink(caller, body);
+    if (body.action === 'licence-photo-link') return await licencePhotoLink(caller, request, body);
     if (!isSuper(caller) && !caller.roles.includes('admin')) return json({ error: 'not-allowed' }, 403);
     if (body.action === 'create') return await createPerson(caller, body);
     if (body.action === 'set-active' || body.action === 'reset-password') return await changePerson(caller, body);
+    if (body.action === 'guard-record') return await readGuardRecord(caller, body);
+    if (body.action === 'guard-record-save') return await saveGuardRecord(caller, body);
+    if (body.action === 'guard-id-reveal') return await revealGuardIdNumber(caller, body);
+    if (body.action === 'guard-photo') return await saveGuardPhoto(caller, body);
     return json({ error: 'unknown-action' }, 400);
   } catch (cause) {
     console.error('digigate-people failed', cause instanceof Error ? cause.name : 'unknown');

@@ -38,6 +38,15 @@ export async function callerOf(request: Request): Promise<Caller | Response> {
   return { id: data.user.id, name: profile.full_name, org_id: profile.org_id, roles: profile.roles };
 }
 
+/** A client acting as the signed-in person, so row security and the database's own visibility checks apply. */
+export function asCaller(request: Request) {
+  return createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: request.headers.get('Authorization') ?? '' } },
+    db: { schema: 'digigate' },
+  });
+}
+
 /** Records what a function did in the audit log, under the person who asked for it. */
 export function audit(caller: Caller, orgId: string | null, category: string, action: string, target: string | null, detail: string | null = null) {
   return sql`select digigate.write_audit(${orgId}::uuid, null, null, ${category}, ${action}, ${caller.id}::uuid, ${caller.name}, ${target}, ${detail})`;

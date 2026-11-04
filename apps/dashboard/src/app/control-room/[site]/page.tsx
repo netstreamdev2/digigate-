@@ -1,6 +1,6 @@
+import { ruleTitle } from "@digigate/core";
 import { Suspense } from "react";
 
-import { ActivityTable, type ActivityRow } from "@/components/activity-table";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/card";
 import { DataTable, TwoLine } from "@/components/data-table";
@@ -16,6 +16,10 @@ import {
   insideCounts,
   insideNow,
   latestChecks,
+  longestInside,
+  siteDay,
+  siteParking,
+  type SiteDay,
   openAlerts,
   siteHeading,
   type Check,
@@ -28,6 +32,7 @@ import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { currentUser, roleLabel } from "@/lib/session";
 
+import { CheckActivity, type CheckRow } from "../check-activity";
 import { LiveAlerts } from "../live-alerts";
 import { SelfieButton } from "../selfie-button";
 
@@ -76,19 +81,64 @@ function gateRow(gate: Gate, now: number) {
   };
 }
 
-function activityRow(check: Check, gateLabel: (post: string | null) => string): ActivityRow {
-  const { outcome } = check;
+/** The hour with the most scans so far today, so a control room can see its rush coming. */
+function busiestHour(today: SiteDay): string {
+  const most = Math.max(...today.hours);
+  if (most === 0) return "No scans yet today";
+  const hour = today.hours.indexOf(most);
+  return `Busiest ${String(hour).padStart(2, "0")}:00 to ${String((hour + 1) % 24).padStart(2, "0")}:00, ${plural(most, "scan")}`;
+}
+
+// A car park almost full is a warning; full is blocked, since the gate should stop letting cars in.
+const PARKING_NEARLY_FULL = 0.9;
+
+function CarParkTile({ vehicles, parking }: { vehicles: number; parking: { open: boolean; spaces: number | null } }) {
+  if (parking.open || !parking.spaces) {
+    return <StatTile label="Car park" value={String(vehicles)} icon="vehicle" detail="Open parking, not counted" />;
+  }
+  const free = Math.max(0, parking.spaces - vehicles);
+  const share = vehicles / parking.spaces;
+  return (
+    <StatTile
+      label="Car park"
+      value={`${vehicles} of ${parking.spaces}`}
+      icon="vehicle"
+      detail={free === 0 ? "Full" : `${plural(free, "space")} free`}
+      tone={free === 0 ? "blocked" : share >= PARKING_NEARLY_FULL ? "warning" : "neutral"}
+    />
+  );
+}
+
+/** How long the check's visit has lasted: so far while it's still going, in full once it's over. */
+function stayOf(check: Check, now: number): string {
+  if (!check.enteredAt || !check.visitOpened) return NO_VALUE;
+  return check.exitedAt ? duration(check.enteredAt, check.exitedAt) : `${duration(check.enteredAt, now)} so far`;
+}
+
+/**
+ * A blocked or warned check stays that way on record. When its visit went ahead anyway (an entry whose visit opened,
+ * an exit whose visit closed) someone let it through, and the chip says so.
+ */
+function resultOf(check: Check): Pick<CheckRow, "result" | "resultLabel"> {
+  const went = check.direction === "in" ? check.visitOpened : check.exitedAt !== null;
+  if (check.outcome === "blocked") return went ? { result: "warning", resultLabel: "Overridden" } : { result: "blocked", resultLabel: null };
+  if (check.outcome === "warning") return { result: "warning", resultLabel: went ? "Let through" : null };
+  return { result: "clear", resultLabel: null };
+}
+
+function activityRow(check: Check, gateLabel: (post: string | null) => string, now: number): CheckRow {
   return {
     id: check.id,
     time: timeOfDay(check.occurredAt),
     person: check.person,
     visitType: check.visitType ? labelFor(check.visitType) : NO_VALUE,
     direction: check.direction,
-    vehicle: check.vehicle ?? "On foot",
+    vehicle: check.vehicle ?? "Pedestrian",
     plate: check.plate ?? NO_VALUE,
     gate: gateLabel(check.post),
-    stay: check.direction === "out" && check.enteredAt ? duration(check.enteredAt, check.occurredAt) : NO_VALUE,
-    result: outcome === "blocked" || outcome === "warning" ? outcome : "clear",
+    stay: stayOf(check, now),
+    ...resultOf(check),
+    alerts: check.ruleCodes.map(ruleTitle),
   };
 }
 
@@ -105,13 +155,16 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
   const page = pageParam(query);
 
   const now = readClock();
-  const [gates, open, counts, inside, checks, entries] = await Promise.all([
+  const [gates, open, counts, inside, checks, entries, today, parking, longest] = await Promise.all([
     gatesAt(siteId),
     openAlerts(siteId),
     insideCounts(siteId),
     insideNow(siteId, lane, search, page),
     latestChecks(siteId),
     entriesToday(siteId, now),
+    siteDay(siteId, now),
+    siteParking(siteId),
+    longestInside(siteId),
   ]);
 
   const path = `/control-room/${siteId}`;
@@ -125,7 +178,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
     <AppShell
       nav={appNav(user, "control-room")}
       user={{ name: user.fullName, role: roleLabel(user) }}
-      eyebrow={<Breadcrumbs items={[{ label: "Control room", href: "/control-room" }, { label: heading.client }, { label: heading.name }]} />}
+      eyebrow={<Breadcrumbs items={[{ label: "Control room", href: "/control-room" }, { label: heading.name }]} />}
       title="Live at the gates"
       plain
       chips={<LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />}
@@ -135,9 +188,10 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
           label="On site now"
           value={String(counts.vehicle + counts.pedestrian)}
           icon="on-site"
-          detail={`${plural(counts.vehicle, "vehicle")} · ${counts.pedestrian} on foot`}
+          detail={`${plural(counts.vehicle, "vehicle")} · ${plural(counts.pedestrian, "pedestrian")}`}
         />
-        <StatTile label="Entries today" value={String(entries)} icon="entry" detail="Since midnight" />
+        <StatTile label="Entries today" value={String(entries)} icon="entry" detail={busiestHour(today)} />
+        <StatTile label="Exits today" value={String(today.exits)} icon="exit" detail="Since midnight" />
         <StatTile
           label="Open alerts"
           value={String(openTotal)}
@@ -149,8 +203,21 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
           label="Gates staffed"
           value={`${gates.length - uncovered.length} of ${gates.length}`}
           icon="guard"
-          detail={uncovered[0] ? `${uncovered[0].label} has nobody on duty` : "Every post is covered"}
+          detail={uncovered[0] ? `${uncovered[0].label} has nobody on duty` : "Every access point is covered"}
           tone={uncovered.length ? "blocked" : "neutral"}
+        />
+        <CarParkTile vehicles={counts.vehicle} parking={parking} />
+        <StatTile
+          label="Stopped at the gate"
+          value={String(today.blocked)}
+          icon="result-blocked"
+          detail={today.blocked ? `${today.overrides} let through by a supervisor · ${today.turnedAway} turned away` : "Nobody stopped today"}
+        />
+        <StatTile
+          label="Average stay today"
+          value={today.exits ? duration(0, (today.stayMinutes / today.exits) * 60_000) : NO_VALUE}
+          icon="duration"
+          detail={longest ? `Longest on site now: ${duration(longest, now)}` : "Nobody on site"}
         />
       </section>
 
@@ -170,7 +237,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
 
           <Card title="Latest checks" subtitle="Every scan, as it reaches the server">
             {checks.length ? (
-              <ActivityTable rows={checks.map((check) => activityRow(check, gateLabel))} />
+              <CheckActivity rows={checks.map((check) => activityRow(check, gateLabel, now))} />
             ) : (
               <p className="py-8 text-center text-sm text-ink-muted">No scans at this site yet.</p>
             )}
@@ -181,7 +248,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
               <Tabs
                 items={[
                   { label: "Vehicles", href: path, active: lane === "vehicle", count: counts.vehicle },
-                  { label: "On foot", href: `${path}?lane=pedestrian`, active: lane === "pedestrian", count: counts.pedestrian },
+                  { label: "Pedestrians", href: `${path}?lane=pedestrian`, active: lane === "pedestrian", count: counts.pedestrian },
                 ]}
               />
             </div>
@@ -192,7 +259,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
                 columns={[
                   { key: "who", label: lane === "vehicle" ? "Driver" : "Person" },
                   ...(lane === "vehicle" ? [{ key: "vehicle", label: "Vehicle" }] : []),
-                  { key: "gate", label: "Came in at" },
+                  { key: "gate", label: "Came in" },
                   { key: "stay", label: "On site", align: "right" },
                 ]}
                 rows={inside.rows.map((row) => ({
@@ -200,7 +267,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
                   cells: {
                     who: <TwoLine main={row.person} sub={labelFor(row.visitType)} />,
                     vehicle: <TwoLine main={row.plate ?? NO_VALUE} sub={row.vehicle ?? NO_VALUE} />,
-                    gate: <TwoLine main={gateLabel(row.post)} sub={timeOfDay(row.enteredAt)} />,
+                    gate: <TwoLine main={timeOfDay(row.enteredAt)} sub={gateLabel(row.post)} />,
                     stay: duration(row.enteredAt, now),
                   },
                 }))}

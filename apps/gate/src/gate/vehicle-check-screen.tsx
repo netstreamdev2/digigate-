@@ -29,6 +29,7 @@ import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
 import { SupervisorOverride } from './supervisor-override';
+import { useKeepLicencePhoto } from './use-keep-licence-photo';
 import { useVehicleDocuments } from './use-vehicle-documents';
 import { recordDecision, type Decision, type Direction } from './decision';
 import { CheckResult, type Settled } from './check-result';
@@ -66,6 +67,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   const [exitChecks, setExitChecks] = useState<ExitChecks>(NO_EXIT_CHECKS);
   const documents = useVehicleDocuments(checked === null);
   const { disc, licence, photo, notice } = documents;
+  const photoProblem = useKeepLicencePhoto(db, checked?.event ?? null, photo);
   const copy = COPY[direction];
 
   const completedChecks = completedExitChecks(exitChecks);
@@ -166,6 +168,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         )}
 
         {problem ? <ResultBanner tone="warning" title="Not saved" message={problem} /> : null}
+        {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
 
         {licence ? <PersonCard document={{ kind: 'driver-licence', licence, photo }} onOpen={() => setDetails('licence')} /> : null}

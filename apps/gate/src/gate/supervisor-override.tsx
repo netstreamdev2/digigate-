@@ -29,13 +29,24 @@ const REASONS = [
 type Props = {
   onConfirmed: (supervisor: GateUser, reason: string) => void;
   onCancel: () => void;
+  /** Skips choosing a reason, for an action that has only one, such as setting an access point's location. */
+  fixedReason?: string;
+  /** The chip at the top, and what a guard who isn't a supervisor is told. */
+  chip?: string;
+  notSupervisorMessage?: string;
 };
 
-/** A supervisor lets a blocked vehicle through: reason, then their own employee number and PIN. */
-export function SupervisorOverride({ onConfirmed, onCancel }: Props) {
+/** A supervisor approves something at the gate: a reason, then their own employee number and PIN. */
+export function SupervisorOverride({
+  onConfirmed,
+  onCancel,
+  fixedReason,
+  chip = 'Supervisor override',
+  notSupervisorMessage = 'Only a supervisor can override a block. Call one to the gate.',
+}: Props) {
   const insets = useSafeAreaInsets();
   const { confirmSupervisor } = useSession();
-  const [reason, setReason] = useState<string | null>(null);
+  const [reason, setReason] = useState<string | null>(fixedReason ?? null);
   const [employeeNumber, setEmployeeNumber] = useState('');
   const [enteringPin, setEnteringPin] = useState(false);
   const [pin, setPin] = useState('');
@@ -53,7 +64,7 @@ export function SupervisorOverride({ onConfirmed, onCancel }: Props) {
       }
       setProblem(
         result.reason === 'not-a-supervisor'
-          ? { tone: 'blocked', title: 'Not a supervisor', message: 'Only a supervisor can override a block. Call one to the gate.' }
+          ? { tone: 'blocked', title: 'Not a supervisor', message: notSupervisorMessage }
           : pinProblem(result),
       );
     } catch {
@@ -84,8 +95,8 @@ export function SupervisorOverride({ onConfirmed, onCancel }: Props) {
   return (
     <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
       <View style={styles.topBar}>
-        <IconButton icon="close" label="Cancel override" tone="dark" onPress={onCancel} />
-        <Chip label="Supervisor override" icon="override" />
+        <IconButton icon="close" label="Cancel" tone="dark" onPress={onCancel} />
+        <Chip label={chip} icon="override" />
       </View>
 
       {!reason ? (

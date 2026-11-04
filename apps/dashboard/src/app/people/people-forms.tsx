@@ -19,7 +19,7 @@ const ROLES = [
   { value: "supervisor", label: "Supervisor" },
   { value: "manager", label: "Manager" },
   { value: "admin", label: "Administrator" },
-  { value: "client_viewer", label: "Client, view only" },
+  { value: "client_viewer", label: "Site, view only" },
 ];
 
 /** A message ready to send them, so nobody has to retype a password. */
@@ -166,7 +166,7 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
         )}
 
         {role === "client_viewer" ? (
-          <SelectField label="Which client" name="clientId">
+          <SelectField label="Which site" name="clientId">
             {options.clients.map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
@@ -175,7 +175,7 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
           </SelectField>
         ) : null}
 
-        {role === "admin" ? <p className="text-sm text-ink-muted">Administrators cover every client of their company.</p> : null}
+        {role === "admin" ? <p className="text-sm text-ink-muted">Administrators cover every site of their company.</p> : null}
 
         {role !== "admin" && role !== "client_viewer" ? (
           <fieldset className="flex flex-col gap-1.5 text-sm font-medium">

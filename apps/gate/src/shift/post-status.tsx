@@ -1,10 +1,13 @@
-import { space } from '@digigate/design';
+import { colors, space } from '@digigate/design';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
 import { ResultBanner } from '@/components/result-banner';
+import { Text } from '@/components/text';
+import { useShift } from '@/shift/shift-context';
+import { fenceOf } from '@/site/site-config';
 
 import { backAtPost, type FenceProblem } from './post-fence';
 import { useFenceStatus } from './post-warning';
@@ -16,12 +19,27 @@ const PROBLEM_WORDS: Record<FenceProblem, string> = {
   'location-off': 'Location is switched off on this device. Turn it on, then come back to this screen.',
 };
 
-/** Shown on home at a post with a location set: the way to say you're stepping away, and to say you're back. */
+/**
+ * Shown on home while on duty. At an access point with a location: the way to say you're stepping away, and to say
+ * you're back. At one without: that leaving it isn't checked, and the way to set where it is, so a gap in the setup is
+ * never silent.
+ */
 export function PostStatus() {
   const { watching, awayUntil, problem } = useFenceStatus();
+  const { shift } = useShift();
   const [notSaved, setNotSaved] = useState(false);
 
-  if (problem) return <ResultBanner tone="warning" title="Your post isn't being checked" message={PROBLEM_WORDS[problem]} />;
+  if (problem) return <ResultBanner tone="warning" title="Your access point isn't being checked" message={PROBLEM_WORDS[problem]} />;
+  if (shift && !fenceOf(shift.post)) {
+    return (
+      <View style={styles.row}>
+        <Text variant="label" color={colors.inkMuted} style={styles.note}>
+          Leaving this access point isn't checked: it has no location yet.
+        </Text>
+        <Chip label="Set its location" icon="on-site" onPress={() => router.push('/set-location')} />
+      </View>
+    );
+  }
   if (!watching) return null;
 
   const back = async () => {
@@ -52,6 +70,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: space.xs,
+  },
+  note: {
+    flexBasis: '100%',
   },
 });

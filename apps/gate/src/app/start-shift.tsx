@@ -7,12 +7,12 @@ import { useCurrentUser, useSession } from '@/auth/session';
 import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import { Logo } from '@/components/logo';
-import { OptionTile } from '@/components/option-tile';
+import { OptionTile, wideTiles } from '@/components/option-tile';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import type { ShiftPhoto } from '@/db/shifts';
-import { currentPosts, shiftPeriodAt, siteConfig } from '@/site/site-config';
+import { currentPosts, currentShiftPeriods, shiftPeriodAt, siteName } from '@/site/site-config';
 import { useShift } from '@/shift/shift-context';
 import { ShiftSelfie } from '@/shift/shift-selfie';
 
@@ -23,7 +23,10 @@ export default function StartShiftScreen() {
   const { start, problem } = useShift();
   const [posts] = useState(currentPosts);
   const [post, setPost] = useState<string>(posts[0]?.code ?? '');
-  const [period, setPeriod] = useState<string>(() => shiftPeriodAt(Date.now()).code);
+  const [periods] = useState(currentShiftPeriods);
+  const postWide = wideTiles(posts.map((option) => option.label));
+  const periodWide = wideTiles(periods.map((option) => option.label));
+  const [period, setPeriod] = useState<string>(() => shiftPeriodAt(Date.now())?.code ?? '');
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startProblem, setStartProblem] = useState<string | null>(null);
@@ -49,7 +52,7 @@ export default function StartShiftScreen() {
       showsVerticalScrollIndicator={false}>
       <View style={styles.topBar}>
         <Logo height={26} />
-        <Chip label={siteConfig.site} />
+        <Chip label={siteName()} />
       </View>
 
       <View style={styles.heading}>
@@ -66,10 +69,10 @@ export default function StartShiftScreen() {
 
       <View style={styles.section}>
         <Text variant="overline" color={colors.inkMuted}>
-          Your post
+          Your access point
         </Text>
         <View style={styles.tiles} accessibilityRole="radiogroup">
-          {posts.map((option) => (
+          {posts.map((option, index) => (
             <OptionTile
               key={option.code}
               label={option.label}
@@ -78,6 +81,7 @@ export default function StartShiftScreen() {
               selected={option.code === post}
               onPress={() => setPost(option.code)}
               stacked
+              wide={postWide[index]}
             />
           ))}
         </View>
@@ -88,7 +92,7 @@ export default function StartShiftScreen() {
           Your shift
         </Text>
         <View style={styles.tiles} accessibilityRole="radiogroup">
-          {siteConfig.shiftPeriods.map((option) => (
+          {periods.map((option, index) => (
             <OptionTile
               key={option.code}
               label={option.label}
@@ -98,6 +102,7 @@ export default function StartShiftScreen() {
               selected={option.code === period}
               onPress={() => setPeriod(option.code)}
               stacked
+              wide={periodWide[index]}
             />
           ))}
         </View>

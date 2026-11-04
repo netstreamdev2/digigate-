@@ -11,6 +11,7 @@ import { PillButton } from '@/components/pill-button';
 import { Text } from '@/components/text';
 import { useLocalDatabase } from '@/db/database-context';
 import { ResultBanner } from '@/components/result-banner';
+import { appVersionLine } from '@/lib/app-updates';
 import { periodHours, postLabel, siteConfig } from '@/site/site-config';
 import { useShift } from '@/shift/shift-context';
 import { useSync, type SyncStatus } from '@/sync/sync-context';
@@ -107,15 +108,17 @@ export default function ShiftScreen() {
         </View>
         <Field label="Employee number" value={user.employeeNumber} />
         <Field label="On duty since" value={clockTime(shift.startedAt)} />
-        <Field label="Post" value={`${postLabel(shift.post)} · ${periodHours(shift.period)}`} />
+        <Field label="Access point" value={`${postLabel(shift.post)} · ${periodHours(shift.period)}`} />
         <Field label="Screen locks" value={`After ${siteConfig.idleLockMinutes} minutes without a touch or a scan, or when the screen goes off`} />
         <Field label="Sync" value={syncSummary(sync.status, sync.pendingEvents)} />
         <Field label="Device storage" value={encrypted ? 'Encrypted' : 'Not encrypted (Expo Go, demo data only)'} />
+        <Field label="App" value={appVersionLine()} />
       </Card>
 
       <View style={styles.actions}>
         <PillButton label="Switch guard" icon="guard" onPress={signOut} />
         <PillButton label="Lock screen" icon="lock" variant="secondary" onPress={lock} />
+        <PillButton label="Set this access point's location" icon="on-site" variant="secondary" onPress={() => router.push('/set-location')} />
         {sync.status.state !== 'local-only' ? (
           <PillButton label="Sync now" icon="syncing" variant="secondary" onPress={() => void sync.syncNow()} />
         ) : null}

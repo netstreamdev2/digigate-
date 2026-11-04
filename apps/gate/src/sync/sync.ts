@@ -4,12 +4,13 @@ import { isPinHash } from '@/auth/pin';
 import { isGateUserRole, type GateUser } from '@/auth/users';
 import { replaceGateUsers } from '@/db/gate-users';
 import { pendingEvents, removeEvents } from '@/db/outbox';
+import { pendingLicencePhoto, removeLicencePhoto } from '@/db/licence-photos';
 import { pendingSelfie, removeSelfie } from '@/db/shifts';
-import { saveSyncedPosts } from '@/db/site-posts';
+import { saveSyncedPosts, saveSyncedSite } from '@/db/site-posts';
 import { isSiteToday, saveSiteToday } from '@/db/site-today';
 import { saveSiteVisits, type SiteVisit } from '@/db/visits';
 import { wipeRevokedDevice } from '@/db/wipe';
-import { isSyncedPost, type SyncedPost } from '@/site/site-config';
+import { isSyncedPost, syncedSiteOf, type SyncedPost } from '@/site/site-config';
 
 import { callFunction, deviceToken } from './device-api';
 import { readDeviceHealth } from './device-health';
@@ -97,8 +98,18 @@ async function uploadSelfie(db: SQLiteDatabase, token: string): Promise<void> {
   if (isRecord(body) && (body.selfie === 'saved' || body.selfie === 'refused')) await removeSelfie(db, selfie.shiftId);
 }
 
+/** Like a selfie: one licence photo a round, kept until the server keeps it or refuses it for good. */
+async function uploadLicencePhoto(db: SQLiteDatabase, token: string): Promise<void> {
+  const photo = await pendingLicencePhoto(db);
+  if (!photo) return;
+  const response = await callFunction('digigate-sync', { licencePhoto: { eventId: photo.eventId, image: photo.bmpBase64 } }, token);
+  if (!response.ok) return;
+  const body: unknown = await response.json();
+  if (isRecord(body) && (body.licencePhoto === 'saved' || body.licencePhoto === 'refused')) await removeLicencePhoto(db, photo.eventId);
+}
+
 /**
- * One round: upload the outbox oldest first, then a waiting selfie, then send the device's health and replace the local
+ * One round: upload the outbox oldest first, then a waiting selfie and licence photo, then send the device's health and replace the local
  * guard list and posts with the site's. An event leaves the outbox only once the server has it, and uploads are
  * idempotent, so a round cut off part-way is simply repeated next time.
  */
@@ -122,6 +133,7 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
   }
 
   await uploadSelfie(db, token);
+  await uploadLicencePhoto(db, token);
 
   const response = await callFunction('digigate-sync', { pull: true, health: await readDeviceHealth() }, token);
   if (response.status === 410) {
@@ -142,6 +154,9 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
   const posts: SyncedPost[] = body.posts.filter(isSyncedPost);
   await replaceGateUsers(db, users);
   await saveSyncedPosts(db, posts);
+  // An older server sends no site details; then the device keeps what it had.
+  const site = syncedSiteOf(body);
+  if (site) await saveSyncedSite(db, site);
   // An older server sends no visits; then the device keeps working from its own, as it always has.
   if (Array.isArray(body.openVisits)) {
     await saveSiteVisits(db, body.openVisits.flatMap((row) => {

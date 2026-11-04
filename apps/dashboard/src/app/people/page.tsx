@@ -21,6 +21,7 @@ import { currentUser, roleLabel, roleName } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { setGateUserActive } from "../setup/actions";
+import { AddGateStaffButton } from "../setup/gate-staff-form";
 import { setPersonActive } from "./actions";
 import { AddPersonButton, ResetPasswordButton } from "./people-forms";
 
@@ -33,7 +34,7 @@ const LOGIN_TABS = [
   { role: "manager", label: "Managers" },
   { role: "control_room", label: "Control room" },
   { role: "supervisor", label: "Supervisors" },
-  { role: "client_viewer", label: "Client viewers" },
+  { role: "client_viewer", label: "Site viewers" },
 ] as const;
 
 const STAFF_TABS = [
@@ -96,7 +97,7 @@ function ActiveChip({ active }: { active: boolean }) {
 function accessOf(person: Login): string {
   if (person.role === "super_user") return "Everything";
   if (person.role === "admin") return "All sites";
-  if (person.role === "client_viewer") return "Their client's sites";
+  if (person.role === "client_viewer") return "Their site";
   return plural(person.sites, "site");
 }
 
@@ -275,7 +276,14 @@ async function People({ searchParams }: { searchParams: Promise<Query> }) {
       title="People"
       plain
       glass
-      actions={onGateStaff ? null : companies.length ? <AddPersonButton companies={companies} /> : null}
+      actions={
+        companies.length ? (
+          <div className="flex flex-wrap gap-2">
+            <AddGateStaffButton />
+            <AddPersonButton companies={companies} label="Add a dashboard login" />
+          </div>
+        ) : null
+      }
       chips={
         <>
           <SegmentedLinks
@@ -313,7 +321,7 @@ async function People({ searchParams }: { searchParams: Promise<Query> }) {
       <GlassPanel
         className="mt-6"
         title={onGateStaff ? "Gate staff" : "Dashboard logins"}
-        subtitle={onGateStaff ? "They sign in at the gate with an employee number and PIN. Add them under their site, in Companies." : "They sign in to this dashboard with a password and an authenticator code."}
+        subtitle={onGateStaff ? "They sign in at the gate with an employee number and PIN. Add gate staff asks which site they work at, then takes one after another." : "They sign in to this dashboard with a password and an authenticator code."}
       >
         {shown.total === 0 ? <NothingHere filtered={filtered} /> : shown.table}
         <div className="-mx-6 -mb-6 mt-4">

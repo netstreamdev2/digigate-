@@ -5,8 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./icons/*": "./src/icons/*.ts",
-    "./vehicles/*": "./assets/vehicles/app/*"
+    "./icons/*": "./src/icons/*.ts"
   },
   "scripts": {
     "icons": "node scripts/build-icon-modules.mjs",

@@ -25,10 +25,7 @@ fixtures.local/
 .simulator/
 
 # Astra's working files stay on the PC. The apps ship only the 12 neutral drawings.
-packages/design/assets/vehicles/*
-!packages/design/assets/vehicles/app/
-packages/design/assets/vehicles/app/*
-!packages/design/assets/vehicles/app/generic-*-neutral.webp
+packages/design/assets/vehicles/
 
 # Logs and OS files
 *.log

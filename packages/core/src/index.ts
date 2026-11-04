@@ -1,5 +1,7 @@
 export { ageBand, type AgeBand } from './demographics';
 export * from './geofence';
+export * from './guard-record';
+export * from './shift-periods';
 export { decodeDocument, type DecodedDocument } from './documents/decode';
 export {
   decodeDriverLicence,
@@ -11,7 +13,6 @@ export {
 export type { Photo } from './documents/licence-photo/wavelet-image';
 export { checkLicence, licencePassesChecks, type LicenceChecks } from './documents/licence-checks';
 export { englishPart, parseLicenceDisc, type LicenceDiscResult, type ParsedLicenceDisc } from './documents/licence-disc';
-export { vehicleBodyFromDisc, type VehicleBody } from './documents/vehicle-body';
 export { isValidSaIdNumber } from './documents/sa-id-number';
 export { factsFromSaIdNumber, type SaIdNumberFacts } from './documents/id-number-barcode';
 export { parseSmartId, type SmartIdCard, type SmartIdResult } from './documents/smart-id';

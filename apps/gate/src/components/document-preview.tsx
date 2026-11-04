@@ -28,7 +28,6 @@ import { Chip } from './chip';
 import { Icon, type IconName } from './icon';
 import { ResultBanner } from './result-banner';
 import { Text } from './text';
-import { vehicleArtFor } from './vehicle-art';
 
 // The guard compares these with the physical document, so the current scan shows every value in full.
 
@@ -104,7 +103,6 @@ function Section({ title, fields }: { title: string; fields: readonly Field[] })
 
 /** `plateHidden` keeps the plate back until the check, so the guard reads it off the car rather than off the screen. */
 function DiscPreview({ disc, plateHidden }: { disc: ParsedLicenceDisc; plateHidden: boolean }) {
-  const art = vehicleArtFor(disc.description);
   return (
     <Card style={styles.card}>
       <Header
@@ -114,14 +112,6 @@ function DiscPreview({ disc, plateHidden }: { disc: ParsedLicenceDisc; plateHidd
         title={`${disc.make} ${disc.model}`}
         detail={`Expires ${formatDate(disc.expiresOn)}`}
       />
-      {art ? (
-        <View style={styles.vehicleArt}>
-          <Image source={art} style={styles.vehicleArtImage} contentFit="contain" accessibilityLabel={disc.description} />
-          <Text variant="label" color={colors.inkMuted}>
-            The body shape only. Check the make, model and colour against the car.
-          </Text>
-        </View>
-      ) : null}
       <View style={styles.plate}>
         {plateHidden ? (
           <Text variant="bodyStrong" color={colors.inkMuted} style={styles.plateHidden}>
@@ -278,7 +268,7 @@ const PHOTO_PROBLEM: Record<Exclude<LicencePhotoResult, { ok: true }>['reason'],
   damaged: "The photo in this barcode didn't decode. Check the photo on the card.",
 };
 
-/** The photo stored in the barcode, decoded after the result is on screen. Never cached or saved. */
+/** The photo stored in the barcode, decoded after the result is on screen. Never cached; kept for the control room only once the check is on record (see use-keep-licence-photo). */
 function LicencePhotoView({ photo }: { photo: LicencePhotoResult | null }) {
   const uri = useMemo(() => (photo?.ok ? greyscaleBmpUri(photo.photo) : null), [photo]);
   return (
@@ -440,16 +430,6 @@ const styles = StyleSheet.create({
   },
   plateHidden: {
     flex: 1,
-  },
-  // The drawings are 480 by 300 pixels; this keeps their 8:5 shape.
-  vehicleArt: {
-    gap: space.xs,
-  },
-  vehicleArtImage: {
-    width: '100%',
-    aspectRatio: 8 / 5,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
   },
   status: {
     flexDirection: 'row',

@@ -14,7 +14,7 @@ const PROBLEMS: Record<string, string> = {
   role: "Choose a role.",
   login: "Usernames are 3 to 32 letters or numbers, with no spaces. An email address also works.",
   sites: "Those sites don't belong to that company.",
-  client: "Choose which client this login is for.",
+  client: "Choose which site this login is for.",
   taken: "That username is already taken.",
   "needs-mfa": "Sign in again, then try this.",
   "not-allowed": "Your account can't do that.",

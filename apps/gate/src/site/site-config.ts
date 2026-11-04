@@ -1,4 +1,4 @@
-import { SITE_RULE_DEFAULTS, type Fence } from '@digigate/core';
+import { DEFAULT_SHIFT_PERIODS, readShiftPeriods, shiftPeriodAt as periodAt, SITE_RULE_DEFAULTS, type Fence, type ShiftPeriod } from '@digigate/core';
 import type { colors } from '@digigate/design';
 
 import type { IconName } from '@/components/icon';
@@ -37,13 +37,16 @@ export function isSyncedPost(value: unknown): value is SyncedPost {
   );
 }
 
-export type ShiftPeriodOption = Omit<PostOption, 'lanes'> & {
-  hours: string;
-  /** Hour of the day at the site it starts. */
-  startHour: number;
-  /** Hour of the day at the site it ends; below `startHour` when it runs past midnight. */
-  endHour: number;
-};
+/** A shift period as the start-shift screen offers it: the site's times, with an icon and colour added here. */
+export type ShiftPeriodOption = ShiftPeriod & Pick<PostOption, 'icon' | 'tint'> & { hours: string };
+
+/** The site as the dashboard sends it with each sync: its name and its shift times. */
+export type SyncedSite = { name: string; shiftPeriods: readonly ShiftPeriod[] };
+
+export function syncedSiteOf(body: Record<string, unknown>): SyncedSite | null {
+  if (typeof body.siteName !== 'string' || !body.siteName) return null;
+  return { name: body.siteName, shiftPeriods: readShiftPeriods(body.shiftPeriods) };
+}
 
 export type VisitTypeOption = {
   code: string;
@@ -54,19 +57,15 @@ export type VisitTypeOption = {
   tint: keyof typeof colors;
 };
 
-// This device's site settings. Phase 2 syncs them from the dashboard (see Site types and tenancy in the project notes); until
-// then the gate runs on these hospital defaults. Overstay limits are still an open decision, so none apply yet.
+// This device's site settings. The site's name, posts and shift times come from the dashboard with each sync (below); the
+// rest are still these hospital defaults (see Site types and tenancy in the project notes). Overstay limits are still an
+// open decision, so none apply yet.
 export const siteConfig = {
-  site: 'Demo Hospital',
   posts: [
     { code: 'main-gate', label: 'Main Gate', lanes: ALL_LANES, icon: 'vehicle', tint: 'tileSky' },
     { code: 'back-gate', label: 'Back Gate', lanes: ['vehicle'], icon: 'vehicle', tint: 'tileLilac' },
     { code: 'walk-in-gate', label: 'Walk-in Gate', lanes: ['pedestrian'], icon: 'pedestrian', tint: 'tileMint' },
   ] satisfies readonly PostOption[],
-  shiftPeriods: [
-    { code: 'day', label: 'Day', hours: '06:00 to 18:00', icon: 'duration', tint: 'tileButter', startHour: 6, endHour: 18 },
-    { code: 'night', label: 'Night', hours: '18:00 to 06:00', icon: 'duration', tint: 'tileLilac', startHour: 18, endHour: 6 },
-  ] satisfies readonly ShiftPeriodOption[],
   /** A shift nobody ended is over after this long, so the next sign-in has to start a new one. */
   maxShiftHours: 14,
   idleLockMinutes: 3,
@@ -126,16 +125,37 @@ export function fenceOf(code: string): Fence | null {
   return postOf(code)?.fence ?? null;
 }
 
+const SHIFT_TINTS = ['tileButter', 'tileLilac', 'tileSky', 'tileMint'] as const;
+
+const periodOptions = (periods: readonly ShiftPeriod[]): ShiftPeriodOption[] =>
+  periods.map((period, index) => ({ ...period, hours: `${period.start} to ${period.end}`, icon: 'duration', tint: SHIFT_TINTS[index % SHIFT_TINTS.length] ?? 'tileButter' }));
+
+const DEFAULT_PERIODS = periodOptions(DEFAULT_SHIFT_PERIODS);
+
+let syncedSite: { name: string; periods: readonly ShiftPeriodOption[] } | null = null;
+
+/** The site's name and shift times from the dashboard. Null forgets them, as a wiped device must. */
+export function applySyncedSite(site: SyncedSite | null): void {
+  syncedSite = site ? { name: site.name, periods: periodOptions(site.shiftPeriods) } : null;
+}
+
+/** Where this device is, once it has synced; until then just the product's name. */
+export function siteName(): string {
+  return syncedSite?.name ?? 'DigiGate';
+}
+
+/** The site's shift times once they've synced; until then day and night. */
+export function currentShiftPeriods(): readonly ShiftPeriodOption[] {
+  return syncedSite && syncedSite.periods.length > 0 ? syncedSite.periods : DEFAULT_PERIODS;
+}
+
 export function periodHours(code: string): string {
-  return siteConfig.shiftPeriods.find((period) => period.code === code)?.hours ?? code;
+  return currentShiftPeriods().find((period) => period.code === code)?.hours ?? code;
 }
 
 /** The shift period the clock says it is, to suggest at the start of a shift. */
-export function shiftPeriodAt(at: number): ShiftPeriodOption {
-  const hour = new Date(at + siteConfig.rules.utcOffsetMinutes * 60_000).getUTCHours();
-  const inPeriod = ({ startHour, endHour }: ShiftPeriodOption) =>
-    startHour < endHour ? hour >= startHour && hour < endHour : hour >= startHour || hour < endHour;
-  return siteConfig.shiftPeriods.find(inPeriod) ?? siteConfig.shiftPeriods[0];
+export function shiftPeriodAt(at: number): ShiftPeriodOption | undefined {
+  return periodAt(currentShiftPeriods(), at, siteConfig.rules.utcOffsetMinutes);
 }
 
 /** The visit type for a code, or null for one this site doesn't know (e.g. from an older config). */

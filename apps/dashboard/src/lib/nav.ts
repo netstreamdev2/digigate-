@@ -2,7 +2,7 @@ import type { NavItem } from "@/components/sidebar";
 
 import type { CurrentUser } from "./session";
 
-type AppPage = "control-room" | "devices" | "reports" | "audit" | "setup" | "people";
+type AppPage = "control-room" | "devices" | "reports" | "audit" | "setup" | "people" | "admin";
 
 /** The sidebar for the pages that run on real data. Setting things up is for administrators. */
 export function appNav(user: CurrentUser, active: AppPage): readonly NavItem[] {
@@ -14,6 +14,7 @@ export function appNav(user: CurrentUser, active: AppPage): readonly NavItem[] {
       { label: "Audit log", icon: "audit-log", href: "/audit", active: active === "audit" },
       { label: "Companies", icon: "sites", href: "/setup", active: active === "setup" },
       { label: "People", icon: "people", href: "/people", active: active === "people" },
+      { label: "Admin", icon: "settings", href: "/admin", active: active === "admin" },
     );
   }
   return items;

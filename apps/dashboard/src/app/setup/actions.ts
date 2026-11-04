@@ -6,17 +6,22 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import QRCode from "qrcode";
 
+import { accessPointColumns, accessPointProblem, parseLocation, readAccessPoint, type AccessPointDraft } from "@/lib/access-points";
 import type { FormState } from "@/lib/form-state";
-import { likePattern } from "@/lib/paging";
+import { anyColumnLike, likePattern } from "@/lib/paging";
+import { findPlaces, type PlaceChoice } from "@/lib/places";
 import { currentUser } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export type PairingState = { problem: string | null; code: string | null; qr: string | null; expiresAt: string | null; createdAt: string | null };
 
-export type PairingLevel = "company" | "client" | "site";
+export type PairingLevel = "company" | "site";
 export type PairingOption = { id: string; name: string };
 export type PairingChoices = { options: PairingOption[]; total: number; problem: string | null };
 export type SiteReadiness = { posts: number; staff: number };
+/** A gate staff form's answer: `added` names who was just added, so the form can say so and take the next one. */
+export type GateStaffState = FormState & { added: string | null };
+export type SiteChoice = { id: string; orgId: string; name: string; detail: string };
 
 // Same record the gate app verifies: see apps/gate/src/auth/pin.ts and scripts/hash-pin.mjs.
 const PIN_ITERATIONS = 20_000;
@@ -24,9 +29,7 @@ const PIN_KEY_BYTES = 32;
 const PAIRING_CODE_DIGITS = 10;
 const PAIRING_LIFETIME_MS = 10 * 60_000;
 const PAIRING_CHOICES_SHOWN = 6;
-// GPS drifts by tens of metres, so a smaller fence would warn guards standing at their post.
-const MIN_FENCE_METRES = 30;
-const MAX_FENCE_METRES = 1000;
+const SITE_CHOICES_SHOWN = 8;
 
 const text = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 
@@ -45,6 +48,7 @@ function problemFor(error: { code?: string }): FormState {
 
 function saved(): FormState {
   revalidatePath("/setup", "layout");
+  revalidatePath("/admin", "layout");
   return { problem: null, saved: Date.now() };
 }
 
@@ -58,7 +62,7 @@ function hashPin(pin: string) {
   };
 }
 
-// Adding a company, client or site goes straight into it, so the next step is right there. Row security doesn't let an
+// Adding a company or site goes straight into it, so the next step is right there. Row security doesn't let an
 // insert hand back a site it has only just made, so each is found again by what makes it unique, newest first.
 
 export async function addOrganisation(_previous: FormState, form: FormData): Promise<FormState> {
@@ -73,82 +77,167 @@ export async function addOrganisation(_previous: FormState, form: FormData): Pro
   redirect(added ? `/setup/${added.id}?added=1` : "/setup");
 }
 
-export async function addClient(_previous: FormState, form: FormData): Promise<FormState> {
-  const name = text(form, "name");
-  const orgId = text(form, "orgId");
-  if (!name) return { problem: "Enter the client's name.", saved: 0 };
+type SiteInput = {
+  orgId: string;
+  /** Set only to finish a place that has a name but no site yet. */
+  placeId: string | null;
+  site: { name: string; siteType: string; code: string; address: string; location: string; radiusM: number; openParking: boolean; parkingSpaces: string };
+  accessPoints: readonly AccessPointDraft[];
+};
+
+/**
+ * The site wizard's one save: the site and every access point together, checked here again whatever the browser sent.
+ * Goes straight to the site's gate staff, the next thing to set up.
+ */
+export async function createSite(input: SiteInput): Promise<{ problem: string }> {
+  const { site } = input;
+  const name = site.name.trim();
+  const code = site.code.trim().toUpperCase();
+  const location = parseLocation(site.location);
+  const spaces = Number(site.parkingSpaces);
+  if (!name) return { problem: "Give the site a name." };
+  if (code && !/^[A-Z0-9]{2,8}$/.test(code)) return { problem: "The site code is 2 to 8 letters or numbers, like DCH." };
+  if (location === "invalid") return { problem: "Paste the site's latitude and longitude, like -29.8587, 31.0218." };
+  if (!site.openParking && !(Number.isInteger(spaces) && spaces >= 1)) return { problem: "Say how many parking spaces the site has." };
+
+  const points = input.accessPoints.map(readAccessPoint);
+  if (points.length === 0 || points.some((point) => point === null)) return { problem: "Add at least one access point." };
+  for (const [index, point] of points.entries()) {
+    const issue = point ? accessPointProblem(point) : "It's missing.";
+    if (issue) return { problem: `Access point ${index + 1}: ${issue}` };
+  }
+
   const supabase = await supabaseServer();
-  const { error } = await supabase.from("clients").insert({ org_id: orgId, name });
-  if (error) return problemFor(error);
-  const { data: added } = await supabase.from("clients").select("id").eq("org_id", orgId).eq("name", name).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const { data: siteId, error } = await supabase.rpc("create_site", {
+    _org: input.orgId,
+    ...(input.placeId ? { _client: input.placeId } : {}),
+    _site: {
+      name,
+      siteType: site.siteType === "estate" ? "estate" : "hospital",
+      code,
+      address: site.address.trim().slice(0, 300),
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
+      radiusM: location ? site.radiusM : null,
+      openParking: site.openParking,
+      parkingSpaces: site.openParking ? null : spaces,
+    },
+    _access_points: points.flatMap((point) => {
+      if (!point) return [];
+      const columns = accessPointColumns(point);
+      return [{
+        label: columns.label,
+        gateType: columns.gate_type,
+        lanes: columns.lanes,
+        booms: columns.booms,
+        manned: columns.manned,
+        cctvCameras: columns.cctv_cameras,
+        anpr: columns.anpr,
+        latitude: columns.latitude,
+        longitude: columns.longitude,
+        radiusM: columns.radius_m,
+      }];
+    }),
+  });
+  if (error || !siteId) {
+    if (error?.code === "23505") return { problem: "That site code is already used by another site in this company." };
+    if (error?.code === "23514" && error.message.includes("set up already")) return { problem: "This site is set up already. Find it in the company's list of sites." };
+    return { problem: problemFor(error ?? {}).problem ?? "That didn't save. Try again." };
+  }
   revalidatePath("/setup", "layout");
-  redirect(added ? `/setup/${orgId}/${added.id}?added=1` : `/setup/${orgId}`);
+  redirect(`/setup/${input.orgId}/${siteId}?tab=staff&added=1`);
 }
 
-export async function addSite(_previous: FormState, form: FormData): Promise<FormState> {
-  const name = text(form, "name");
-  const orgId = text(form, "orgId");
-  const clientId = text(form, "clientId");
-  if (!name) return { problem: "Enter the site's name.", saved: 0 };
+/** One access point, from the popup on the site page. Its code is made from its name, unique within the site. */
+export async function addAccessPoint(_previous: FormState, form: FormData): Promise<FormState> {
+  const draft = readAccessPoint(JSON.parse(text(form, "accessPoint") || "null"));
+  if (!draft) return { problem: "That didn't save. Try again.", saved: 0 };
+  const issue = accessPointProblem(draft);
+  if (issue) return { problem: issue, saved: 0 };
+  const siteId = text(form, "siteId");
   const supabase = await supabaseServer();
-  const { error } = await supabase.from("sites").insert({ org_id: orgId, client_id: clientId, name, site_type: text(form, "siteType") });
-  if (error) return problemFor(error);
-  const { data: added } = await supabase.from("sites").select("id").eq("client_id", clientId).eq("name", name).order("created_at", { ascending: false }).limit(1).maybeSingle();
-  revalidatePath("/setup", "layout");
-  redirect(added ? `/setup/${orgId}/${clientId}/${added.id}?added=1` : `/setup/${orgId}/${clientId}`);
-}
-
-export async function addPost(_previous: FormState, form: FormData): Promise<FormState> {
-  const label = text(form, "label");
-  const lanes = form.getAll("lanes").map(String);
-  if (!label) return { problem: "Enter the post's name.", saved: 0 };
-  if (lanes.length === 0) return { problem: "Choose cars, people on foot, or both.", saved: 0 };
-  const supabase = await supabaseServer();
-  const { error } = await supabase
-    .from("posts")
-    .insert({ org_id: text(form, "orgId"), site_id: text(form, "siteId"), code: slugOf(label), label, lanes });
+  const { data: code, error: codeError } = await supabase.rpc("post_code_for", { _site: siteId, _label: draft.label });
+  if (codeError || !code) return problemFor(codeError ?? {});
+  const { error } = await supabase.from("posts").insert({ org_id: text(form, "orgId"), site_id: siteId, code, ...accessPointColumns(draft) });
   return error ? problemFor(error) : saved();
 }
 
-/** Accepts what Google Maps copies, such as -33.9249, 18.4241. Empty clears the location, which turns the geofence off. */
-export async function setPostLocation(_previous: FormState, form: FormData): Promise<FormState> {
-  const location = text(form, "location");
-  const radius = Number(text(form, "radius"));
-  const [latitude, longitude, ...rest] = location.split(/[\s,]+/).filter(Boolean).map(Number);
-  if (location) {
-    const valid = rest.length === 0 && latitude !== undefined && longitude !== undefined && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
-    if (!valid) return { problem: "Paste the latitude and longitude, like -33.9249, 18.4241.", saved: 0 };
-  }
-  if (!Number.isInteger(radius) || radius < MIN_FENCE_METRES || radius > MAX_FENCE_METRES) {
-    return { problem: `The distance must be between ${MIN_FENCE_METRES} and ${MAX_FENCE_METRES} metres.`, saved: 0 };
-  }
+/** Everything about an access point but its code, which handhelds already know it by. */
+export async function updateAccessPoint(_previous: FormState, form: FormData): Promise<FormState> {
+  const draft = readAccessPoint(JSON.parse(text(form, "accessPoint") || "null"));
+  if (!draft) return { problem: "That didn't save. Try again.", saved: 0 };
+  const issue = accessPointProblem(draft);
+  if (issue) return { problem: issue, saved: 0 };
   const supabase = await supabaseServer();
-  const { error } = await supabase
-    .from("posts")
-    .update({ latitude: location ? latitude : null, longitude: location ? longitude : null, radius_m: radius })
-    .eq("id", text(form, "id"));
+  const { error } = await supabase.from("posts").update(accessPointColumns(draft)).eq("id", text(form, "id"));
   return error ? problemFor(error) : saved();
 }
 
-export async function addGateUser(_previous: FormState, form: FormData): Promise<FormState> {
+/**
+ * A guard or supervisor, at one site. The form stays open after each one, so a whole shift can be added in one go, and
+ * the answer names who was added so the PIN can be handed over.
+ */
+export async function addGateUser(_previous: GateStaffState, form: FormData): Promise<GateStaffState> {
   const employeeNumber = text(form, "employeeNumber");
   const pin = text(form, "pin");
   const firstName = text(form, "firstName");
   const lastName = text(form, "lastName");
-  if (!firstName || !lastName) return { problem: "Enter their first name and surname.", saved: 0 };
-  if (!/^\d{3,8}$/.test(employeeNumber)) return { problem: "Employee numbers are 3 to 8 digits.", saved: 0 };
-  if (!/^\d{6}$/.test(pin)) return { problem: "The PIN must be 6 digits.", saved: 0 };
+  const siteId = text(form, "siteId");
+  const role = text(form, "role") === "supervisor" ? "supervisor" : "guard";
+  const refused = (problem: string): GateStaffState => ({ problem, saved: 0, added: null });
+  if (!siteId) return refused("Choose the site they work at.");
+  if (!firstName || !lastName) return refused("Enter their first name and surname.");
+  if (!/^\d{3,8}$/.test(employeeNumber)) return refused("Employee numbers are 3 to 8 digits.");
+  if (!/^\d{6}$/.test(pin)) return refused("The PIN must be 6 digits. Tap Make a PIN for one.");
   const supabase = await supabaseServer();
   const { error } = await supabase.from("gate_users").insert({
     org_id: text(form, "orgId"),
-    site_ids: [text(form, "siteId")],
+    site_ids: [siteId],
     employee_number: employeeNumber,
     first_name: firstName,
     last_name: lastName,
-    role: text(form, "role"),
+    role,
     pin: hashPin(pin),
   });
-  return error ? problemFor(error) : saved();
+  if (error) {
+    return refused(error.code === "23505" ? `Employee number ${employeeNumber} is already used in this company. Find them under People.` : (problemFor(error).problem ?? "That didn't save."));
+  }
+  revalidatePath("/setup", "layout");
+  revalidatePath("/people");
+  return { problem: null, saved: Date.now(), added: `${firstName} ${lastName}` };
+}
+
+const PLACE_SEARCH_MIN = 3;
+
+/** Addresses for the site wizard, as they're typed. Signed-in administrators only, so it can't be used as an open relay. */
+export async function placeChoices(search: string): Promise<{ places: PlaceChoice[]; problem: string | null }> {
+  const user = await currentUser();
+  if (!user || (!user.roles.includes("super_user") && !user.roles.includes("admin"))) return { places: [], problem: "Your account can't do that." };
+  const term = search.trim().slice(0, 120);
+  if (term.length < PLACE_SEARCH_MIN) return { places: [], problem: null };
+  try {
+    return { places: await findPlaces(term), problem: null };
+  } catch {
+    return { places: [], problem: "The address search isn't answering. Type the address yourself, or try again in a moment." };
+  }
+}
+
+/** Sites to add gate staff to, searched by name or code. Row security decides which come back. */
+export async function siteChoices(search: string): Promise<{ sites: SiteChoice[]; problem: string | null }> {
+  const supabase = await supabaseServer();
+  let list = supabase.from("sites").select("id, org_id, name, code, organisations(name)").eq("is_active", true).order("name").limit(SITE_CHOICES_SHOWN);
+  if (search.trim()) list = list.or(anyColumnLike(["name", "code"], search.trim()));
+  const { data, error } = await list;
+  if (error) return { sites: [], problem: "That didn't load. Try again." };
+  return {
+    problem: null,
+    sites: data.map((site) => ({
+      id: site.id,
+      orgId: site.org_id,
+      name: [site.name, site.code].filter(Boolean).join(" · "),
+      detail: site.organisations?.name ?? "",
+    })),
+  };
 }
 
 export async function setGateUserActive(form: FormData): Promise<void> {
@@ -162,8 +251,7 @@ function pairingRows(level: PairingLevel, parentId: string, pattern: string, sup
   const columns = "id, name";
   const count = { count: "exact" } as const;
   if (level === "company") return supabase.from("organisations").select(columns, count).eq("is_active", true).ilike("name", pattern).order("name").limit(PAIRING_CHOICES_SHOWN);
-  if (level === "client") return supabase.from("clients").select(columns, count).eq("org_id", parentId).eq("is_active", true).ilike("name", pattern).order("name").limit(PAIRING_CHOICES_SHOWN);
-  return supabase.from("sites").select(columns, count).eq("client_id", parentId).eq("is_active", true).ilike("name", pattern).order("name").limit(PAIRING_CHOICES_SHOWN);
+  return supabase.from("sites").select(columns, count).eq("org_id", parentId).eq("is_active", true).ilike("name", pattern).order("name").limit(PAIRING_CHOICES_SHOWN);
 }
 
 /** One step of the pairing walk-through: a short list to pick from, searched on the server. Row security decides what's in it. */

@@ -29,6 +29,7 @@ import { CheckResult, type Settled } from './check-result';
 import { recordDecision, type Decision, type Direction } from './decision';
 import { personIdOf } from './person-id';
 import { IdNumberPopup } from './id-number-popup';
+import { useKeepLicencePhoto } from './use-keep-licence-photo';
 import { usePersonDocument } from './use-person-document';
 import { usePersonVisits } from './use-person-visits';
 import { VisitSummary } from './visit-summary';
@@ -92,6 +93,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
   const [problem, setProblem] = useState<string | null>(null);
   const scan = usePersonDocument(checked === null);
   const { person, notice } = scan;
+  const photoProblem = useKeepLicencePhoto(db, checked?.event ?? null, person?.kind === 'driver-licence' ? person.photo : null);
   const visits = usePersonVisits(direction === 'exit' ? person : null);
   const copy = COPY[direction];
 
@@ -179,6 +181,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
         )}
 
         {problem ? <ResultBanner tone="warning" title="Not saved" message={problem} /> : null}
+        {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
 
         {person ? (

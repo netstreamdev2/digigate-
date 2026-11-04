@@ -337,3 +337,19 @@ body {
     animation: none;
   }
 }
+
+/* The map's pin and geofence (components/location-map.tsx), from the same tokens as everything else. */
+.dg-map-pin {
+  border-radius: 9999px 9999px 9999px 0;
+  transform: rotate(-45deg);
+  background: var(--color-brand);
+  border: 3px solid var(--color-surface);
+  box-shadow: var(--shadow-floating);
+}
+
+.dg-map-fence {
+  stroke: var(--color-brand);
+  stroke-width: 2;
+  fill: var(--color-brand);
+  fill-opacity: 0.12;
+}

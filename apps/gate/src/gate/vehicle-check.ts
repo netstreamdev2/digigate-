@@ -75,7 +75,7 @@ function vehiclePayload(disc: ParsedLicenceDisc): GateEventPayload {
     make: disc.make,
     model: disc.model,
     colour: englishPart(disc.colour),
-    // The body type in the disc's own words, so new wordings can be matched to a drawing. Not personal information.
+    // The body type in the disc's own words, shown to the control room. Not personal information.
     description: disc.description,
     disc_expires_on: disc.expiresOn,
   };

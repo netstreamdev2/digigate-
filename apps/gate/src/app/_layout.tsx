@@ -17,7 +17,8 @@ import { LocalDatabaseProvider, useLocalDatabase } from '@/db/database-context';
 import { countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users';
 import { appendEvent } from '@/db/outbox';
 import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
-import { loadSyncedPosts } from '@/db/site-posts';
+import { loadSyncedPosts, loadSyncedSite } from '@/db/site-posts';
+import { useAppUpdates } from '@/lib/app-updates';
 import { siteConfig } from '@/site/site-config';
 import { seedUsers } from '@/demo/seed-users';
 import { prepareTones } from '@/lib/feedback';
@@ -38,6 +39,7 @@ async function prepareDatabase(): Promise<LocalDatabase> {
     await replaceGateUsers(local.db, seedUsers);
   }
   await loadSyncedPosts(local.db);
+  await loadSyncedSite(local.db);
   return local;
 }
 
@@ -133,6 +135,8 @@ function GuardedStack() {
     setScansPaused(locked);
   }, [locked]);
 
+  useAppUpdates(state.status !== 'active');
+
   // The device has just cleared itself, so nobody can carry on working on it.
   useEffect(() => {
     if (syncStatus.state === 'revoked') signOut();
@@ -156,6 +160,7 @@ function GuardedStack() {
           <Stack.Screen name="shift" />
           <Stack.Screen name="scan-test" />
           <Stack.Screen name="stepping-away" />
+          <Stack.Screen name="set-location" />
           <Stack.Screen name="manual" />
         </Stack.Protected>
         <Stack.Protected guard={signedIn && !onDuty} redirectTo={signedIn ? '/' : '/sign-in'}>

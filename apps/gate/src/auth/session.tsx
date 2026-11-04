@@ -7,7 +7,9 @@ import type { FailureRecord } from '@/db/sign-in-failures';
 import { verifyPin } from './pin';
 import type { GateUser } from './users';
 
-const MAX_FAILED_ATTEMPTS = 5;
+// Three wrong PINs lock that employee number on this device for five minutes, so guessing a six-digit PIN would take
+// well over a year.
+const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_MS = 5 * 60_000;
 const IDLE_CHECK_MS = 10_000;
 

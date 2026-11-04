@@ -1,6 +1,7 @@
 // A device's only door to the server. Deployed with --no-verify-jwt: devices have no login, so each proves itself with
 // its own token. Uploads a batch from the outbox and, when asked, returns what the device needs to run offline. It can
-// also carry the device's health and one shift selfie, each sent on its own so a slow photo never holds up events.
+// also carry the device's health, one shift selfie or one licence photo, each sent on its own so a slow photo never
+// holds up events.
 // Each check is run through the rules again as it arrives, against every gate's visits, and anything the handheld
 // couldn't see becomes a server alert. Run `pnpm functions:bundle` before deploying: the rules come from packages/core.
 // Logs carry counts and error names only: event payloads hold personal information.
@@ -11,6 +12,9 @@ import { json, sha256Hex, sql } from '../_shared/device.ts';
 const MAX_BATCH = 100;
 const SELFIE_BUCKET = 'shift-selfies';
 const MOST_SELFIE_BYTES = 400_000;
+const LICENCE_PHOTO_BUCKET = 'licence-photos';
+// A licence photo is small: an 8-bit greyscale BMP of a few hundred pixels a side.
+const MOST_LICENCE_PHOTO_BYTES = 200_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CHECKS = new Set(['vehicle_entry', 'vehicle_exit', 'pedestrian_entry', 'pedestrian_exit']);
 
@@ -82,7 +86,7 @@ async function serverFindings(orgId: string, siteId: string, events: readonly un
   return findings;
 }
 
-type Body = { events?: unknown; pull?: unknown; health?: unknown; selfie?: unknown };
+type Body = { events?: unknown; pull?: unknown; health?: unknown; selfie?: unknown; licencePhoto?: unknown };
 
 /** `later` when the shift hasn't reached the server yet, so the device holds on to the photo and tries again. */
 type SelfieResult = 'saved' | 'refused' | 'later';
@@ -113,6 +117,42 @@ async function keepSelfie(deviceId: string, selfie: unknown): Promise<SelfieResu
   if (error) throw new Error('selfie upload failed');
   await sql`select digigate.attach_selfie(${deviceId}, ${shiftId}, ${path})`;
   return 'saved';
+}
+
+function bmpBytes(base64: string): Uint8Array | null {
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+  } catch {
+    return null;
+  }
+  const looksLikeBmp = bytes[0] === 0x42 && bytes[1] === 0x4d;
+  return looksLikeBmp && bytes.length <= MOST_LICENCE_PHOTO_BYTES ? bytes : null;
+}
+
+/**
+ * The photo decoded from a driver's licence, sent after the check it belongs to. `later` while that check hasn't
+ * reached the server; `refused` once its details are gone, so the device lets go of it.
+ */
+async function keepLicencePhoto(deviceId: string, photo: unknown): Promise<SelfieResult> {
+  if (typeof photo !== 'object' || photo === null) return 'refused';
+  const { eventId, image } = photo as { eventId?: unknown; image?: unknown };
+  if (typeof eventId !== 'string' || !UUID.test(eventId) || typeof image !== 'string') return 'refused';
+  const bytes = bmpBytes(image);
+  if (!bytes) return 'refused';
+
+  const [check] = await sql`
+    select e.org_id, e.site_id, d.event_id is not null as has_details
+    from digigate.events e left join digigate.event_details d on d.event_id = e.id
+    where e.id = ${eventId} and e.device_id = ${deviceId}`;
+  if (!check) return 'later';
+  if (!check.has_details) return 'refused';
+
+  const path = `${check.org_id}/${check.site_id}/${eventId}.bmp`;
+  const { error } = await admin.storage.from(LICENCE_PHOTO_BUCKET).upload(path, bytes, { contentType: 'image/bmp', upsert: true });
+  if (error) throw new Error('licence photo upload failed');
+  const [{ ok }] = await sql`select digigate.attach_licence_photo(${deviceId}, ${eventId}, ${path}) as ok`;
+  return ok ? 'saved' : 'refused';
 }
 
 Deno.serve(async (request) => {
@@ -162,10 +202,11 @@ Deno.serve(async (request) => {
       await sql`select digigate.record_device_health(${deviceId}, ${sql.json(body.health)})`;
     }
     const selfie = body.selfie === undefined ? undefined : await keepSelfie(deviceId, body.selfie);
-    if (body.pull !== true) return json({ accepted, selfie });
+    const licencePhoto = body.licencePhoto === undefined ? undefined : await keepLicencePhoto(deviceId, body.licencePhoto);
+    if (body.pull !== true) return json({ accepted, selfie, licencePhoto });
 
     const [{ snapshot }] = await sql`select digigate.device_snapshot(${deviceId}) as snapshot`;
-    return json({ accepted, selfie, ...snapshot });
+    return json({ accepted, selfie, licencePhoto, ...snapshot });
   } catch (cause) {
     console.error('digigate-sync failed', events.length, cause instanceof Error ? cause.name : 'unknown');
     return json({ error: 'Server error' }, 500);

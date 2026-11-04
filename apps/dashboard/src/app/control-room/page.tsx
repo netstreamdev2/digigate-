@@ -36,7 +36,7 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
       plain
       chips={
         <>
-          <SearchBox placeholder="Search a site or client" />
+          <SearchBox placeholder="Search a site" />
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />
         </>
       }
@@ -50,7 +50,7 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
           <ListRow
             key={site.id}
             href={`/control-room/${site.id}`}
-            title={`${site.client} · ${site.name}`}
+            title={site.name}
             detail={`${site.onSite} on site · ${plural(site.onDuty, "guard")} on duty`}
             trailing={
               <>

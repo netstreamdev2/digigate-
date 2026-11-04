@@ -23,12 +23,14 @@ type Props = {
   fields?: Record<string, string>;
   /** A small button, for use inside a row. */
   compact?: boolean;
+  /** A wider popup, for forms with more in them. */
+  wide?: boolean;
   /** The inputs. */
   children: ReactNode;
 };
 
 /** A form that opens in a popup, so a list page stays a list however much can be added to it. */
-export function FormDialog({ label, title, icon, submitLabel, pendingLabel, action, fields = {}, compact = false, children }: Props) {
+export function FormDialog({ label, title, icon, submitLabel, pendingLabel, action, fields = {}, compact = false, wide = false, children }: Props) {
   const dialog = useDialog();
   const { ref } = dialog;
   const [state, formAction, pending] = useActionState(action, FORM_START);
@@ -53,7 +55,7 @@ export function FormDialog({ label, title, icon, submitLabel, pendingLabel, acti
       >
         {label}
       </button>
-      <Dialog dialogRef={dialog.ref}>
+      <Dialog dialogRef={dialog.ref} wide={wide}>
         <DialogHeading icon={icon} tone="neutral" title={title} />
         <form key={state.saved} onSubmit={submit} className="mt-5 flex flex-col gap-4">
           <FormProblem message={state.problem} />

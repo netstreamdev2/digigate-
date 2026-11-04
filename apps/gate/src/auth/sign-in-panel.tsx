@@ -16,7 +16,7 @@ import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import { useLocalDatabase } from '@/db/database-context';
 import { countGateUsers } from '@/db/gate-users';
-import { siteConfig } from '@/site/site-config';
+import { siteName } from '@/site/site-config';
 import { useSync, type SyncStatus } from '@/sync/sync-context';
 
 const EMPLOYEE_NUMBER_MIN_LENGTH = 3;
@@ -109,7 +109,7 @@ export function SignInPanel() {
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
       <View style={styles.topBar}>
         <Logo height={26} />
-        <Chip label={siteConfig.site} />
+        <Chip label={siteName()} />
       </View>
 
       {/* The banner takes the heading's place, so the keypad and the button under it stay on screen. */}

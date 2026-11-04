@@ -2,7 +2,7 @@ import "server-only";
 
 import { siteToday } from "./format";
 import { anyColumnLike, likePattern, PAGE_SIZE, rangeOf } from "./paging";
-import { counted, must } from "./reads";
+import { counted, maybe, must } from "./reads";
 import { supabaseServer } from "./supabase/server";
 
 export type Lane = "vehicle" | "pedestrian";
@@ -72,6 +72,11 @@ export type Check = {
   post: string | null;
   enteredAt: string | null;
   outcome: string | null;
+  ruleCodes: string[];
+  /** Whether the visit this check belongs to exists, and when it ended: how a blocked check that a supervisor let
+   * through shows it went ahead, since the check itself stays blocked on record. */
+  visitOpened: boolean;
+  exitedAt: string | null;
 };
 
 const ALERTS_SHOWN = 25;
@@ -221,11 +226,14 @@ export async function latestChecks(siteId: string): Promise<Check[]> {
   const rows = must(
     await supabase
       .from("check_records")
-      .select("id, type, occurred_at, person_name, plate, vehicle_description, visit_type, post, visit_entered_at, outcome")
+      .select("id, type, occurred_at, person_name, plate, vehicle_description, visit_type, post, visit_id, visit_entered_at, outcome, rule_codes")
       .eq("site_id", siteId)
       .order("occurred_at", { ascending: false })
       .limit(CHECKS_SHOWN),
   );
+  const visitIds = rows.flatMap((row) => (row.visit_id && row.visit_entered_at ? [row.visit_id] : []));
+  const visits = visitIds.length ? must(await supabase.from("visit_records").select("id, exited_at").in("id", visitIds)) : [];
+  const exitedAt = new Map(visits.flatMap((visit) => (visit.id ? [[visit.id, visit.exited_at] as const] : [])));
   return rows.flatMap((row) =>
     row.id && row.occurred_at
       ? [{
@@ -239,6 +247,9 @@ export async function latestChecks(siteId: string): Promise<Check[]> {
           post: row.post,
           enteredAt: row.visit_entered_at,
           outcome: row.outcome,
+          ruleCodes: row.rule_codes ?? [],
+          visitOpened: row.visit_entered_at !== null,
+          exitedAt: row.visit_id ? (exitedAt.get(row.visit_id) ?? null) : null,
         }]
       : [],
   );
@@ -249,4 +260,51 @@ export async function entriesToday(siteId: string, now: number): Promise<number>
   const supabase = await supabaseServer();
   const rows = must(await supabase.from("daily_counts").select("visits").eq("site_id", siteId).eq("day", siteToday(now)));
   return rows.reduce((sum, row) => sum + row.visits, 0);
+}
+
+export type SiteDay = {
+  checks: number;
+  exits: number;
+  stayMinutes: number;
+  blocked: number;
+  overrides: number;
+  turnedAway: number;
+  /** Scans in each hour of the site's day, midnight first. */
+  hours: number[];
+};
+
+/**
+ * Today's running totals at the site, from the counts the server keeps as checks arrive. A site that changed security
+ * company today has a row for each; row security leaves the viewer only their own, or both for the site's own logins.
+ */
+export async function siteDay(siteId: string, now: number): Promise<SiteDay> {
+  const supabase = await supabaseServer();
+  const rows = must(
+    await supabase.from("daily_activity").select("checks, exits, stay_minutes, blocked, overrides, turned_away, hours").eq("site_id", siteId).eq("day", siteToday(now)),
+  );
+  const hours = Array.from({ length: 24 }, (_, hour) => rows.reduce((sum, row) => sum + (row.hours[hour] ?? 0), 0));
+  const total = (pick: (row: (typeof rows)[number]) => number) => rows.reduce((sum, row) => sum + pick(row), 0);
+  return {
+    checks: total((row) => row.checks),
+    exits: total((row) => row.exits),
+    stayMinutes: total((row) => row.stay_minutes),
+    blocked: total((row) => row.blocked),
+    overrides: total((row) => row.overrides),
+    turnedAway: total((row) => row.turned_away),
+    hours,
+  };
+}
+
+/** Whether the site counts its parking, and how many spaces it has. */
+export async function siteParking(siteId: string): Promise<{ open: boolean; spaces: number | null }> {
+  const supabase = await supabaseServer();
+  const row = maybe(await supabase.from("sites").select("open_parking, parking_spaces").eq("id", siteId).maybeSingle());
+  return { open: row?.open_parking ?? true, spaces: row?.parking_spaces ?? null };
+}
+
+/** When the longest stay still going began, or null when nobody is inside. */
+export async function longestInside(siteId: string): Promise<string | null> {
+  const supabase = await supabaseServer();
+  const [row] = must(await supabase.from("visit_records").select("entered_at").eq("site_id", siteId).is("exited_at", null).order("entered_at").limit(1));
+  return row?.entered_at ?? null;
 }

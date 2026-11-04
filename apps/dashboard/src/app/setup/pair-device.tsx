@@ -12,20 +12,19 @@ import { QrImage } from "@/components/qr-image";
 import { createPairingCode, deviceWasPaired, pairingChoices, siteReadiness, type PairingChoices, type PairingLevel, type PairingOption, type PairingState, type SiteReadiness } from "./actions";
 
 /** Where the device is going, known up front on a site's own page. */
-export type PairingPlace = { company: PairingOption; client: PairingOption; site: PairingOption };
+export type PairingPlace = { company: PairingOption; site: PairingOption };
 
 type Chosen = Partial<PairingPlace>;
 type Step = PairingLevel | "name" | "scan" | "done";
 type Paired = { pairing: PairingState; deviceName: string };
 
-const STEPS: readonly Step[] = ["company", "client", "site", "name", "scan"];
+const STEPS: readonly Step[] = ["company", "site", "name", "scan"];
 const NO_CODE: PairingState = { problem: null, code: null, qr: null, expiresAt: null, createdAt: null };
 const SEARCH_DELAY_MS = 250;
 const CHECK_EVERY_MS = 3000;
 
 const TITLES: Record<Exclude<Step, "done">, string> = {
   company: "Which security company?",
-  client: "Which client is it for?",
   site: "Which site?",
   name: "Name this device",
   scan: "Scan this on the handheld",
@@ -33,8 +32,7 @@ const TITLES: Record<Exclude<Step, "done">, string> = {
 
 const PICKER_WORDS: Record<PairingLevel, { search: string; none: string; empty: string }> = {
   company: { search: "Search companies", none: "No company matches that.", empty: "There are no companies yet." },
-  client: { search: "Search clients", none: "No client matches that.", empty: "This company has no clients yet." },
-  site: { search: "Search sites", none: "No site matches that.", empty: "This client has no sites yet." },
+  site: { search: "Search sites", none: "No site matches that.", empty: "This company has no sites yet." },
 };
 
 const QUIET_BUTTON = "inline-flex h-11 items-center justify-center rounded-pill bg-surface-muted px-5 text-sm font-semibold text-ink transition hover:bg-border";
@@ -48,9 +46,8 @@ function countdown(milliseconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function firstStep({ company, client, site }: Chosen): Step {
+function firstStep({ company, site }: Chosen): Step {
   if (!company) return "company";
-  if (!client) return "client";
   return site ? "name" : "site";
 }
 
@@ -169,7 +166,7 @@ function NameStep({ place, name, onBack, onCode }: { place: PairingPlace; name: 
     startTransition(() => action(form));
   };
 
-  const setupHref = `/setup/${place.company.id}/${place.client.id}/${siteId}`;
+  const setupHref = `/setup/${place.company.id}/${siteId}`;
   return (
     <form onSubmit={submit} className="mt-5 flex flex-col gap-4">
       <FormProblem message={state.problem} />
@@ -178,8 +175,8 @@ function NameStep({ place, name, onBack, onCode }: { place: PairingPlace; name: 
       <Field label="Device name" name="name" defaultValue={name} placeholder="Main Gate DT50" autoComplete="off" autoFocus required />
       <p className="-mt-2 text-sm text-ink-muted">Use the name of its gate, so the control room can tell handhelds apart.</p>
       {readiness?.posts === 0 ? (
-        <ReadinessNote href={setupHref} action="Add a post">
-          This site has no posts, so a guard can&apos;t start a shift here yet.
+        <ReadinessNote href={setupHref} action="Add an access point">
+          This site has no access points, so a guard can&apos;t start a shift here yet.
         </ReadinessNote>
       ) : null}
       {readiness?.staff === 0 ? (
@@ -314,7 +311,6 @@ function Walkthrough({ place, onClose }: { place?: PairingPlace; onClose: () => 
     setTrail((current) => [...(automatic ? current.slice(0, -1) : current), next]);
   }, []);
   const pickCompany = useCallback((option: PairingOption, automatic: boolean) => pick("company", option, automatic), [pick]);
-  const pickClient = useCallback((option: PairingOption, automatic: boolean) => pick("client", option, automatic), [pick]);
   const pickSite = useCallback((option: PairingOption, automatic: boolean) => pick("site", option, automatic), [pick]);
 
   const showCode = useCallback((next: Paired) => {
@@ -331,8 +327,8 @@ function Walkthrough({ place, onClose }: { place?: PairingPlace; onClose: () => 
     setTrail([firstStep(chosen)]);
   };
 
-  const { company, client, site } = chosen;
-  const whereSoFar = [company?.name, client?.name, site?.name].filter(Boolean);
+  const { company, site } = chosen;
+  const whereSoFar = [company?.name, site?.name].filter(Boolean);
 
   if (step === "done" && site) return <DoneStep siteName={site.name} deviceName={lastName} onAnother={anotherOne} onClose={onClose} />;
 
@@ -355,12 +351,11 @@ function Walkthrough({ place, onClose }: { place?: PairingPlace; onClose: () => 
       {whereSoFar.length ? <p className="mt-3 text-xs text-ink-muted">{whereSoFar.join(" · ")}</p> : null}
 
       {step === "company" ? <Picker key="company" level="company" parentId="" setupHref="/setup" onPick={pickCompany} /> : null}
-      {step === "client" && company ? <Picker key="client" level="client" parentId={company.id} setupHref={`/setup/${company.id}`} onPick={pickClient} /> : null}
-      {step === "site" && company && client ? <Picker key="site" level="site" parentId={client.id} setupHref={`/setup/${company.id}/${client.id}`} onPick={pickSite} /> : null}
-      {step === "name" && company && client && site ? <NameStep key="name" place={{ company, client, site }} name={lastName} onBack={canGoBack ? back : null} onCode={showCode} /> : null}
+      {step === "site" && company ? <Picker key="site" level="site" parentId={company.id} setupHref={`/setup/${company.id}`} onPick={pickSite} /> : null}
+      {step === "name" && company && site ? <NameStep key="name" place={{ company, site }} name={lastName} onBack={canGoBack ? back : null} onCode={showCode} /> : null}
       {step === "scan" && site && paired ? <ScanStep siteId={site.id} paired={paired} onBack={back} onPaired={finish} /> : null}
 
-      {(step === "company" || step === "client" || step === "site") ? (
+      {(step === "company" || step === "site") ? (
         <div className="mt-4 flex justify-between">
           {canGoBack ? (
             <button type="button" onClick={back} className={QUIET_BUTTON}>
