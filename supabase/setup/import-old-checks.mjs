@@ -105,14 +105,31 @@ function toCheck(row, personKeyOf) {
 }
 
 // ---- Talking to the project, through the Supabase CLI you're signed in with.
+
+/**
+ * The rows in the CLI's answer. Asked for JSON, it prints a plain list of rows in a terminal and an object holding
+ * `rows` when run by a script or an assistant, with its own lines (the target, pnpm's "Done in") around either.
+ */
+function rowsOf(out) {
+  const list = out.indexOf('[');
+  const object = out.indexOf('{');
+  const isList = list !== -1 && (object === -1 || list < object);
+  const json = isList ? out.slice(list, out.lastIndexOf(']') + 1) : out.slice(object, out.lastIndexOf('}') + 1);
+  const parsed = JSON.parse(json);
+  return Array.isArray(parsed) ? parsed : (parsed.rows ?? []);
+}
+
 function query(sql) {
   const folder = mkdtempSync(join(tmpdir(), 'dg-import-'));
   try {
     const path = join(folder, 'batch.sql');
     writeFileSync(path, sql);
-    const out = execSync(`pnpm dlx supabase db query --remote=${ref} --yes --file "${path}"`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
-    const json = out.slice(out.indexOf('{'));
-    return JSON.parse(json).rows ?? [];
+    const out = execSync(`pnpm dlx supabase db query --remote=${ref} --yes --output json --file "${path}"`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    return rowsOf(out);
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
