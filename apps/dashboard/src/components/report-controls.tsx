@@ -63,7 +63,7 @@ type SegmentProps = {
 /** A row of choices where exactly one is on, as real links so the back button works. */
 export function SegmentedLinks({ items, label }: SegmentProps) {
   return (
-    <nav aria-label={label} className="dg-glass flex h-11 max-w-full items-center gap-1 overflow-x-auto rounded-pill p-1">
+    <nav aria-label={label} className="dg-glass flex h-11 max-w-full items-center gap-1 overflow-x-auto overflow-y-hidden rounded-pill p-1">
       {items.map((item) => (
         <Link
           key={item.label}
