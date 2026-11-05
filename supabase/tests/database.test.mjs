@@ -714,6 +714,25 @@ check('the photo is found for whoever may see the check', photoRow?.path === `a/
 check('named only masked in the log', photoRow !== undefined && photoRow.person !== 'T KHUMALO');
 check('but not for another company', (await photoFor(ADMIN_B, entry.id)).length === 0);
 
+// The photo of the car's number plate, and how the guard gave the plate.
+const attachPlate = (device, eventId) => service('select digigate.attach_plate_photo($1, $2, $3) as ok', [device, eventId, `a/b/${eventId}.jpg`]);
+check('the device that made a vehicle check attaches its plate photo', (await attachPlate(DEVICE, entry.id)).rows[0].ok === true);
+check('no other device can attach one', (await attachPlate(SECOND_DEVICE, entry.id)).rows[0].ok === false);
+check('nor can the dashboard', (await as('authenticated', ADMIN_A, 'aal2', 'select digigate.attach_plate_photo($1, $2, $3)', [DEVICE, entry.id, 'x.jpg'])).error);
+await db.exec(`update digigate.event_details set payload = payload || '{"plate_entry": {"source": "typed", "photo": true, "read_from_photo": "TT00TTGP", "warned_plate": "TS00TTGP"}}' where event_id = '${entry.id}'`);
+const withPlate = await detailFor(ADMIN_A, entry.id);
+check('the control room sees there is a plate photo', withPlate?.hasPlatePhoto === true);
+check('and how the guard gave the plate', withPlate?.plateEntry?.source === 'typed' && withPlate.plateEntry.photo === true && withPlate.plateEntry.readFromPhoto === 'TT00TTGP' && withPlate.plateEntry.warnedPlate === 'TS00TTGP');
+check('after 365 days there is no plate photo and no plate entry', agedDetail?.hasPlatePhoto === false && agedDetail.plateEntry === null);
+const plateFor = async (profile, eventId) => (await as('authenticated', profile, 'aal2', 'select * from digigate.plate_photo_for($1)', [eventId])).rows;
+const plateRow = (await plateFor(ROOM_A, entry.id))[0];
+check('the plate photo is found for whoever may see the check', plateRow?.path === `a/b/${entry.id}.jpg` && plateRow.org_id === ORG_A);
+check('with the plate only masked, for the log', plateRow !== undefined && plateRow.plate !== 'TT00TTGP');
+check('but not for another company either', (await plateFor(ADMIN_B, entry.id)).length === 0);
+for (const fn of ['attach_plate_photo(uuid, uuid, text)']) {
+  check(`dashboard users cannot call ${fn}`, !(await one(`select has_function_privilege('authenticated', 'digigate.${fn}', 'execute') a`)).a);
+}
+
 // An access point's location, set on the handheld by a supervisor standing at it.
 const backGateNow = () => one(`select latitude, longitude, radius_m from digigate.posts where site_id = '${SITE_A}' and code = 'back-gate'`);
 const locate = (gateUserId, payload) => ingest([event('post_location_set', payload, gateUserId)]);
@@ -940,12 +959,72 @@ await db.exec(`delete from digigate.visit_details where visit_id = '${OLD}'`);
 const erased = (await visits(ADMIN_A, 'aal2')).rows.find((row) => row.id === OLD);
 check('an erased visit stays as a bare row, marked erased', erased?.details_erased === true && erased.person_name === null);
 
+// Expected stay, who is in the car, a changed head count with the guard's reason, and the site's story in the log.
+const STAY_VISIT = u(970);
+const OPEN_STAY = u(971);
+const stayCar = { ...vehicle, vin: 'TESTVIN0000000970', plate: 'ST00AYGP', disc_number: 'D970', description: 'Hatch back / Luikrug' };
+const stayEntry = event('vehicle_entry', {
+  visit_id: STAY_VISIT, outcome: 'clear', hits: [], vehicle: stayCar, typed_plate: 'ST00AYGP', driver, occupants: 3,
+  occupants_by_sex: { male: 1, female: 2, unknown: 0 }, visit_type: 'visitor', expected_stay_minutes: 240,
+});
+await ingest([
+  stayEntry,
+  event('pedestrian_entry', { visit_id: OPEN_STAY, outcome: 'clear', hits: [], person: { person_key: 'key-stay', names: 'Lindiwe', surname: 'Mokoena' }, visit_type: 'staff', expected_stay_minutes: null }),
+]);
+const stayMinutes = async (visitId) => (await one(`select extract(epoch from expected_until - entered_at) / 60 as m from digigate.visits where id = '${visitId}'`)).m;
+check('the visit keeps how long it should last', Number(await stayMinutes(STAY_VISIT)) === 240);
+check('a visit with no limit has no end time', (await stayMinutes(OPEN_STAY)) === null);
+const cameIn = (await one(`select occupants_in_by_sex from digigate.visits where id = '${STAY_VISIT}'`)).occupants_in_by_sex;
+check('and who was in the car, as counts', cameIn.male === 1 && cameIn.female === 2 && cameIn.unknown === 0);
+const stayRecord = (await as('authenticated', ADMIN_A, 'aal2', `select vehicle_search, expected_until from digigate.visit_records where id = '${STAY_VISIT}'`)).rows[0];
+check('the car can be searched by colour and body', stayRecord?.vehicle_search.includes('white') && stayRecord.vehicle_search.includes('hatch back'));
+check('and the dashboard sees when it is due out', stayRecord?.expected_until !== null);
+const stayCheck = (await as('authenticated', ADMIN_A, 'aal2', `select vehicle_search from digigate.check_records where id = '${stayEntry.id}'`)).rows[0];
+check('checks can be searched the same way', stayCheck?.vehicle_search.includes('toyota') && stayCheck.vehicle_search.includes('luikrug'));
+const staySnapshot = (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s;
+check('the handheld learns the expected stay of every open visit', staySnapshot.openVisits.find((visit) => visit.id === STAY_VISIT)?.expectedStayMinutes === 240);
+check('and the site type and its own stay settings', staySnapshot.siteType === 'hospital' && JSON.stringify(staySnapshot.stayMinutes) === '{}');
+check('and the booms at each access point, so a gate with none gets the right words', staySnapshot.posts.length > 0 && staySnapshot.posts.every((post) => Array.isArray(post.booms)));
+
+const stayExit = event('vehicle_exit', {
+  visit_id: STAY_VISIT, outcome: 'clear', hits: [{ code: 'OCCUPANT_COUNT_DROP', severity: 'info', related_visit_id: STAY_VISIT }], vehicle: stayCar,
+  typed_plate: 'ST00AYGP', driver, occupants: 2, occupants_by_sex: { male: 1, female: 1, unknown: 0 },
+  exit_checks: { ignition_restart: 'done', boot_check: 'not-needed' },
+});
+await ingest([stayExit]);
+const headCount = await one(`select severity, status, resolution from digigate.alerts where event_id = '${stayExit.id}'`);
+check('fewer people leaving is only noted, never left open', headCount.severity === 'info' && headCount.status === 'resolved');
+check('the visit keeps who left in it', (await one(`select occupants_out_by_sex from digigate.visits where id = '${STAY_VISIT}'`)).occupants_out_by_sex.female === 1);
+await service('select digigate.ingest_events($1, $2::jsonb)', [SECOND_DEVICE, JSON.stringify([event('occupant_reason', { check_event_id: stayExit.id, visit_id: STAY_VISIT, change: 'fewer', reason: 'Someone left on foot' })])]);
+check('another handheld cannot give the reason', (await one(`select occupant_reason from digigate.visit_details where visit_id = '${STAY_VISIT}'`)).occupant_reason === null);
+await ingest([event('occupant_reason', { check_event_id: stayExit.id, visit_id: STAY_VISIT, change: 'fewer', reason: 'Dropped off a patient' })]);
+check("the guard's reason is kept with the visit's details", (await one(`select occupant_reason from digigate.visit_details where visit_id = '${STAY_VISIT}'`)).occupant_reason === 'Dropped off a patient');
+check('and goes on the note', (await one(`select resolution from digigate.alerts where event_id = '${stayExit.id}'`)).resolution === 'Guard: Dropped off a patient');
+const reasonLog = (await service(`select actor_name, target, detail from digigate.audit_log where action = 'gate.occupant_reason'`)).rows;
+check('the log says a reason was given, by whom, but not what it was', reasonLog.length === 1 && reasonLog[0].actor_name === 'Thabo Khumalo' && reasonLog[0].detail === 'OCCUPANT_COUNT_DROP' && !JSON.stringify(reasonLog).includes('patient'));
+const headCountDetail = await detailFor(ADMIN_A, stayExit.id);
+check('the control room sees the head count change and why', headCountDetail?.occupantsCameIn === 3 && headCountDetail.occupants === 2 && headCountDetail.occupantReason === 'Dropped off a patient');
+check('with who came in and who left', headCountDetail?.occupantsCameInBySex.female === 2 && headCountDetail.occupantsBySex.female === 1);
+
+const siteStory = (await service(`select actor_name, target, detail from digigate.audit_log where action = 'alert.raised' and target = 'OCCUPANT_COUNT_DROP' order by at desc limit 1`)).rows[0];
+check('every flag goes in the site log, from the handheld that raised it', siteStory?.actor_name !== null && siteStory.detail.includes('Going out') && siteStory.detail.includes('Noted'));
+check('naming no one', !/KHUMALO|ST00AYGP|TESTVIN|Mokoena/.test(JSON.stringify(siteStory)));
+check('the site log counts as alerts for the admin', (await as('authenticated', ADMIN_A, 'aal2', `select id from digigate.audit_log where action = 'alert.raised'`)).rows.length > 0);
+await as('authenticated', ADMIN_A, 'aal2', `update digigate.sites set stay_minutes = '{"visitor": 120, "delivery": null}' where id = '${SITE_A}'`);
+check('an admin sets the site\x27s own stays', (await one(`select stay_minutes from digigate.sites where id = '${SITE_A}'`)).stay_minutes.visitor === 120);
+check('which the handheld then learns', (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.stayMinutes.visitor === 120);
+check('the stays must be a list by visit type', (await as('authenticated', ADMIN_A, 'aal2', `update digigate.sites set stay_minutes = '[1]' where id = '${SITE_A}'`)).error);
+await as('authenticated', ROOM_A, 'aal2', `update digigate.sites set stay_minutes = '{"visitor": 30}' where id = '${SITE_A}'`);
+check('the control room cannot change them', (await one(`select stay_minutes from digigate.sites where id = '${SITE_A}'`)).stay_minutes.visitor === 120);
+await db.exec(`update digigate.sites set stay_minutes = '{}' where id = '${SITE_A}'`);
+check('dashboard users cannot write the log themselves', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.audit_log (category, action) values ('alerts', 'alert.raised')`)).error);
+
 // The nightly erasure: three years after a visit ends, its people's details go for good.
 const PAST = "now() - interval '1 day'";
 const ENDED_SHIFT = u(920);
 const arrivalVisit = u(910);
 await db.exec(`
-  update digigate.event_details set erase_after = ${PAST}, licence_photo_path = '${ORG_A}/${SITE_A}/${hotCheck.id}.bmp' where event_id = '${hotCheck.id}';
+  update digigate.event_details set erase_after = ${PAST}, licence_photo_path = '${ORG_A}/${SITE_A}/${hotCheck.id}.bmp', plate_photo_path = '${ORG_A}/${SITE_A}/${hotCheck.id}.jpg' where event_id = '${hotCheck.id}';
   update digigate.alerts set status = 'resolved', resolution = 'Spoke to Sipho Ndlovu at the gate' where event_id = '${hotCheck.id}';
   update digigate.visit_details set erase_after = ${PAST} where visit_id = '${arrivalVisit}';
   insert into digigate.shifts (id, org_id, site_id, device_id, gate_user_id, post, period, started_at, ended_at, end_reason, erase_after, selfie, selfie_path)
@@ -969,17 +1048,42 @@ check('an open shift stays', (await count(`digigate.shifts where id = '${SHIFT}'
 check('the hotlist entry and the booking are gone', (await count(`digigate.hotlist where id = '${HOT_PLATE}'`)) === 0 && (await count(`digigate.expected_visitors where id = '${LATER}'`)) === 0);
 check('entries still in force are untouched', (await count(`digigate.hotlist where id = '${HOT_PERSON}'`)) === 1);
 const queuedFiles = (await service('select bucket, path from digigate.erasure_files order by bucket')).rows;
-check('the licence photo and the selfie wait to be removed from storage', queuedFiles.map((row) => row.bucket).join() === 'licence-photos,shift-selfies');
+check('the licence photo, plate photo and selfie wait to be removed from storage', queuedFiles.map((row) => row.bucket).join() === 'licence-photos,plate-photos,shift-selfies');
 const erasureLog = (await service(`select org_id, actor_name, target, detail from digigate.audit_log where action = 'erasure.ran'`)).rows;
-check('the company\x27s log says what was erased, in counts', erasureLog.length === 1 && erasureLog[0].org_id === ORG_A && erasureLog[0].detail === '1 checks, 1 visits, 1 licence photos, 1 shifts, 1 hotlist entries, 1 bookings');
+check('the company\x27s log says what was erased, in counts', erasureLog.length === 1 && erasureLog[0].org_id === ORG_A && erasureLog[0].detail === '1 checks, 1 visits, 1 licence photos, 1 plate photos, 1 shifts, 1 hotlist entries, 1 bookings');
 check('and never whose', !JSON.stringify(erasureLog).includes('Ndlovu') && !JSON.stringify(erasureLog).includes('Dlamini'));
 check('the admin sees it in their log', (await as('authenticated', ADMIN_A, 'aal2', `select id from digigate.audit_log where action = 'erasure.ran'`)).rows.length === 1);
 check('another company does not', (await as('authenticated', ADMIN_B, 'aal2', `select id from digigate.audit_log where action = 'erasure.ran'`)).rows.length === 0);
 const quietNight = (await service('select digigate.erase_due(5000) as r')).rows[0]?.r;
 check('a night with nothing due erases nothing and logs nothing', quietNight?.checks === 0 && (await count(`digigate.audit_log where action = 'erasure.ran'`)) === 1);
 await service('select digigate.erasure_files_done($1, $2)', ['licence-photos', [queuedFiles[0]?.path]]);
-check('a file storage has removed leaves the queue', (await count('digigate.erasure_files')) === 1);
+check('a file storage has removed leaves the queue', (await count('digigate.erasure_files')) === 2);
 check('without the secret, nobody may trigger the storage clean-up', (await service('select digigate.erasure_token_ok($1) as ok', ['guess'])).rows[0]?.ok === false);
+
+// Checks brought over from a site's old gate system: kept apart, seen like DigiGate's own, erased on time.
+const oldRows = [
+  { ref: 'OLD-1', at: new Date(Date.now() - 2 * 86_400_000).toISOString(), direction: 'in', person_key: 'key-old', name: 'N MOKOENA', sex: 'female', plate: 'OLD123GP', vin: 'OLDVIN0000000001', make: 'TOYOTA', model: 'HILUX', colour: 'White', body: 'Pick-up / Bakkie', visit_type: 'visitor', occupants: '2', scanned_by: 'Sipho Dube' },
+  { ref: 'OLD-2', at: new Date(Date.now() - 86_400_000).toISOString(), direction: 'out', person_key: 'key-old', name: 'N MOKOENA', plate: 'OLD123GP', make: 'TOYOTA', colour: 'White', body: 'Pick-up / Bakkie', occupants: '0' },
+  { ref: 'OLD-3', at: new Date(Date.now() - 4 * 365 * 86_400_000).toISOString(), direction: 'in', name: 'TOO OLD', plate: 'OLD999GP' },
+];
+// The import runs as the database owner, from the terminal of whoever brings the old data over.
+const importOld = (rows, site = SITE_A) =>
+  db.query('select digigate.import_old_checks($1, $2, $3::jsonb) as n', [ORG_A, site, JSON.stringify(rows)]).then((result) => ({ rows: result.rows, error: null }), (cause) => ({ rows: [], error: cause.message }));
+check('an import adds the old checks, but none already three years old', (await importOld(oldRows)).rows[0]?.n === 2);
+check('running it again adds nothing', (await importOld(oldRows)).rows[0]?.n === 0);
+check('nor can it put checks at another company\'s site', (await importOld([{ ...oldRows[0], ref: 'OLD-X' }], u(902))).error);
+check('a count of nobody is kept as unknown', (await one(`select occupants from digigate.imported_checks where source_ref = 'OLD-2'`)).occupants === null);
+check('the import is logged once, in counts', (await one(`select count(*)::int n, max(detail) d from digigate.audit_log where action = 'import.old_checks'`)).d === '2 checks from the old system');
+const oldSeen = (await as('authenticated', ADMIN_A, 'aal2', 'select person_name, plate, vehicle_search, scanned_by from digigate.imported_check_records order by occurred_at')).rows;
+check('the company sees its old checks', oldSeen.length === 2 && oldSeen[0].person_name === 'N MOKOENA' && oldSeen[0].scanned_by === 'Sipho Dube');
+check('and can search them by the car', oldSeen[0].vehicle_search.includes('white') && oldSeen[0].vehicle_search.includes('bakkie'));
+check('another company sees none of them', (await as('authenticated', ADMIN_B, 'aal2', 'select id from digigate.imported_check_records')).rows.length === 0);
+check('nobody reads the table itself', (await as('authenticated', ADMIN_A, 'aal2', 'select id from digigate.imported_checks')).rows.length === 0);
+check('neither the dashboard nor the service key can import', !(await one(`select has_function_privilege('service_role', 'digigate.import_old_checks(uuid, uuid, jsonb)', 'execute') a`)).a && !(await one(`select has_function_privilege('authenticated', 'digigate.import_old_checks(uuid, uuid, jsonb)', 'execute') a`)).a);
+await db.exec(`update digigate.imported_checks set erase_after = now() - interval '1 day' where source_ref = 'OLD-1'`);
+const oldErased = (await service('select digigate.erase_due(5000) as r')).rows[0]?.r;
+check('the nightly job erases an old check when its three years are up', oldErased?.imported === 1 && (await count(`digigate.imported_checks where source_ref = 'OLD-1'`)) === 0);
+check('and says so in the log, in counts', (await one(`select detail from digigate.audit_log where action = 'erasure.ran' order by at desc limit 1`)).detail === '1 old-system checks');
 
 // A client viewer, and a client changing security company.
 const VIEWER = u(17);

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AppShell } from "@/components/app-shell";
 import { CompanyGrid } from "@/components/company-grid";
 import { Field } from "@/components/form";
@@ -41,13 +42,15 @@ async function Companies({ searchParams }: { searchParams: Promise<Query> }) {
       title="Security companies"
       chips={
         <>
-          <SearchBox placeholder="Search companies" />
           <FormDialog label="Add company" title="Add a security company" icon="sites" submitLabel="Add company" pendingLabel="Adding…" action={addOrganisation}>
             <Field label="Company name" name="name" autoFocus required />
           </FormDialog>
         </>
       }
     >
+      <FilterBar label="Filter the companies">
+        <SearchBox placeholder="Search companies" />
+      </FilterBar>
       <CompanyGrid
         companies={companies.map(companyCardOf)}
         hrefFor={(id) => `/setup/${id}`}

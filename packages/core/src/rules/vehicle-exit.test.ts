@@ -108,8 +108,14 @@ describe('evaluateVehicleExit', () => {
       expect(outcomeOf(hits)).toBe('clear');
     });
 
-    it('does not fire when more people leave', () => {
-      expect(evaluateVehicleExit(exit({ occupants: 4 }), gateState({ openVisits: [carAInside] }), config)).toEqual([]);
+    it('notes more people leaving than came in, without blocking', () => {
+      const hits = evaluateVehicleExit(exit({ occupants: 4 }), gateState({ openVisits: [carAInside] }), config);
+      expect(hits).toEqual([{ code: 'OCCUPANT_COUNT_RISE', severity: 'info', relatedVisitId: 'visit-car-a' }]);
+      expect(outcomeOf(hits)).toBe('clear');
+    });
+
+    it('notes nothing when the same number leave', () => {
+      expect(evaluateVehicleExit(exit(), gateState({ openVisits: [carAInside] }), config)).toEqual([]);
     });
   });
 
@@ -152,6 +158,23 @@ describe('evaluateVehicleExit', () => {
 
     it('does not fire for a visit type without a limit', () => {
       const state = gateState({ openVisits: [vehicleVisit({ visitType: 'staff', enteredAt: NOW - 900 * MINUTE })] });
+      expect(evaluateVehicleExit(exit(), state, config)).toEqual([]);
+    });
+
+    it('only notes it, so the car still leaves', () => {
+      const state = gateState({ openVisits: [vehicleVisit({ enteredAt: NOW - 300 * MINUTE })] });
+      expect(outcomeOf(evaluateVehicleExit(exit(), state, config))).toBe('clear');
+    });
+
+    it('goes by the stay recorded at entry over the visit type', () => {
+      const short = gateState({ openVisits: [vehicleVisit({ enteredAt: NOW - 90 * MINUTE, expectedStayMinutes: 60 })] });
+      expect(codes(evaluateVehicleExit(exit(), short, config))).toEqual(['OVERSTAY']);
+      const long = gateState({ openVisits: [vehicleVisit({ enteredAt: NOW - 300 * MINUTE, expectedStayMinutes: 480 })] });
+      expect(evaluateVehicleExit(exit(), long, config)).toEqual([]);
+    });
+
+    it('never fires when the guard recorded no limit', () => {
+      const state = gateState({ openVisits: [vehicleVisit({ enteredAt: NOW - 900 * MINUTE, expectedStayMinutes: null })] });
       expect(evaluateVehicleExit(exit(), state, config)).toEqual([]);
     });
   });

@@ -4,6 +4,7 @@ import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { PageSkeleton } from "@/components/skeleton";
+import { FilterBar } from "@/components/filter-bar";
 import { GlassStat } from "@/components/glass";
 import { Icon } from "@/components/icon";
 import { Pagination, Tabs } from "@/components/list";
@@ -79,21 +80,14 @@ async function AuditLog({ searchParams }: { searchParams: Promise<Query> }) {
   return (
     <AppShell
       company={company ? await companyBrand(company) : null}
-      eyebrow="Who did what, and when. Nothing here can be changed or deleted."
+      eyebrow="Everything that happened: at the gates, across each site and on the dashboard. Nothing here can be changed or deleted."
       title="Audit log"
-      chips={
-        <>
-          <SearchBox placeholder="Search a person, device or rule" />
-          {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
-          <DateRange from={fromDay} to={toDay} latest={today} />
-        </>
-      }
     >
       <section aria-label="Key figures" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <GlassStat label="Entries in this range" value={countLabel(everything)} icon="audit-log" note={`${longDate(fromDay)} to ${longDate(toDay)}`} />
         <GlassStat label="At the gate" value={countLabel(counts.gate ?? 0)} icon="guard" note="Overrides, decisions and shifts" />
         <GlassStat label="Dashboard changes" value={countLabel((counts.setup ?? 0) + (counts.people ?? 0) + (counts.devices ?? 0))} icon="settings" note="Setup, people and devices" />
-        <GlassStat label="Reports" value={countLabel(counts.reports ?? 0)} icon="reports" note="Sent and automated" />
+        <GlassStat label="Flags at the sites" value={countLabel(counts.alerts ?? 0)} icon="alerts" note="Every mismatch and alarm, and who closed it" />
       </section>
 
       <div className="mt-6">
@@ -109,6 +103,12 @@ async function AuditLog({ searchParams }: { searchParams: Promise<Query> }) {
           ]}
         />
       </div>
+
+      <FilterBar label="Filter the log">
+        <SearchBox placeholder="Search a person, device, site or rule" />
+        {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+        <DateRange from={fromDay} to={toDay} latest={today} />
+      </FilterBar>
 
       <section aria-label="Log entries" className="dg-glass mt-6 overflow-hidden">
         {entries.length === 0 ? (

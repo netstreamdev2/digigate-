@@ -1,6 +1,6 @@
 "use client";
 
-import { isExpired, ruleTitle } from "@digigate/core";
+import { describeOccupants, isExpired, normaliseIdentifier, occupantChange, plateDifferences, ruleTitle, type OccupantsBySex } from "@digigate/core";
 import Image from "next/image";
 import { useRef, useState, useTransition, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -10,9 +10,9 @@ import { CancelButton, Dialog, useDialog } from "@/components/dialog";
 import { Icon } from "@/components/icon";
 import { StatusChip } from "@/components/status-chip";
 import type { CheckDetail } from "@/lib/check-detail";
-import { labelFor, shortDate, timeOfDay } from "@/lib/format";
+import { duration, labelFor, shortDate, timeOfDay } from "@/lib/format";
 
-import { openCheck, openLicencePhoto } from "./actions";
+import { openCheck, openLicencePhoto, openPlatePhoto } from "./actions";
 
 /** `resultLabel` replaces the chip's word, as when a supervisor let a blocked check through. */
 export type CheckRow = ActivityRow & { alerts: string[]; resultLabel: string | null };
@@ -22,7 +22,11 @@ const HOVER_CARD_WIDTH = 320;
 const HOVER_GAP = 8;
 const PHOTO_WIDTH = 240;
 const PHOTO_HEIGHT = 300;
+const PLATE_PHOTO_WIDTH = 960;
+const PLATE_PHOTO_HEIGHT = 720;
 const NO_VALUE = "—";
+/** A photo that hasn't arrived after a day isn't coming: the handheld sends it on its next sync. */
+const PHOTO_WAIT_MS = 24 * 60 * 60_000;
 
 const columns = ["Time", "Result", "Person", "Movement", "Vehicle", "Gate", "On site"];
 
@@ -63,7 +67,7 @@ function HoverCard({ hover }: { hover: Hover }) {
         <dd>{row.stay}</dd>
       </dl>
       {row.alerts.length > 0 ? <p className="mt-3 text-xs font-semibold text-warning">{row.alerts.join(" · ")}</p> : null}
-      <p className="mt-3 border-t border-border pt-2 text-xs text-ink-muted">Click for the licence photo and everything scanned.</p>
+      <p className="mt-3 border-t border-border pt-2 text-xs text-ink-muted">Click for the photos and everything scanned.</p>
     </div>,
     document.body,
   );
@@ -89,7 +93,8 @@ function Expiry({ on, at }: { on: string | null; at: number }) {
   );
 }
 
-type Loaded = { detail: CheckDetail | null; problem: string | null; photo: { url: string | null; problem: string | null } | null; at: number };
+type PhotoLink = { url: string | null; problem: string | null };
+type Loaded = { detail: CheckDetail | null; problem: string | null; photo: PhotoLink | null; plate: PhotoLink | null; at: number };
 
 function LicencePhoto({ loaded, name }: { loaded: Loaded; name: string }) {
   const { detail, photo } = loaded;
@@ -101,7 +106,9 @@ function LicencePhoto({ loaded, name }: { loaded: Loaded; name: string }) {
         ? "Older than a year, so the photo is no longer shown."
         : !detail.hasLicencePhoto
           ? detail.lane === "vehicle"
-            ? "No licence photo yet. The handheld sends it when it has a connection."
+            ? loaded.at - new Date(detail.occurredAt).getTime() > PHOTO_WAIT_MS
+              ? "No licence photo was kept with this check."
+              : "No licence photo yet. The handheld sends it when it has a connection."
             : "No licence photo: this person showed an ID document."
           : (photo?.problem ?? "From the licence barcode. Every look is logged.");
   return (
@@ -118,13 +125,115 @@ function LicencePhoto({ loaded, name }: { loaded: Loaded; name: string }) {
   );
 }
 
+/** The plate the guard gave, with every character that isn't on the disc boxed, so a one-letter slip stands out. */
+export function GivenPlate({ plate, disc }: { plate: string; disc: string | null }) {
+  const differs = disc !== null && normaliseIdentifier(plate) !== normaliseIdentifier(disc);
+  const characters = differs ? plateDifferences(plate, disc) : null;
+  if (!characters) return <span className={`tabular-nums ${differs ? "text-blocked" : ""}`}>{plate}</span>;
+  return (
+    <span className="inline-flex gap-px tabular-nums" aria-label={`${plate}, which differs from the disc`}>
+      {characters.map((character, index) => (
+        <span key={index} className={character.differs ? "rounded-sm bg-blocked-soft px-0.5 font-bold text-blocked ring-1 ring-blocked" : "px-px"}>
+          {character.character}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Who was in the car, in words, when the guard counted them by sex; otherwise just how many. */
+function peopleIn(total: number | null, bySex: OccupantsBySex | null): string {
+  if (bySex) return `${total ?? ""} (${describeOccupants(bySex)})`.trim();
+  return total === null ? NO_VALUE : String(total);
+}
+
+/** A car that left with a different number of people than came in: noted, never an alarm, with the guard's reason. */
+function HeadCountNote({ detail }: { detail: CheckDetail }) {
+  if (detail.direction !== "out" || detail.occupantsCameIn === null || detail.occupants === null) return null;
+  const change = occupantChange(detail.occupantsCameIn, detail.occupants);
+  if (!change) return null;
+  return (
+    <div role="note" className="mt-3 flex items-start gap-2.5 rounded-md bg-tile-butter px-3 py-2.5 text-sm">
+      <Icon name="occupants" className="mt-0.5 size-4 shrink-0 text-ink" />
+      <div className="min-w-0">
+        <p className="font-semibold">{change === "fewer" ? "Fewer people left than came in" : "More people left than came in"}</p>
+        <p className="mt-0.5 text-ink-muted">
+          {`Came in: ${peopleIn(detail.occupantsCameIn, detail.occupantsCameInBySex)}. Left: ${peopleIn(detail.occupants, detail.occupantsBySex)}.`}
+        </p>
+        <p className="mt-0.5 text-ink-muted">{detail.occupantReason ? `The guard said: ${detail.occupantReason}.` : "The guard gave no reason. It was noted, not alarmed."}</p>
+      </div>
+    </div>
+  );
+}
+
+/** The stay recorded at entry, and whether the visit kept to it. */
+function stayWords(detail: CheckDetail, now: number): string {
+  if (!detail.expectedUntil) return detail.direction === "in" && detail.expectedStayMinutes === null ? "No limit" : NO_VALUE;
+  const ended = detail.exitedAt ? new Date(detail.exitedAt).getTime() : now;
+  const due = new Date(detail.expectedUntil).getTime();
+  const until = `Until ${timeOfDay(detail.expectedUntil)}`;
+  return ended > due ? `${until} · over by ${duration(due, ended)}` : until;
+}
+
+/** How the guard gave the plate, in a sentence, for checks made since plate photos began. */
+function plateStory(detail: CheckDetail): string | null {
+  const entry = detail.plateEntry;
+  if (!entry) return null;
+  const disc = detail.vehicle?.plate ?? null;
+  const matchesDisc = disc !== null && detail.typedPlate !== null && normaliseIdentifier(disc) === normaliseIdentifier(detail.typedPlate);
+  if (entry.warnedPlate) {
+    return matchesDisc
+      ? `First given as ${entry.warnedPlate}. The guard was told it didn't match the disc, looked again and fixed it.`
+      : "The guard was told this plate didn't match the disc, looked again and kept it.";
+  }
+  if (entry.source === "photo") return "Read off the plate photo and confirmed by the guard.";
+  if (entry.photo) return entry.readFromPhoto ? `Typed by the guard. The photo read ${entry.readFromPhoto}.` : "Typed by the guard. The photo couldn't be read.";
+  return "Typed by the guard, with no photo.";
+}
+
+/** The photo of the car's plate: small beside the vehicle's details, the full width of the popup when clicked. */
+function PlatePhoto({ loaded }: { loaded: Loaded }) {
+  const [large, setLarge] = useState(false);
+  const { detail, plate } = loaded;
+  if (!detail?.hasPlatePhoto) {
+    const waiting = detail?.inFull && detail.plateEntry?.photo;
+    return (
+      <figure className="flex w-40 flex-col gap-2">
+        <span className="grid aspect-[4/3] w-full place-items-center rounded-md bg-tile-sky text-brand">
+          <Icon name="number-plate" className="size-10" />
+        </span>
+        <figcaption className="text-xs text-ink-muted">
+          {waiting ? "The plate photo hasn't arrived yet. The handheld sends it when it has a connection." : detail?.inFull ? "No plate photo with this check." : "Older than a year, so the photo is no longer shown."}
+        </figcaption>
+      </figure>
+    );
+  }
+  return (
+    <figure className={`flex flex-col gap-2 ${large ? "basis-full" : "w-40"}`}>
+      <button
+        type="button"
+        onClick={() => setLarge(!large)}
+        aria-label={large ? "Make the plate photo smaller" : "Make the plate photo bigger"}
+        className="grid aspect-[4/3] w-full cursor-zoom-in place-items-center overflow-hidden rounded-md bg-surface-muted ring-1 ring-border transition hover:ring-brand"
+      >
+        {plate?.url ? (
+          <Image unoptimized src={plate.url} alt="The car's number plate, photographed at the gate" width={PLATE_PHOTO_WIDTH} height={PLATE_PHOTO_HEIGHT} className="size-full object-cover" />
+        ) : (
+          <Icon name="number-plate" className="size-10 text-ink-subtle" />
+        )}
+      </button>
+      <figcaption className="text-xs text-ink-muted">{plate?.problem ?? (plate ? "Taken at the gate. Every look is logged." : "Opening the photo…")}</figcaption>
+    </figure>
+  );
+}
+
 function CheckDetails({ row, loaded }: { row: CheckRow; loaded: Loaded }) {
   const { detail, at } = loaded;
   if (!detail) return <p className="py-10 text-center text-sm text-ink-muted">{loaded.problem}</p>;
   const name = detail.person.name ?? row.person;
   const vehicle = detail.vehicle;
   const makeModel = [vehicle?.make, vehicle?.model].filter(Boolean).join(" ");
-  const platesDiffer = vehicle?.plate && detail.typedPlate && vehicle.plate.replace(/[^A-Z0-9]/gi, "") !== detail.typedPlate.replace(/[^A-Z0-9]/gi, "");
+  const story = plateStory(detail);
 
   return (
     <div className="mt-5 grid gap-6 md:grid-cols-[15rem_1fr]">
@@ -167,26 +276,30 @@ function CheckDetails({ row, loaded }: { row: CheckRow; loaded: Loaded }) {
         {vehicle ? (
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-subtle">Vehicle</h3>
-            <div className="mt-2 flex flex-wrap items-center gap-5">
-              <span className="grid size-16 shrink-0 place-items-center rounded-lg bg-tile-sky text-brand">
-                <Icon name="vehicle" className="size-8" />
-              </span>
-              <dl className="grid flex-1 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <div className="mt-2 flex flex-wrap items-start gap-5">
+              <PlatePhoto loaded={loaded} />
+              <dl className="grid min-w-[16rem] flex-1 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
                 <Fact label="Make and model">{makeModel || NO_VALUE}</Fact>
                 <Fact label="Colour">{vehicle.colour ?? NO_VALUE}</Fact>
                 <Fact label="Body">{vehicle.description ? vehicle.description.split(" / ")[0] : NO_VALUE}</Fact>
                 <Fact label="Plate on the disc">
                   <span className="tabular-nums">{vehicle.plate ?? NO_VALUE}</span>
                 </Fact>
-                <Fact label="Plate the guard saw">
-                  <span className={`tabular-nums ${platesDiffer ? "text-blocked" : ""}`}>{detail.typedPlate ?? NO_VALUE}</span>
-                </Fact>
+                <Fact label="Plate the guard saw">{detail.typedPlate ? <GivenPlate plate={detail.typedPlate} disc={vehicle.plate} /> : NO_VALUE}</Fact>
                 <Fact label="Disc expires">
                   <Expiry on={vehicle.discExpiresOn} at={at} />
                 </Fact>
-                <Fact label="People in it">{detail.occupants ?? NO_VALUE}</Fact>
+                <Fact label="People in it">{peopleIn(detail.occupants, detail.occupantsBySex)}</Fact>
+                <Fact label="Expected stay">{stayWords(detail, at)}</Fact>
               </dl>
             </div>
+            <HeadCountNote detail={detail} />
+            {story ? (
+              <p className="mt-3 flex items-start gap-2 rounded-md bg-surface-muted px-3 py-2 text-sm text-ink-muted">
+                <Icon name="number-plate" className="mt-0.5 size-4 shrink-0" />
+                {story}
+              </p>
+            ) : null}
           </section>
         ) : null}
 
@@ -234,10 +347,13 @@ export function CheckActivity({ rows }: { rows: readonly CheckRow[] }) {
       const at = Date.now();
       const { detail, problem } = await openCheck(row.id);
       if (opened.current !== row.id) return;
-      setLoaded({ detail, problem, photo: null, at });
-      if (!detail?.hasLicencePhoto) return;
-      const photo = await openLicencePhoto(row.id);
-      if (opened.current === row.id) setLoaded({ detail, problem, photo, at });
+      setLoaded({ detail, problem, photo: null, plate: null, at });
+      if (!detail?.hasLicencePhoto && !detail?.hasPlatePhoto) return;
+      const [photo, plate] = await Promise.all([
+        detail.hasLicencePhoto ? openLicencePhoto(row.id) : null,
+        detail.hasPlatePhoto ? openPlatePhoto(row.id) : null,
+      ]);
+      if (opened.current === row.id) setLoaded({ detail, problem, photo, plate, at });
     });
   };
 

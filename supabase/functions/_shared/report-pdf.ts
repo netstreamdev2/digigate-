@@ -189,7 +189,7 @@ function drawTiles(pen: Pen, data: ReportData): void {
     { label: 'Scans', value: countLabel(count('checks')), now: count('checks'), then: before('checks'), upMeans: 'neutral' },
     { label: 'Entries', value: countLabel(entriesOf(totals)), now: entriesOf(totals), then: entriesOf(prior), upMeans: 'neutral' },
     { label: 'Exits', value: countLabel(count('exits')), now: count('exits'), then: before('exits'), upMeans: 'neutral' },
-    { label: 'Blocked at the boom', value: countLabel(count('blocked')), now: count('blocked'), then: before('blocked'), upMeans: 'bad' },
+    { label: 'Stopped at the gate', value: countLabel(count('blocked')), now: count('blocked'), then: before('blocked'), upMeans: 'bad' },
     { label: 'Warnings', value: countLabel(count('warnings')), now: count('warnings'), then: before('warnings'), upMeans: 'bad' },
     { label: 'Average stay', value: stayLabel(stay), now: stay, then: averageStay(prior), upMeans: 'neutral' },
   ];

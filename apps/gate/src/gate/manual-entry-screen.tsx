@@ -1,4 +1,4 @@
-import { normaliseIdentifier } from '@digigate/core';
+import { occupantTotal, type OccupantsBySex } from '@digigate/core';
 import { colors, radius, space, typography } from '@digigate/design';
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -15,20 +15,28 @@ import { OptionTile } from '@/components/option-tile';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
+import { driverOnly, OccupantCounter } from '@/components/occupant-counter';
+import { StayPicker } from '@/components/stay-picker';
 import { VisitTypePicker } from '@/components/visit-type-picker';
 import { useLocalDatabase } from '@/db/database-context';
 import { masked, rememberLastScan, settleLastScan, visitTypeLabel } from '@/db/last-scan';
 import { signalOutcome } from '@/lib/feedback';
-import { nameInput, plateInput, titleCase } from '@/lib/format';
-import { siteConfig, visitTypeOf, type Lane } from '@/site/site-config';
+import { nameInput, titleCase } from '@/lib/format';
+import { gateWords, vehicleGateWords, type GateWords } from '@/lib/gate-words';
+import { expectedStayFor, siteConfig, visitTypeOf, type Lane } from '@/site/site-config';
 import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
 import { CheckResult, type Settled } from './check-result';
-import { recordDecision, type Decision } from './decision';
+import { recordDecision, recordOccupantReason, type Decision } from './decision';
+import { OccupantReasonCard } from './occupant-reason-card';
 import { completedExitChecks, ExitChecksCard, NO_EXIT_CHECKS, type ExitChecks } from './exit-checks';
+import { PlateCamera } from './plate-camera';
+import { PlateField } from './plate-field';
 import { SupervisorOverride } from './supervisor-override';
 import { typedIdentity } from './typed-identity';
+import { useKeepPlatePhoto } from './use-keep-plate-photo';
+import { usePlateEntry } from './use-plate-entry';
 import { checkVehicle, typedSubject, type CheckedVehicle } from './vehicle-check';
 import { checkPerson, type CheckedPerson } from './walk-in-check';
 
@@ -49,12 +57,12 @@ const REASONS: Record<Lane, readonly string[]> = {
   pedestrian: ["Card won't scan", 'Foreign passport', 'Document has no barcode'],
 };
 
-const RESULT_COPY: Record<Movement, { clear: string; through: string }> = {
-  'car-in': { clear: 'No flags on this car or driver. Open the boom. The visit has started.', through: 'Open the boom. The visit has started.' },
-  'car-out': { clear: 'This driver brought this car in. Open the boom. The visit has ended.', through: 'Open the boom. The visit has ended.' },
+const resultCopy = (words: GateWords): Record<Movement, { clear: string; through: string }> => ({
+  'car-in': { clear: `No flags on this car or driver. ${words.letIn} The visit has started.`, through: `${words.letIn} The visit has started.` },
+  'car-out': { clear: `This driver brought this car in. ${words.letOut} The visit has ended.`, through: `${words.letOut} The visit has ended.` },
   'walk-in': { clear: 'No flags on this person. Let them in. The visit has started.', through: 'Let them in. The visit has started.' },
   'walk-out': { clear: 'This person walked in. Let them out. The visit has ended.', through: 'Let them out. The visit has ended.' },
-};
+});
 
 const MIN_ID_LENGTH = 5;
 const MIN_PLATE_LENGTH = 2;
@@ -93,17 +101,21 @@ function ManualEntry({ guard }: { guard: GateUser }) {
   const [idNumber, setIdNumber] = useState('');
   const [names, setNames] = useState('');
   const [surname, setSurname] = useState('');
-  const [plate, setPlate] = useState('');
+  const plate = usePlateEntry();
   const [makeAndModel, setMakeAndModel] = useState('');
   const [colour, setColour] = useState('');
-  const [occupants, setOccupants] = useState(1);
+  // A typed driver's sex isn't known, so they start as not sure until the guard says.
+  const [people, setPeople] = useState<OccupantsBySex>(driverOnly(null));
   const [visitType, setVisitType] = useState<string>(siteConfig.defaultVisitType);
+  const [stay, setStay] = useState<number | null>(expectedStayFor(siteConfig.defaultVisitType));
+  const occupants = occupantTotal(people);
   const [exitChecks, setExitChecks] = useState<ExitChecks>(NO_EXIT_CHECKS);
   const [checked, setChecked] = useState<CheckedVehicle | CheckedPerson | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
   const [overriding, setOverriding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const platePhotoProblem = useKeepPlatePhoto(db, checked && (movement === 'car-in' || movement === 'car-out') ? checked.event : null, plate.photo);
 
   const movements = MOVEMENTS.filter((option) => post.lanes.includes(option.lane));
   const lane: Lane | null = movement === 'car-in' || movement === 'car-out' ? 'vehicle' : movement ? 'pedestrian' : null;
@@ -111,6 +123,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
   const locked = checked !== null;
   const identity = typedIdentity(idNumber);
   const exitAnswers = completedExitChecks(exitChecks);
+  const words = lane === 'pedestrian' ? gateWords('on-foot') : vehicleGateWords(post.hasBoom);
 
   const ready =
     movement !== null &&
@@ -118,7 +131,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
     identity.idNumber.length >= MIN_ID_LENGTH &&
     names.trim() !== '' &&
     surname.trim() !== '' &&
-    (lane === 'pedestrian' || (normaliseIdentifier(plate).length >= MIN_PLATE_LENGTH && (entering || exitAnswers !== null)));
+    (lane === 'pedestrian' || (plate.normalised.length >= MIN_PLATE_LENGTH && (entering || exitAnswers !== null)));
 
   const choose = (next: Movement) => {
     setMovement(next);
@@ -135,13 +148,16 @@ function ManualEntry({ guard }: { guard: GateUser }) {
         lane === 'vehicle'
           ? await checkVehicle(db, {
               ...(entering || !exitAnswers ? { direction: 'entry' as const } : { direction: 'exit' as const, ...exitAnswers }),
-              subject: typedSubject({ plate, makeAndModel: makeAndModel.trim(), colour: colour.trim() }, person, reason),
-              typedPlate: plate,
+              subject: typedSubject({ plate: plate.plate, makeAndModel: makeAndModel.trim(), colour: colour.trim() }, person, reason),
+              typedPlate: plate.plate,
+              plateEntry: plate.payload(),
               occupants,
+              occupantsBySex: people,
               visitType,
+              expectedStayMinutes: stay,
               guardId: guard.id,
             })
-          : await checkPerson(db, { direction: entering ? 'entry' : 'exit', person: { kind: 'typed', ...person, reason }, visitType, guardId: guard.id });
+          : await checkPerson(db, { direction: entering ? 'entry' : 'exit', person: { kind: 'typed', ...person, reason }, visitType, expectedStayMinutes: stay, guardId: guard.id });
       setChecked(result);
       signalOutcome(result.outcome);
       eventRecorded();
@@ -153,7 +169,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
         visitType: visitTypeLabel(result.event.payload.visit_type, (code) => visitTypeOf(code)?.label ?? null),
         outcome: result.outcome,
         settled: null,
-        plate: lane === 'vehicle' ? masked(normaliseIdentifier(plate)) : null,
+        plate: lane === 'vehicle' ? masked(plate.normalised) : null,
         vehicle: lane === 'vehicle' ? makeAndModel.trim() || 'Typed in' : null,
         people: lane === 'vehicle' ? occupants : null,
         idNumber: masked(identity.idNumber),
@@ -203,8 +219,9 @@ function ManualEntry({ guard }: { guard: GateUser }) {
             hotlistNotes={checked.hotlistNotes}
             expected={checked.expected}
             settled={settled}
-            clearMessage={RESULT_COPY[movement].clear}
-            letThroughMessage={RESULT_COPY[movement].through}
+            clearMessage={resultCopy(words)[movement].clear}
+            letThroughMessage={resultCopy(words)[movement].through}
+            words={words}
           />
         ) : (
           <View style={styles.heading}>
@@ -218,7 +235,16 @@ function ManualEntry({ guard }: { guard: GateUser }) {
           </View>
         )}
 
+        {checked && 'occupantsCameIn' in checked && checked.occupantsCameIn !== null ? (
+          <OccupantReasonCard
+            cameIn={checked.occupantsCameIn}
+            leaving={occupants}
+            onReason={(change, why) => recordOccupantReason(db, checked, change, why, guard.id).then(eventRecorded)}
+          />
+        ) : null}
+
         {problem ? <ResultBanner tone="warning" title="Not saved" message={problem} /> : null}
+        {platePhotoProblem ? <ResultBanner tone="warning" title="Plate photo not kept" message={platePhotoProblem} /> : null}
 
         <View style={styles.tiles} accessibilityRole="radiogroup">
           {movements.map((option) => (
@@ -298,22 +324,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
         {lane === 'vehicle' ? (
           <Card style={styles.card}>
             <Text variant="bodyStrong">The car</Text>
-            <Field label="Plate on the car">
-              <TextInput
-                value={plate}
-                onChangeText={(text) => setPlate(plateInput(text))}
-                placeholder="Type the plate"
-                placeholderTextColor={colors.inkSubtle}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                spellCheck={false}
-                autoComplete="off"
-                maxLength={12}
-                editable={!locked}
-                style={styles.plateInput}
-                accessibilityLabel="Plate on the car"
-              />
-            </Field>
+            <PlateField entry={plate} checked={locked} discPlate={null} lookAgain={false} />
             <View style={styles.pair}>
               <View style={styles.half}>
                 <Field label="Make and model">
@@ -344,25 +355,26 @@ function ManualEntry({ guard }: { guard: GateUser }) {
                 </Field>
               </View>
             </View>
-            <View style={styles.occupants}>
-              <View style={styles.occupantsCopy}>
-                <Text variant="bodyStrong">{entering ? 'People in the car' : 'People leaving in the car'}</Text>
-                <Text variant="label" color={colors.inkMuted}>
-                  Including the driver
-                </Text>
-              </View>
-              <View style={styles.stepper}>
-                <IconButton icon="remove" label="One person fewer" onPress={!locked && occupants > 1 ? () => setOccupants(occupants - 1) : undefined} />
-                <Text variant="stat" style={styles.count}>
-                  {occupants}
-                </Text>
-                <IconButton icon="add" label="One person more" onPress={!locked ? () => setOccupants(occupants + 1) : undefined} />
-              </View>
-            </View>
           </Card>
         ) : null}
 
-        {lane && entering ? <VisitTypePicker value={visitType} onChange={setVisitType} locked={locked} /> : null}
+        {lane === 'vehicle' ? (
+          <OccupantCounter title={entering ? 'People in the car' : 'People leaving in the car'} value={people} onChange={setPeople} locked={locked} />
+        ) : null}
+
+        {lane && entering ? (
+          <>
+            <VisitTypePicker
+              value={visitType}
+              onChange={(code) => {
+                setVisitType(code);
+                setStay(expectedStayFor(code));
+              }}
+              locked={locked}
+            />
+            <StayPicker value={stay} onChange={setStay} locked={locked} />
+          </>
+        ) : null}
         {lane === 'vehicle' && !entering ? <ExitChecksCard value={exitChecks} onChange={setExitChecks} locked={locked} /> : null}
       </ScrollView>
 
@@ -383,6 +395,8 @@ function ManualEntry({ guard }: { guard: GateUser }) {
           </>
         )}
       </View>
+
+      {plate.cameraOpen ? <PlateCamera onUse={plate.acceptPhoto} onType={plate.typeIt} onCancel={plate.closeCamera} /> : null}
 
       {overriding ? (
         <SupervisorOverride
@@ -443,32 +457,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
     color: colors.ink,
     ...typography.body,
-  },
-  plateInput: {
-    minHeight: 52,
-    paddingHorizontal: space.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-    color: colors.ink,
-    ...typography.title,
-    letterSpacing: 2,
-  },
-  occupants: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  occupantsCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-  },
-  count: {
-    minWidth: 28,
-    textAlign: 'center',
   },
   footer: {
     position: 'absolute',

@@ -11,6 +11,7 @@ import {
   type GateEventPayload,
   type IgnitionRestart,
   type LicenceDisc,
+  type OccupantsBySex,
   type Outcome,
   type ParsedLicenceDisc,
 } from '@digigate/core';
@@ -52,9 +53,15 @@ export type CheckInput = Passage & {
   subject: CheckSubject;
   /** The plate the guard read off the car. */
   typedPlate: string;
+  /** How the guard gave the plate: off a photo or typed, and whether they were told it didn't match the disc. */
+  plateEntry: GateEventPayload;
   occupants: number;
+  /** The same people, as men, women and anyone the guard couldn't tell. */
+  occupantsBySex: OccupantsBySex;
   /** Entry only: exits keep the visit's own type. */
   visitType: string;
+  /** Entry only: how long the visit should last, in minutes; null for no limit. */
+  expectedStayMinutes: number | null;
   guardId: string;
 };
 
@@ -63,6 +70,8 @@ export type CheckedVehicle = GateCheck & {
   outcome: Outcome;
   /** Open visits the hits point at, for the guard's explanation. */
   related: ReadonlyMap<string, VisitDetails>;
+  /** At an exit, how many people the car came in with, so a different count can be explained. */
+  occupantsCameIn: number | null;
 };
 
 function vehiclePayload(disc: ParsedLicenceDisc): GateEventPayload {
@@ -161,6 +170,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
           occupants: input.occupants,
           visitType: input.visitType,
           enteredAt: at,
+          expectedStayMinutes: input.expectedStayMinutes,
           personName: subject.personName,
           vehicleDescription: subject.vehicleDescription,
         }
@@ -179,8 +189,11 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
       hits: hitsPayload(hits),
       vehicle: subject.vehiclePayload,
       typed_plate: input.typedPlate,
+      plate_entry: input.plateEntry,
       driver: subject.driverPayload(personKey, at),
       occupants: input.occupants,
+      occupants_by_sex: input.occupantsBySex,
+      expected_stay_minutes: direction === 'entry' ? input.expectedStayMinutes : null,
       exit_checks: input.direction === 'exit' ? { ignition_restart: input.ignitionRestart, boot_check: input.bootCheck } : null,
       visit_type: direction === 'entry' ? input.visitType : (openVisit?.visitType ?? null),
       expected_visitor_id: expected?.id ?? null,
@@ -200,5 +213,16 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
     if (own) related.set(openVisit.id, own);
   }
 
-  return { direction, event, hits, outcome, visitId, pendingVisit, related, hotlistNotes: notesFor(hits, hotlistNotes), expected };
+  return {
+    direction,
+    event,
+    hits,
+    outcome,
+    visitId,
+    pendingVisit,
+    related,
+    hotlistNotes: notesFor(hits, hotlistNotes),
+    expected,
+    occupantsCameIn: openVisit?.occupants ?? null,
+  };
 }

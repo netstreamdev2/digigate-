@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense, type CSSProperties } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AppShell } from "@/components/app-shell";
 import { CompanyMark } from "@/components/company-mark";
 import { PageSkeleton } from "@/components/skeleton";
@@ -97,7 +98,6 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
       title="Reports"
       chips={
         <>
-          <SearchBox placeholder="Search a company" />
           <DayPicker day={day} previous={addDays(day, -1)} next={day < today ? addDays(day, 1) : null} label={day === today ? "Today" : shortDay(day)} />
         </>
       }
@@ -105,9 +105,13 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
       <section aria-label="Across every company" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <GlassStat label="Scans" value={compactCount(figures.checks)} icon="visits" {...moved(figures.checks, before.checks)} />
         <GlassStat label="Entries" value={compactCount(figures.entries)} icon="entry" {...moved(figures.entries, before.entries)} />
-        <GlassStat label="Blocked at the boom" value={compactCount(figures.blocked)} icon="result-blocked" attention={figures.blocked > 0} {...moved(figures.blocked, before.blocked, "bad")} />
+        <GlassStat label="Stopped at the gate" value={compactCount(figures.blocked)} icon="result-blocked" attention={figures.blocked > 0} {...moved(figures.blocked, before.blocked, "bad")} />
         <GlassStat label="Companies active" value={countLabel(figures.companies)} icon="sites" note={`of ${countLabel(total)} ${total === 1 ? "company" : "companies"}`} />
       </section>
+
+      <FilterBar label="Filter the companies">
+        <SearchBox placeholder="Search a company" />
+      </FilterBar>
 
       {companies.length === 0 ? (
         <div className="dg-glass mt-6 px-5 py-14 text-center text-sm text-ink-muted">{search ? "No company matches that." : "No companies yet."}</div>

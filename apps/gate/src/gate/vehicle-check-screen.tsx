@@ -1,8 +1,8 @@
-import { normaliseIdentifier } from '@digigate/core';
-import { colors, radius, space, typography } from '@digigate/design';
+import { normaliseIdentifier, occupantTotal, type OccupantsBySex } from '@digigate/core';
+import { colors, radius, space } from '@digigate/design';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCurrentUser } from '@/auth/session';
@@ -19,20 +19,28 @@ import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import { VehicleCard } from '@/components/vehicle-card';
+import { driverOnly, OccupantCounter } from '@/components/occupant-counter';
+import { StayPicker } from '@/components/stay-picker';
 import { VisitTypePicker } from '@/components/visit-type-picker';
 import { useLocalDatabase } from '@/db/database-context';
 import { masked, rememberLastScan, settleLastScan, visitTypeLabel } from '@/db/last-scan';
 import { signalOutcome } from '@/lib/feedback';
-import { formatPlate, plateInput, titleCase } from '@/lib/format';
-import { siteConfig, visitTypeOf } from '@/site/site-config';
+import { titleCase } from '@/lib/format';
+import { vehicleGateWords } from '@/lib/gate-words';
+import { expectedStayFor, siteConfig, visitTypeOf } from '@/site/site-config';
 import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
+import { PlateCamera } from './plate-camera';
+import { PlateField } from './plate-field';
 import { SupervisorOverride } from './supervisor-override';
 import { useCarPark } from './use-car-park';
 import { useKeepLicencePhoto } from './use-keep-licence-photo';
+import { useKeepPlatePhoto } from './use-keep-plate-photo';
+import { usePlateEntry } from './use-plate-entry';
 import { useVehicleDocuments } from './use-vehicle-documents';
-import { recordDecision, type Decision, type Direction } from './decision';
+import { recordDecision, recordOccupantReason, type Decision, type Direction } from './decision';
+import { OccupantReasonCard } from './occupant-reason-card';
 import { CheckResult, type Settled } from './check-result';
 import { completedExitChecks, ExitChecksCard, NO_EXIT_CHECKS, type ExitChecks } from './exit-checks';
 import { checkVehicle, scannedSubject, type CheckedVehicle, type Passage } from './vehicle-check';
@@ -63,25 +71,59 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   const [details, setDetails] = useState<'licence' | 'disc' | 'disc-drawing' | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [typedPlate, setTypedPlate] = useState('');
-  const [occupants, setOccupants] = useState(1);
+  const plate = usePlateEntry();
+  const [people, setPeople] = useState<OccupantsBySex>(driverOnly(null));
+  const peopleCounted = useRef(false);
   const [visitType, setVisitType] = useState<string>(siteConfig.defaultVisitType);
+  const [stay, setStay] = useState<number | null>(expectedStayFor(siteConfig.defaultVisitType));
   const [exitChecks, setExitChecks] = useState<ExitChecks>(NO_EXIT_CHECKS);
   const documents = useVehicleDocuments(checked === null);
   const { disc, licence, photo, notice } = documents;
   const photoProblem = useKeepLicencePhoto(db, checked?.event ?? null, photo);
+  const platePhotoProblem = useKeepPlatePhoto(db, checked?.event ?? null, plate.photo);
   const copy = COPY[direction];
+  const words = vehicleGateWords(post.hasBoom);
+  const occupants = occupantTotal(people);
+
+  // The driver counts as the licence says, until the guard counts the car themselves.
+  const driverGender = licence?.gender ?? null;
+  useEffect(() => {
+    if (!peopleCounted.current) setPeople(driverOnly(driverGender));
+  }, [driverGender]);
+
+  const countPeople = (next: OccupantsBySex) => {
+    peopleCounted.current = true;
+    setPeople(next);
+  };
+
+  const chooseVisitType = (code: string) => {
+    setVisitType(code);
+    setStay(expectedStayFor(code));
+  };
 
   const completedChecks = completedExitChecks(exitChecks);
   const passage: Passage | null = direction === 'entry' ? { direction } : completedChecks && { direction, ...completedChecks };
-  const ready = disc !== null && licence !== null && passage !== null && normaliseIdentifier(typedPlate).length >= MIN_PLATE_LENGTH;
+  const ready = disc !== null && licence !== null && passage !== null && plate.normalised.length >= MIN_PLATE_LENGTH;
+  // Checked before the rules run, without showing the disc's plate: a slip is fixed at the gate, not left as an alert.
+  const plateDiffers = disc !== null && plate.normalised !== normaliseIdentifier(disc.plate);
+  const lookAgain = !checked && plateDiffers && plate.warnedPlate !== null;
 
   const runCheck = async () => {
     if (!disc || !licence || !passage) return;
     setBusy(true);
     setProblem(null);
     try {
-      const result = await checkVehicle(db, { ...passage, subject: scannedSubject({ disc, licence }), typedPlate, occupants, visitType, guardId: guard.id });
+      const result = await checkVehicle(db, {
+        ...passage,
+        subject: scannedSubject({ disc, licence }),
+        typedPlate: plate.plate,
+        plateEntry: plate.payload(),
+        occupants,
+        occupantsBySex: people,
+        visitType,
+        expectedStayMinutes: stay,
+        guardId: guard.id,
+      });
       setChecked(result);
       signalOutcome(result.outcome);
       eventRecorded();
@@ -103,6 +145,15 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
     } finally {
       setBusy(false);
     }
+  };
+
+  // The first Check with a plate that isn't the disc's asks the guard to look again; the second goes ahead.
+  const check = () => {
+    if (plateDiffers && plate.warnedPlate === null) {
+      plate.warn();
+      return;
+    }
+    void runCheck();
   };
 
   const decide = async (decision: Decision) => {
@@ -128,9 +179,11 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
     setSettled(null);
     setDetails(null);
     setProblem(null);
-    setTypedPlate('');
-    setOccupants(1);
+    plate.reset();
+    peopleCounted.current = false;
+    setPeople(driverOnly(null));
     setVisitType(siteConfig.defaultVisitType);
+    setStay(expectedStayFor(siteConfig.defaultVisitType));
     setExitChecks(NO_EXIT_CHECKS);
   };
 
@@ -157,10 +210,11 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
             settled={settled}
             clearMessage={
               direction === 'entry'
-                ? 'No flags on this car or driver. Open the boom. The visit has started.'
-                : 'This driver brought this car in. Open the boom. The visit has ended.'
+                ? `No flags on this car or driver. ${words.letIn} The visit has started.`
+                : `This driver brought this car in. ${words.letOut} The visit has ended.`
             }
-            letThroughMessage={direction === 'entry' ? 'Open the boom. The visit has started.' : 'Open the boom. The visit has ended.'}
+            letThroughMessage={direction === 'entry' ? `${words.letIn} The visit has started.` : `${words.letOut} The visit has ended.`}
+            words={words}
           />
         ) : (
           <View style={styles.heading}>
@@ -171,8 +225,17 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
           </View>
         )}
 
+        {checked && checked.occupantsCameIn !== null ? (
+          <OccupantReasonCard
+            cameIn={checked.occupantsCameIn}
+            leaving={occupants}
+            onReason={(change, reason) => recordOccupantReason(db, checked, change, reason, guard.id).then(eventRecorded)}
+          />
+        ) : null}
+
         {problem ? <ResultBanner tone="warning" title="Not saved" message={problem} /> : null}
         {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
+        {platePhotoProblem ? <ResultBanner tone="warning" title="Plate photo not kept" message={platePhotoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
         {direction === 'entry' && !checked && carPark.kind === 'counted' && carPark.full ? (
           <ResultBanner
@@ -206,58 +269,16 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         )}
 
         <Card style={styles.plate}>
-          <Text variant="overline" color={colors.inkMuted}>
-            Plate on the car
-          </Text>
-          {checked && disc ? (
-            <View style={styles.plateRow}>
-              <Text variant="title">{formatPlate(normaliseIdentifier(typedPlate))}</Text>
-              {normaliseIdentifier(typedPlate) === normaliseIdentifier(disc.plate) ? (
-                <Chip label="Matches disc" icon="check" tone="clear" />
-              ) : (
-                <Chip label={`Disc says ${formatPlate(disc.plate)}`} icon="result-blocked" tone="blocked" />
-              )}
-            </View>
-          ) : (
-            // The disc's own plate stays hidden until the check, so the guard reads it off the car, not the screen.
-            <TextInput
-              value={typedPlate}
-              onChangeText={(text) => setTypedPlate(plateInput(text))}
-              placeholder="Type the plate"
-              placeholderTextColor={colors.inkSubtle}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              spellCheck={false}
-              autoComplete="off"
-              maxLength={12}
-              style={styles.plateInput}
-              accessibilityLabel="Plate on the car"
-            />
-          )}
+          <PlateField entry={plate} checked={checked !== null} discPlate={checked && disc ? disc.plate : null} lookAgain={lookAgain} />
         </Card>
 
-        <Card style={styles.occupants}>
-          <View style={styles.occupantsCopy}>
-            <Text variant="bodyStrong">{copy.people}</Text>
-            <Text variant="label" color={colors.inkMuted}>
-              Including the driver
-            </Text>
-          </View>
-          <View style={styles.stepper}>
-            <IconButton
-              icon="remove"
-              label="One person fewer"
-              onPress={!checked && occupants > 1 ? () => setOccupants(occupants - 1) : undefined}
-            />
-            <Text variant="stat" style={styles.count}>
-              {occupants}
-            </Text>
-            <IconButton icon="add" label="One person more" onPress={!checked ? () => setOccupants(occupants + 1) : undefined} />
-          </View>
-        </Card>
+        <OccupantCounter title={copy.people} value={people} onChange={countPeople} locked={checked !== null} />
 
         {direction === 'entry' ? (
-          <VisitTypePicker value={visitType} onChange={setVisitType} locked={checked !== null} />
+          <>
+            <VisitTypePicker value={visitType} onChange={chooseVisitType} locked={checked !== null} />
+            <StayPicker value={stay} onChange={setStay} locked={checked !== null} />
+          </>
         ) : (
           <ExitChecksCard value={exitChecks} onChange={setExitChecks} locked={checked !== null} />
         )}
@@ -265,7 +286,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
         {!checked ? (
-          <PillButton label="Check" icon="check" disabled={!ready || busy} onPress={runCheck} />
+          <PillButton label={lookAgain ? "It's right · Check" : "Check"} icon="check" disabled={!ready || busy} onPress={check} />
         ) : finished ? (
           <PillButton label="Next car" icon={copy.icon} onPress={nextCar} />
         ) : checked.outcome === 'warning' ? (
@@ -294,6 +315,8 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
       ) : null}
 
       {details === 'disc-drawing' && disc ? <DiscPopup disc={disc} plateShown={checked !== null} onClose={() => setDetails(null)} /> : null}
+
+      {plate.cameraOpen ? <PlateCamera onUse={plate.acceptPhoto} onType={plate.typeIt} onCancel={plate.closeCamera} /> : null}
 
       {overriding ? (
         <SupervisorOverride
@@ -370,38 +393,6 @@ const styles = StyleSheet.create({
   },
   plate: {
     gap: space.xs,
-  },
-  plateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: space.sm,
-  },
-  plateInput: {
-    minHeight: 52,
-    paddingHorizontal: space.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceMuted,
-    color: colors.ink,
-    ...typography.title,
-    letterSpacing: 2,
-  },
-  occupants: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  occupantsCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-  },
-  count: {
-    minWidth: 28,
-    textAlign: 'center',
   },
   footer: {
     position: 'absolute',

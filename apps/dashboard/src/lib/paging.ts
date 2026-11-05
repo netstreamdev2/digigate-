@@ -1,3 +1,5 @@
+import { vehicleSearchTerms } from "@digigate/core";
+
 /** How many rows a list ever asks the database for at once. */
 export const PAGE_SIZE = 25;
 
@@ -27,6 +29,22 @@ export function likePattern(text: string): string {
 export function anyColumnLike(columns: readonly string[], text: string): string {
   const pattern = likePattern(text.replace(/[,()]/g, " "));
   return columns.map((column) => `${column}.ilike.${pattern}`).join(",");
+}
+
+/**
+ * A search where every word must match, in any of the columns, the way people describe what they want: "white
+ * hatchback", "blue Mercedes", "Khumalo CA". Each word also matches what a licence disc calls the same thing (SUV finds
+ * "Station wagon"). One filter per word, for the query to apply each with `.or()`, so together they all must hold.
+ */
+export function everyWordLike(columns: readonly string[], text: string): string[] {
+  return vehicleSearchTerms(text.replace(/[,()]/g, " ")).map((alternatives) =>
+    columns.flatMap((column) => alternatives.map((alternative) => `${column}.ilike.${likePattern(alternative)}`)).join(","),
+  );
+}
+
+/** A query narrowed to rows where every word of the search matches (see everyWordLike). */
+export function withEveryWord<Query extends { or: (filters: string) => Query }>(query: Query, columns: readonly string[], text: string): Query {
+  return everyWordLike(columns, text).reduce((narrowed, filter) => narrowed.or(filter), query);
 }
 
 /** The same address with a different page, keeping the search and filters. */

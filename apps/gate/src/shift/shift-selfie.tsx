@@ -1,5 +1,4 @@
 import { colors, radius, space } from '@digigate/design';
-import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
 import { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -10,6 +9,7 @@ import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import type { ShiftPhoto } from '@/db/shifts';
+import { discardCameraFile, smallestPictureSize } from '@/lib/camera-files';
 import { cameraLibrary } from '@/lib/native';
 
 type Camera = NonNullable<typeof cameraLibrary>;
@@ -20,26 +20,9 @@ type Props = {
   onCancel: () => void;
 };
 
+/** The smallest size that still shows a face clearly, so the photo is quick to send on a weak signal. */
 const SMALLEST_SHORT_SIDE = 480;
 const PHOTO_QUALITY = 0.5;
-
-/** The smallest size that still shows a face clearly, so the photo is quick to send on a weak signal. */
-function smallestGoodSize(sizes: readonly string[]): string | undefined {
-  const usable = sizes.flatMap((size) => {
-    const [width = 0, height = 0] = size.split('x').map(Number);
-    return Math.min(width, height) >= SMALLEST_SHORT_SIDE ? [{ size, pixels: width * height }] : [];
-  });
-  return usable.sort((first, second) => first.pixels - second.pixels)[0]?.size;
-}
-
-/** The camera always leaves a copy in the app's cache, outside the encrypted database. A copy that won't delete stays private to the app until Android clears it. */
-function discardCameraFile(uri: string): void {
-  try {
-    new File(uri).delete();
-  } catch {
-    return;
-  }
-}
 
 /** The photo that goes with a shift, for people in the control room to look at. Nothing here reads the face. */
 export function ShiftSelfie({ onDone, onCancel }: Props) {
@@ -83,7 +66,7 @@ function CameraStep({ camera: library, onDone }: { camera: Camera; onDone: Props
   const prepare = async () => {
     setReady(true);
     const sizes = await camera.current?.getAvailablePictureSizesAsync().catch(() => []);
-    setSize(smallestGoodSize(sizes ?? []));
+    setSize(smallestPictureSize(sizes ?? [], SMALLEST_SHORT_SIDE));
   };
 
   const take = async () => {

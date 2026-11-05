@@ -110,7 +110,7 @@ function HotlistForm({ company, presetSite, close }: { company: Company; presetS
 
       <TextAreaField label="Why (the control room sees this, the guard doesn't)" name="reason" maxLength={500} placeholder="Reported stolen, SAPS case 12/11/2026" required />
       <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
-        <Field label="What the guard should do" name="guardNote" maxLength={200} defaultValue="Keep the boom closed and call your supervisor." required />
+        <Field label="What the guard should do" name="guardNote" maxLength={200} defaultValue="Don't let them through, and call your supervisor." required />
         <Field label="Until (leave empty for no end)" name="until" type="date" />
       </div>
       <p className="-mt-2 text-xs text-ink-muted">

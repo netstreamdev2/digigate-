@@ -43,7 +43,7 @@ async function Evacuation({ params }: { params: Promise<{ site: string }> }) {
     .map((person) => ({
       id: person.id,
       name: person.person,
-      detail: person.visitType ? plainLabel(person.visitType) : "On foot",
+      detail: person.visitType ? plainLabel(person.visitType) : "Pedestrian",
       others: 0,
       cameIn: cameIn(person.enteredAt),
       gate: gateLabel(person.post),
@@ -71,7 +71,7 @@ async function Evacuation({ params }: { params: Promise<{ site: string }> }) {
         complete={complete}
         sections={[
           { title: "In vehicles", icon: "vehicle", rows: cars, empty: "No vehicles inside." },
-          { title: "On foot", icon: "pedestrian", rows: onFoot, empty: "Nobody inside on foot." },
+          { title: "Pedestrians", icon: "pedestrian", rows: onFoot, empty: "No pedestrians inside." },
           { title: "Gate staff on duty", icon: "guard", rows: staff, empty: "No gate staff on duty." },
         ]}
       />

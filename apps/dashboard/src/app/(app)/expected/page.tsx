@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { ConfirmAction } from "@/components/dialog";
+import { FilterBar } from "@/components/filter-bar";
 import { Icon } from "@/components/icon";
 import { Pagination, Tabs } from "@/components/list";
 import { NoAccess } from "@/components/no-access";
@@ -117,7 +118,6 @@ async function Expected({ searchParams }: { searchParams: Promise<Query> }) {
       title="Expected visitors"
       chips={
         <>
-          <SearchBox placeholder="Search a name, plate or note" />
           <BookVisitorButton orgId={formCompany?.id ?? ""} />
         </>
       }
@@ -132,7 +132,11 @@ async function Expected({ searchParams }: { searchParams: Promise<Query> }) {
           }))}
         />
       </div>
-      <section className="dg-glass mt-4 overflow-hidden">
+      <FilterBar label="Filter the bookings">
+        <SearchBox placeholder="Search a name, plate or note" />
+      </FilterBar>
+
+      <section className="dg-glass mt-6 overflow-hidden">
         {rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-5 py-14 text-center">
             <Icon name="invite" className="size-8 text-ink-subtle" />

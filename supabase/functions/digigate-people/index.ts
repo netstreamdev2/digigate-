@@ -1,5 +1,5 @@
-// Manages dashboard accounts, which only the service key can create, opens guards' shift selfies and drivers' licence
-// photos, which only it can read, and keeps guards' personal records (see ../_shared/guard-records.ts). Called by the dashboard's server code with the signed-in person's session, so the service key stays in Supabase
+// Manages dashboard accounts, which only the service key can create, opens guards' shift selfies, drivers' licence photos and
+// cars' plate photos, which only it can read, and keeps guards' personal records (see ../_shared/guard-records.ts). Called by the dashboard's server code with the signed-in person's session, so the service key stays in Supabase
 // and never reaches the dashboard. Deployed with --no-verify-jwt: the session is checked below, and it must have passed
 // MFA. Super users are never created here.
 // Logs carry error names only: requests hold names and temporary passwords.
@@ -17,6 +17,7 @@ const SELFIE_BUCKET = 'shift-selfies';
 const SELFIE_LINK_SECONDS = 60;
 const LICENCE_PHOTO_BUCKET = 'licence-photos';
 const LICENCE_PHOTO_LINK_SECONDS = 60;
+const PLATE_PHOTO_BUCKET = 'plate-photos';
 
 /** The company responsible for an account: its own, or for a client's login, the client's. */
 async function companyOf(profileId: string): Promise<{ org_id: string | null; roles: string[]; full_name: string } | null> {
@@ -169,6 +170,21 @@ async function licencePhotoLink(caller: Caller, request: Request, body: Record<s
   return json({ url: link.signedUrl });
 }
 
+/** Like a licence photo: a one-minute link to the photo of the car's plate, logged each time with the plate masked. */
+async function platePhotoLink(caller: Caller, request: Request, body: Record<string, unknown>): Promise<Response> {
+  const eventId = String(body.eventId ?? '');
+  if (!UUID.test(eventId)) return json({ error: 'not-allowed' }, 403);
+  const { data, error } = await asCaller(request).rpc('plate_photo_for', { _event: eventId });
+  if (error) throw new Error('plate photo lookup failed');
+  const [photo] = (data ?? []) as { path: string; org_id: string; plate: string | null }[];
+  if (!photo) return json({ error: 'no-photo' }, 404);
+
+  const { data: link, error: linkError } = await admin.storage.from(PLATE_PHOTO_BUCKET).createSignedUrl(photo.path, LICENCE_PHOTO_LINK_SECONDS);
+  if (linkError || !link) throw new Error('plate photo link failed');
+  await audit(caller, photo.org_id, 'gate', 'check.plate_photo_viewed', photo.plate, eventId);
+  return json({ url: link.signedUrl });
+}
+
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -184,6 +200,7 @@ Deno.serve(async (request) => {
     }
     if (body.action === 'selfie-link') return await selfieLink(caller, body);
     if (body.action === 'licence-photo-link') return await licencePhotoLink(caller, request, body);
+    if (body.action === 'plate-photo-link') return await platePhotoLink(caller, request, body);
     if (!isSuper(caller) && !caller.roles.includes('admin')) return json({ error: 'not-allowed' }, 403);
     if (body.action === 'create') return await createPerson(caller, body);
     if (body.action === 'set-active' || body.action === 'reset-password') return await changePerson(caller, body);

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AppShell } from "@/components/app-shell";
 import { CompanyGrid } from "@/components/company-grid";
 import { Pagination } from "@/components/list";
@@ -34,8 +35,10 @@ async function Admin({ searchParams }: { searchParams: Promise<Query> }) {
     <AppShell
       eyebrow="Guard records, access points and shift times"
       title="Admin"
-      chips={<SearchBox placeholder="Search companies" />}
     >
+      <FilterBar label="Filter the companies">
+        <SearchBox placeholder="Search companies" />
+      </FilterBar>
       <CompanyGrid companies={companies.map(companyCardOf)} hrefFor={(id) => `/admin/${id}`} empty={search ? "Nothing matches that search." : "No security companies yet."} />
       <div className="dg-glass mt-6 overflow-hidden empty:hidden">
         <Pagination page={page} total={count} hrefFor={(next) => pageHref("/admin", query, next)} />

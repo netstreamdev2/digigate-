@@ -382,6 +382,7 @@ export type Database = {
           licence_photo_path: string | null
           org_id: string
           payload: Json
+          plate_photo_path: string | null
           site_id: string
           visit_id: string | null
         }
@@ -392,6 +393,7 @@ export type Database = {
           licence_photo_path?: string | null
           org_id: string
           payload: Json
+          plate_photo_path?: string | null
           site_id: string
           visit_id?: string | null
         }
@@ -402,6 +404,7 @@ export type Database = {
           licence_photo_path?: string | null
           org_id?: string
           payload?: Json
+          plate_photo_path?: string | null
           site_id?: string
           visit_id?: string | null
         }
@@ -757,6 +760,96 @@ export type Database = {
           },
           {
             foreignKeyName: "hotlist_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      imported_checks: {
+        Row: {
+          body: string | null
+          colour: string | null
+          direction: string
+          erase_after: string
+          id: string
+          imported_at: string
+          licence_expires_on: string | null
+          make: string | null
+          model: string | null
+          occupants: number | null
+          occurred_at: string
+          org_id: string
+          person_key: string | null
+          person_name: string | null
+          plate: string | null
+          scanned_by: string | null
+          sex: string | null
+          site_id: string
+          source: string
+          source_ref: string
+          vin: string | null
+          visit_type: string | null
+        }
+        Insert: {
+          body?: string | null
+          colour?: string | null
+          direction: string
+          erase_after: string
+          id?: string
+          imported_at?: string
+          licence_expires_on?: string | null
+          make?: string | null
+          model?: string | null
+          occupants?: number | null
+          occurred_at: string
+          org_id: string
+          person_key?: string | null
+          person_name?: string | null
+          plate?: string | null
+          scanned_by?: string | null
+          sex?: string | null
+          site_id: string
+          source: string
+          source_ref: string
+          vin?: string | null
+          visit_type?: string | null
+        }
+        Update: {
+          body?: string | null
+          colour?: string | null
+          direction?: string
+          erase_after?: string
+          id?: string
+          imported_at?: string
+          licence_expires_on?: string | null
+          make?: string | null
+          model?: string | null
+          occupants?: number | null
+          occurred_at?: string
+          org_id?: string
+          person_key?: string | null
+          person_name?: string | null
+          plate?: string | null
+          scanned_by?: string | null
+          sex?: string | null
+          site_id?: string
+          source?: string
+          source_ref?: string
+          vin?: string | null
+          visit_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imported_checks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "imported_checks_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
@@ -1225,6 +1318,7 @@ export type Database = {
           radius_m: number | null
           shift_periods: Json
           site_type: string
+          stay_minutes: Json
           updated_at: string
         }
         Insert: {
@@ -1244,6 +1338,7 @@ export type Database = {
           radius_m?: number | null
           shift_periods?: Json
           site_type: string
+          stay_minutes?: Json
           updated_at?: string
         }
         Update: {
@@ -1263,6 +1358,7 @@ export type Database = {
           radius_m?: number | null
           shift_periods?: Json
           site_type?: string
+          stay_minutes?: Json
           updated_at?: string
         }
         Relationships: [
@@ -1287,11 +1383,13 @@ export type Database = {
           disc_expires_on: string | null
           disc_number: string | null
           erase_after: string | null
+          occupant_reason: string | null
           org_id: string
           person_key: string
           person_name: string
           plate: string | null
           site_id: string
+          vehicle_body: string | null
           vehicle_description: string | null
           vin: string | null
           visit_id: string
@@ -1300,11 +1398,13 @@ export type Database = {
           disc_expires_on?: string | null
           disc_number?: string | null
           erase_after?: string | null
+          occupant_reason?: string | null
           org_id: string
           person_key: string
           person_name: string
           plate?: string | null
           site_id: string
+          vehicle_body?: string | null
           vehicle_description?: string | null
           vin?: string | null
           visit_id: string
@@ -1313,11 +1413,13 @@ export type Database = {
           disc_expires_on?: string | null
           disc_number?: string | null
           erase_after?: string | null
+          occupant_reason?: string | null
           org_id?: string
           person_key?: string
           person_name?: string
           plate?: string | null
           site_id?: string
+          vehicle_body?: string | null
           vehicle_description?: string | null
           vin?: string | null
           visit_id?: string
@@ -1343,10 +1445,13 @@ export type Database = {
         Row: {
           entered_at: string
           exited_at: string | null
+          expected_until: string | null
           id: string
           kind: string
           occupants_in: number | null
+          occupants_in_by_sex: Json | null
           occupants_out: number | null
+          occupants_out_by_sex: Json | null
           org_id: string
           post: string | null
           site_id: string
@@ -1355,10 +1460,13 @@ export type Database = {
         Insert: {
           entered_at: string
           exited_at?: string | null
+          expected_until?: string | null
           id: string
           kind: string
           occupants_in?: number | null
+          occupants_in_by_sex?: Json | null
           occupants_out?: number | null
+          occupants_out_by_sex?: Json | null
           org_id: string
           post?: string | null
           site_id: string
@@ -1367,10 +1475,13 @@ export type Database = {
         Update: {
           entered_at?: string
           exited_at?: string | null
+          expected_until?: string | null
           id?: string
           kind?: string
           occupants_in?: number | null
+          occupants_in_by_sex?: Json | null
           occupants_out?: number | null
+          occupants_out_by_sex?: Json | null
           org_id?: string
           post?: string | null
           site_id?: string
@@ -1404,6 +1515,7 @@ export type Database = {
           type: string | null
           typed_plate: string | null
           vehicle_description: string | null
+          vehicle_search: string | null
           visit_entered_at: string | null
           visit_id: string | null
           visit_type: string | null
@@ -1418,23 +1530,65 @@ export type Database = {
           },
         ]
       }
+      imported_check_records: {
+        Row: {
+          body: string | null
+          direction: string | null
+          id: string | null
+          in_full: boolean | null
+          licence_expires_on: string | null
+          occupants: number | null
+          occurred_at: string | null
+          org_id: string | null
+          person_name: string | null
+          plate: string | null
+          scanned_by: string | null
+          sex: string | null
+          site_id: string | null
+          source: string | null
+          vehicle_description: string | null
+          vehicle_search: string | null
+          visit_type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imported_checks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "imported_checks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       visit_records: {
         Row: {
           details_erased: boolean | null
           disc_number: string | null
           entered_at: string | null
           exited_at: string | null
+          expected_until: string | null
           id: string | null
           in_full: boolean | null
           kind: string | null
+          occupant_reason: string | null
           occupants_in: number | null
+          occupants_in_by_sex: Json | null
           occupants_out: number | null
+          occupants_out_by_sex: Json | null
           org_id: string | null
           person_name: string | null
           plate: string | null
           post: string | null
           site_id: string | null
           vehicle_description: string | null
+          vehicle_search: string | null
           vin: string | null
           visit_type: string | null
         }
@@ -1479,6 +1633,10 @@ export type Database = {
         Returns: string
       }
       admin_org: { Args: never; Returns: string }
+      alert_story: {
+        Args: { _alert: Database["digigate"]["Tables"]["alerts"]["Row"] }
+        Returns: string
+      }
       apply_passage: {
         Args: {
           _at: string
@@ -1491,6 +1649,10 @@ export type Database = {
         Returns: undefined
       }
       attach_licence_photo: {
+        Args: { _device: string; _event: string; _path: string }
+        Returns: boolean
+      }
+      attach_plate_photo: {
         Args: { _device: string; _event: string; _path: string }
         Returns: boolean
       }
@@ -1719,6 +1881,10 @@ export type Database = {
           match_key: string
         }[]
       }
+      import_old_checks: {
+        Args: { _org: string; _rows: Json; _site: string }
+        Returns: number
+      }
       in_org: { Args: { _org: string }; Returns: boolean }
       ingest_events: {
         Args: { _device_id: string; _events: Json }
@@ -1742,6 +1908,7 @@ export type Database = {
         Returns: string
       }
       note_sign_in: { Args: never; Returns: undefined }
+      occupants_by_sex: { Args: { _value: Json }; Returns: Json }
       org_person_key: { Args: { _org: string }; Returns: string }
       people_board: {
         Args: {
@@ -1779,6 +1946,15 @@ export type Database = {
         Returns: string
       }
       plate_key: { Args: { _value: string }; Returns: string }
+      plate_photo_for: {
+        Args: { _event: string }
+        Returns: {
+          org_id: string
+          path: string
+          plate: string
+          site_id: string
+        }[]
+      }
       post_code_for: {
         Args: { _label: string; _site: string }
         Returns: string

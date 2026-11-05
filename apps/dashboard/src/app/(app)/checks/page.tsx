@@ -2,11 +2,12 @@ import { countLabel } from "@digigate/core";
 import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { FilterBar } from "@/components/filter-bar";
 import { GlassStat } from "@/components/glass";
 import { Icon } from "@/components/icon";
 import { Pagination, Tabs } from "@/components/list";
 import { NoAccess } from "@/components/no-access";
-import { DateRange } from "@/components/report-controls";
+import { DateRange, SegmentedLinks } from "@/components/report-controls";
 import { FilterSelect, SearchBox } from "@/components/search-box";
 import { PageSkeleton } from "@/components/skeleton";
 import { checkRowOf } from "@/lib/check-rows";
@@ -14,11 +15,13 @@ import { checkPage, type CheckDirection, type CheckLane, type CheckResult } from
 import { companyBrand } from "@/lib/company-brand";
 import { addDays, dayParam, longDate, siteToday } from "@/lib/format";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
+import { oldCheckPage } from "@/lib/old-checks";
 import { must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { CheckActivity } from "../control-room/check-activity";
+import { OldCheckList } from "./old-check-list";
 
 const DEFAULT_DAYS = 7;
 /** A wider range is cut to this many days, so a search stays quick however busy the gates are. */
@@ -33,7 +36,7 @@ const RESULTS = [
 
 const LANES = [
   { value: "vehicle", label: "Vehicles" },
-  { value: "pedestrian", label: "On foot" },
+  { value: "pedestrian", label: "Pedestrians" },
 ] as const;
 
 const pick = <T extends string>(value: string, options: readonly { value: T }[]): T | "" => options.find((option) => option.value === value)?.value ?? "";
@@ -55,6 +58,8 @@ async function Checks({ searchParams }: { searchParams: Promise<Query> }) {
   const lane: CheckLane = pick(textParam(query, "lane"), LANES);
   const search = textParam(query, "q");
   const page = pageParam(query);
+  // The site's old gate system, brought over and kept apart: its checks have no rule results to filter by.
+  const fromOldSystem = textParam(query, "source") === "old";
 
   const supabase = await supabaseServer();
   const companies = isSuperUser ? must(await supabase.from("organisations").select("id, name").order("name").limit(MOST_CHOICES)) : [];
@@ -65,10 +70,12 @@ async function Checks({ searchParams }: { searchParams: Promise<Query> }) {
   const sites = isSuperUser && !company ? [] : must(await siteList);
   const site = sites.find((row) => row.id === textParam(query, "site"))?.id ?? "";
 
-  const [{ checks, total }, brand] = await Promise.all([
-    checkPage({ fromDay, toDay, search, direction, result, lane, company, site }, page),
+  const [{ checks, total }, old, brand] = await Promise.all([
+    fromOldSystem ? { checks: [], total: 0 } : checkPage({ fromDay, toDay, search, direction, result, lane, company, site }, page),
+    fromOldSystem ? oldCheckPage({ fromDay, toDay, search, direction, company, site }, page) : null,
     company ? companyBrand(company) : null,
   ]);
+  const shown = old ? old.total : total;
   const severalDays = fromDay !== toDay;
   const showSite = sites.length !== 1 && !site;
   const tabHref = (next: CheckDirection) => pageHref("/checks", { ...query, direction: next || undefined }, 1);
@@ -78,27 +85,27 @@ async function Checks({ searchParams }: { searchParams: Promise<Query> }) {
       company={brand}
       eyebrow="Everyone who came in and went out, searched by name, plate or day"
       title="Checks"
-      chips={
-        <>
-          <SearchBox placeholder="Search a name or plate" />
-          {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
-          {sites.length > 1 ? <FilterSelect name="site" label="All sites" options={sites.map((row) => ({ value: row.id, label: row.name }))} /> : null}
-          <FilterSelect name="lane" label="Cars and on foot" options={LANES} />
-          <FilterSelect name="result" label="Every result" options={RESULTS} />
-          <DateRange from={fromDay} to={toDay} latest={today} />
-        </>
-      }
     >
       <section aria-label="Key figures" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <GlassStat
           label={direction === "in" ? "Entries" : direction === "out" ? "Exits" : "Checks"}
-          value={countLabel(total)}
+          value={countLabel(shown)}
           icon="visits"
-          note={severalDays ? `${longDate(fromDay)} to ${longDate(toDay)}` : longDate(fromDay)}
+          note={`${severalDays ? `${longDate(fromDay)} to ${longDate(toDay)}` : longDate(fromDay)}${old ? " · old system" : ""}`}
         />
       </section>
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <SegmentedLinks
+          label="Whose checks"
+          items={[
+            { label: "DigiGate", href: pageHref("/checks", { ...query, source: undefined }, 1), active: !fromOldSystem },
+            { label: "Old system", href: pageHref("/checks", { ...query, source: "old", lane: undefined, result: undefined }, 1), active: fromOldSystem },
+          ]}
+        />
+      </div>
+
+      <div className="mt-4">
         <Tabs
           items={[
             { label: "In and out", href: tabHref(""), active: direction === "" },
@@ -108,18 +115,33 @@ async function Checks({ searchParams }: { searchParams: Promise<Query> }) {
         />
       </div>
 
-      <section className="dg-glass mt-4 overflow-hidden">
-        {checks.length === 0 ? (
+      <FilterBar label="Filter the checks">
+        <SearchBox placeholder="Name, plate or car: white hatchback" />
+        {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+        {sites.length > 1 ? <FilterSelect name="site" label="All sites" options={sites.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+        {fromOldSystem ? null : <FilterSelect name="lane" label="Vehicles and pedestrians" options={LANES} />}
+        {fromOldSystem ? null : <FilterSelect name="result" label="Every result" options={RESULTS} />}
+        <DateRange from={fromDay} to={toDay} latest={today} />
+      </FilterBar>
+
+      <section className="dg-glass mt-6 overflow-hidden">
+        {(old ? old.checks.length : checks.length) === 0 ? (
           <div className="flex flex-col items-center gap-2 px-5 py-14 text-center">
             <Icon name="visits" className="size-8 text-ink-subtle" />
-            <p className="text-sm text-ink-muted">{search || result || lane || site ? "No check matches all of that. Try fewer filters or more days." : "No checks on these days."}</p>
+            <p className="text-sm text-ink-muted">
+              {search || result || lane || site ? "No check matches all of that. Try fewer filters or more days." : old ? "No checks from the old system on these days." : "No checks on these days."}
+            </p>
+          </div>
+        ) : old ? (
+          <div className="px-2 pt-2 sm:px-4">
+            <OldCheckList checks={old.checks} showSite={showSite} severalDays={severalDays} />
           </div>
         ) : (
           <div className="px-2 pt-2 sm:px-4">
             <CheckActivity rows={checks.map((check) => checkRowOf(check, showSite ? `${check.gate} · ${check.siteName}` : check.gate, now, severalDays))} />
           </div>
         )}
-        <Pagination page={page} total={total} hrefFor={(next) => pageHref("/checks", query, next)} />
+        <Pagination page={page} total={shown} hrefFor={(next) => pageHref("/checks", query, next)} />
       </section>
     </AppShell>
   );

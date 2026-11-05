@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AppShell } from "@/components/app-shell";
 import { PageSkeleton } from "@/components/skeleton";
 import { Breadcrumbs, ListCard, ListRow, Pagination, Tabs } from "@/components/list";
@@ -145,13 +146,17 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
               { label: "Sites, access points and shifts", href: `${path}?tab=sites`, active: tab === "sites" },
             ]}
           />
-          <div className="flex flex-wrap items-center gap-2">
-            <SearchBox key={tab} placeholder={tab === "guards" ? "Search name or employee number" : "Search a site name or code"} />
-            {tab === "guards" ? <AddGateStaffButton /> : null}
-          </div>
+          {tab === "guards" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <AddGateStaffButton />
+            </div>
+          ) : null}
         </div>
       }
     >
+      <FilterBar label={tab === "guards" ? "Filter the guards" : "Filter the sites"}>
+        <SearchBox key={tab} placeholder={tab === "guards" ? "Search name or employee number" : "Search a site name or code"} />
+      </FilterBar>
       <div className="mt-6">
         {tab === "guards" ? <GuardsTab org={org} query={query} path={path} /> : <SitesTab org={org} query={query} path={path} />}
       </div>

@@ -7,6 +7,7 @@ import type { LiveAlert } from "@/lib/control-room";
 import { timeOfDay } from "@/lib/format";
 
 import { closeAlert } from "./actions";
+import { PlateEvidence } from "./plate-evidence";
 
 type Props = {
   alerts: readonly LiveAlert[];
@@ -17,6 +18,7 @@ type Props = {
 };
 
 const DIRECTION_WORDS = { in: "Coming in", out: "Going out" } as const;
+const PLATE_MISMATCH = "PLATE_DISC_MISMATCH";
 
 export function LiveAlerts({ alerts, total, gateLabel, canClose }: Props) {
   if (alerts.length === 0) return <p className="py-8 text-center text-sm text-ink-muted">No open alerts. All clear.</p>;
@@ -35,7 +37,7 @@ export function LiveAlerts({ alerts, total, gateLabel, canClose }: Props) {
                 <p className="font-display text-base font-semibold tracking-tight">{titles}</p>
               </div>
               {alert.foundAfter ? (
-                <p className="mt-2 text-xs font-semibold text-brand">Found by the server after the gate, from every gate&apos;s records. The boom may already be open.</p>
+                <p className="mt-2 text-xs font-semibold text-brand">Found by the server after the gate, from every gate&apos;s records. They may already have gone through.</p>
               ) : null}
               {alert.person ? <p className="mt-2 text-sm font-medium">{alert.person}</p> : null}
               {alert.plate ? <p className="mt-0.5 text-sm text-ink-muted">{[alert.plate, alert.vehicle].filter(Boolean).join(" · ")}</p> : null}
@@ -55,8 +57,12 @@ export function LiveAlerts({ alerts, total, gateLabel, canClose }: Props) {
                     action={closeAlert}
                     fields={{ ids: alert.ids.join(",") }}
                   >
-                    <p className="text-sm text-ink-muted">This takes it off the live list. It doesn&apos;t open the boom: the guard at the gate still decides.</p>
-                    <Field label="What was done?" name="reason" autoFocus required />
+                    <p className="text-sm text-ink-muted">This takes it off the live list. It doesn&apos;t let anyone through: the guard at the gate still decides.</p>
+                    {alert.eventId && alert.codes.includes(PLATE_MISMATCH) ? (
+                      <PlateEvidence eventId={alert.eventId} discPlate={alert.plate} typedPlate={alert.typedPlate} />
+                    ) : (
+                      <Field label="What was done?" name="reason" autoFocus required />
+                    )}
                   </FormDialog>
                 ) : null}
               </div>

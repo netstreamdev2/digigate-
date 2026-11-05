@@ -31,6 +31,7 @@ export type SiteVisit = {
   discNumber: string | null;
   discExpiresOn: string | null;
   vehicleDescription: string | null;
+  expectedStayMinutes: number | null;
 };
 
 type VisitRow = {
@@ -47,6 +48,7 @@ type VisitRow = {
   entered_at: number;
   person_name: string;
   vehicle_description: string | null;
+  expected_stay_minutes: number | null;
 };
 
 /** What the guard's screen shows about an open visit, beyond what the rules read. */
@@ -73,7 +75,7 @@ function coDriverKeys(value: string): string[] {
 
 function toOpenVisit(row: VisitRow): OpenVisit {
   if (row.kind === 'pedestrian') {
-    return { id: row.id, kind: 'pedestrian', personKey: row.person_key, visitType: row.visit_type, enteredAt: row.entered_at };
+    return { id: row.id, kind: 'pedestrian', personKey: row.person_key, visitType: row.visit_type, enteredAt: row.entered_at, expectedStayMinutes: row.expected_stay_minutes };
   }
   if (row.plate === null || row.occupants === null) {
     throw new DamagedVisit('A stored vehicle visit has no vehicle');
@@ -88,6 +90,7 @@ function toOpenVisit(row: VisitRow): OpenVisit {
     occupants: row.occupants,
     visitType: row.visit_type,
     enteredAt: row.entered_at,
+    expectedStayMinutes: row.expected_stay_minutes,
   };
 }
 
@@ -103,7 +106,7 @@ async function siteRows(db: SQLiteDatabase): Promise<VisitRow[]> {
   const own = await db.getAllAsync<VisitRow>('SELECT * FROM visits');
   const shared = await db.getAllAsync<VisitRow>(
     `SELECT id, kind, person_key, '[]' AS co_driver_keys, vin, plate, disc_number, disc_expires_on, occupants, visit_type, entered_at,
-            person_name, vehicle_description
+            person_name, vehicle_description, expected_stay_minutes
      FROM site_visits
      WHERE generation = (SELECT CAST(value AS INTEGER) FROM kv WHERE key = ?)
        AND id NOT IN (SELECT id FROM visits)
@@ -174,17 +177,18 @@ export async function commitGateEvent(db: SQLiteDatabase, event: GateEvent, chan
     if (change && 'open' in change && change.open.kind === 'pedestrian') {
       const visit = change.open;
       await db.runAsync(
-        `INSERT INTO visits (id, kind, person_key, co_driver_keys, visit_type, entered_at, person_name)
-         VALUES (?, 'pedestrian', ?, '[]', ?, ?, ?)`,
-        [visit.id, visit.personKey, visit.visitType, visit.enteredAt, visit.personName],
+        `INSERT INTO visits (id, kind, person_key, co_driver_keys, visit_type, entered_at, person_name, expected_stay_minutes)
+         VALUES (?, 'pedestrian', ?, '[]', ?, ?, ?, ?)`,
+        [visit.id, visit.personKey, visit.visitType, visit.enteredAt, visit.personName, visit.expectedStayMinutes ?? null],
       );
     } else if (change && 'open' in change && change.open.kind === 'vehicle') {
       const visit = change.open;
       const vin = normaliseIdentifier(visit.vehicle.vin);
       const plate = normaliseIdentifier(visit.vehicle.plate);
       await db.runAsync(
-        `INSERT INTO visits (id, kind, person_key, co_driver_keys, vin, plate, disc_number, disc_expires_on, occupants, visit_type, entered_at, person_name, vehicle_description)
-         VALUES (?, 'vehicle', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO visits (id, kind, person_key, co_driver_keys, vin, plate, disc_number, disc_expires_on, occupants, visit_type, entered_at, person_name, vehicle_description,
+           expected_stay_minutes)
+         VALUES (?, 'vehicle', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           visit.id,
           visit.driverKey,
@@ -198,6 +202,7 @@ export async function commitGateEvent(db: SQLiteDatabase, event: GateEvent, chan
           visit.enteredAt,
           visit.personName,
           visit.vehicleDescription,
+          visit.expectedStayMinutes ?? null,
         ],
       );
       await db.runAsync(
@@ -231,8 +236,8 @@ export async function saveSiteVisits(db: SQLiteDatabase, visits: readonly SiteVi
     for (const visit of visits) {
       await db.runAsync(
         `INSERT OR REPLACE INTO site_visits (generation, id, kind, person_key, vin, plate, disc_number, disc_expires_on, occupants, visit_type,
-           entered_at, person_name, vehicle_description)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           entered_at, person_name, vehicle_description, expected_stay_minutes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           generation,
           visit.id,
@@ -247,6 +252,7 @@ export async function saveSiteVisits(db: SQLiteDatabase, visits: readonly SiteVi
           visit.enteredAt,
           visit.personName,
           visit.vehicleDescription,
+          visit.expectedStayMinutes,
         ],
       );
     }

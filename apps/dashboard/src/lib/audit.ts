@@ -17,7 +17,7 @@ export const CATEGORY_LOOK: Record<AuditCategory, { label: string; icon: IconNam
   people: { label: "People", icon: "users", tint: "bg-tile-lilac" },
   setup: { label: "Setup", icon: "sites", tint: "bg-tile-mint" },
   devices: { label: "Devices", icon: "device", tint: "bg-tile-sky" },
-  alerts: { label: "Alerts", icon: "alerts", tint: "bg-warning-soft" },
+  alerts: { label: "Flags and alerts", icon: "alerts", tint: "bg-warning-soft" },
   reports: { label: "Reports", icon: "reports", tint: "bg-tile-butter" },
   gate: { label: "At the gate", icon: "guard", tint: "bg-tile-mint" },
   privacy: { label: "Erasure", icon: "delete", tint: "bg-blocked-soft" },
@@ -58,6 +58,7 @@ const WORDS: Readonly<Record<string, string>> = {
   "device.added": "paired the device",
   "device.changed": "renamed the device",
   "device.revoked": "revoked the device",
+  "alert.raised": "flagged",
   "alert.closed": "closed the alert",
   "schedule.added": "automated",
   "schedule.changed": "changed the automated report",
@@ -73,6 +74,7 @@ const WORDS: Readonly<Record<string, string>> = {
   "gate.shift_start": "went on duty at",
   "gate.shift_end": "came off duty at",
   "gate.override": "overrode a block at",
+  "gate.occupant_reason": "explained a changed head count at",
   "gate.turned_away": "turned someone away at",
   "gate.alert_ack": "let someone through after a warning at",
   "gate.left_post": "left their post with",
@@ -80,12 +82,14 @@ const WORDS: Readonly<Record<string, string>> = {
   "gate.stepping_away": "said they were stepping away from",
   "shift.selfie_viewed": "looked at the shift photo of",
   "check.licence_photo_viewed": "looked at the licence photo of",
+  "check.plate_photo_viewed": "looked at the plate photo of",
   "gate.post_located": "set the location of",
   "hotlist.added": "added to the hotlist:",
   "hotlist.removed": "took off the hotlist:",
   "expected.added": "booked in",
   "expected.cancelled": "cancelled the booking of",
   "erasure.ran": "erased the personal details in",
+  "import.old_checks": "brought in from the old system, for",
 };
 
 export type AuditEntry = {
@@ -103,7 +107,7 @@ export type AuditFilter = { search: string; category: AuditCategory | null; comp
 
 function detailOf(action: string, detail: string | null): string | null {
   if (!detail) return null;
-  if (action === "gate.override" || action === "gate.turned_away" || action === "gate.alert_ack") return detail.split(", ").map(ruleTitle).join(", ");
+  if (action === "gate.override" || action === "gate.turned_away" || action === "gate.alert_ack" || action === "gate.occupant_reason") return detail.split(", ").map(ruleTitle).join(", ");
   if (action.startsWith("gate.shift") || action.endsWith("_post")) return detail.split(" · ").map(plainLabel).join(" · ");
   if (action === "gate.stepping_away") return detail.split(" · ").map((part, index) => (index === 0 ? plainLabel(part) : part)).join(" · ");
   if (action.endsWith(".changed")) return `Changed: ${detail.split(", ").map(plainLabel).join(", ")}`;
@@ -145,7 +149,7 @@ export async function auditEntries(filter: AuditFilter, page: number): Promise<{
           category,
           actor,
           words: WORDS[row.action] ?? plainLabel(row.action),
-          target: row.action === "alert.closed" && row.target ? ruleTitle(row.target) : row.target,
+          target: (row.action === "alert.closed" || row.action === "alert.raised") && row.target ? ruleTitle(row.target) : row.target,
           detail: detailOf(row.action, row.detail),
           company: companies.find((company) => company.id === row.org_id)?.name ?? null,
         },

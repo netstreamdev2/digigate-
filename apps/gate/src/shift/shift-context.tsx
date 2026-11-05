@@ -4,7 +4,7 @@ import { useSession } from '@/auth/session';
 import { useLocalDatabase } from '@/db/database-context';
 import { beginShift, closeShift, openShift, type Shift, type ShiftPhoto } from '@/db/shifts';
 import { newEventId } from '@/lib/ids';
-import { lanesOf, postLabel, siteConfig, siteName, type Lane } from '@/site/site-config';
+import { hasBoomAt, lanesOf, postLabel, siteConfig, siteName, type Lane } from '@/site/site-config';
 import { useSync } from '@/sync/sync-context';
 
 const HOUR_MS = 60 * 60_000;
@@ -91,10 +91,10 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
 }
 
 /** Where the signed-in guard is posted: its name, and which lanes it handles. */
-export function usePost(): { label: string; lanes: readonly Lane[] } {
+export function usePost(): { label: string; lanes: readonly Lane[]; hasBoom: boolean } {
   const { shift } = useShift();
   return useMemo(
-    () => ({ label: shift ? postLabel(shift.post) : siteName(), lanes: lanesOf(shift?.post ?? '') }),
+    () => ({ label: shift ? postLabel(shift.post) : siteName(), lanes: lanesOf(shift?.post ?? ''), hasBoom: hasBoomAt(shift?.post ?? '') }),
     [shift],
   );
 }

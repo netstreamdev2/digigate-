@@ -36,6 +36,8 @@ export type OpenVehicleVisit = {
   occupants: number;
   visitType: string;
   enteredAt: EpochMs;
+  /** How long the guard was told the visit would last, in minutes. Null for no limit; absent for visits from before it was asked. */
+  expectedStayMinutes?: number | null;
 };
 
 export type OpenPedestrianVisit = {
@@ -44,6 +46,8 @@ export type OpenPedestrianVisit = {
   personKey: PersonKey;
   visitType: string;
   enteredAt: EpochMs;
+  /** As for a vehicle visit. */
+  expectedStayMinutes?: number | null;
 };
 
 export type OpenVisit = OpenVehicleVisit | OpenPedestrianVisit;
@@ -83,7 +87,7 @@ export type GateState = {
 export type RuleConfig = {
   /** The site's offset from UTC, used to decide which calendar day it is for expiry dates. */
   utcOffsetMinutes: number;
-  /** Overstay limit per visit type. Visit types without a limit never overstay. */
+  /** Overstay limit per visit type, for visits that didn't record their own expected stay. Visit types without a limit never overstay. */
   overstayLimitMinutes: Readonly<Partial<Record<string, number>>>;
   disabledRules: readonly RuleCode[];
 };

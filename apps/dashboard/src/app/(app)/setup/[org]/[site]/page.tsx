@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AddedNotice } from "@/components/added-notice";
 import { AppShell } from "@/components/app-shell";
 import { PageSkeleton } from "@/components/skeleton";
@@ -21,6 +22,7 @@ import { AccessPointList } from "../../access-point-list";
 import { addAccessPoint, revokeDevice, setGateUserActive } from "../../actions";
 import { AddGateStaffButton } from "../../gate-staff-form";
 import { PairDeviceButton } from "../../pair-device";
+import { SiteStaysButton } from "../../site-stays";
 
 type Tab = "points" | "staff" | "devices";
 
@@ -177,7 +179,7 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
   const supabase = await supabaseServer();
   const [companyRead, siteRead, points, staff, devices] = await Promise.all([
     supabase.from("organisations").select("name").eq("id", ids.org).maybeSingle(),
-    supabase.from("sites").select("name, code, site_type, address, latitude, longitude, radius_m, open_parking, parking_spaces").eq("id", ids.site).eq("org_id", ids.org).maybeSingle(),
+    supabase.from("sites").select("name, code, site_type, address, latitude, longitude, radius_m, open_parking, parking_spaces, stay_minutes").eq("id", ids.site).eq("org_id", ids.org).maybeSingle(),
     supabase.from("posts").select("id", { count: "exact", head: true }).eq("site_id", ids.site),
     supabase.from("gate_users").select("id", { count: "exact", head: true }).contains("site_ids", [ids.site]),
     supabase.from("devices").select("id", { count: "exact", head: true }).eq("site_id", ids.site),
@@ -209,12 +211,12 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
             ]}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <SearchBox key={tab} placeholder={searchPlaceholder} />
             {tab === "points" ? (
               <FormDialog wide label="Add access point" title="Add an access point" icon="sites" submitLabel="Add access point" pendingLabel="Adding…" action={addAccessPoint} fields={{ orgId: ids.org, siteId: ids.site }}>
                 <AccessPointFormFields near={near} />
               </FormDialog>
             ) : null}
+            <SiteStaysButton siteId={ids.site} siteType={site.site_type} stayMinutes={site.stay_minutes} />
             {tab === "staff" ? <AddGateStaffButton site={{ id: ids.site, orgId: ids.org, name: site.name, detail: company.name, siteType: site.site_type }} /> : null}
             {tab === "devices" ? (
               <PairDeviceButton place={{ company: { id: ids.org, name: company.name }, site: { id: ids.site, name: site.name } }} />
@@ -229,6 +231,9 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
           next="Now add its gate staff with Add gate staff, then pair a handheld under Devices."
         />
       ) : null}
+      <FilterBar label={searchPlaceholder}>
+        <SearchBox key={tab} placeholder={searchPlaceholder} />
+      </FilterBar>
       {tab === "points" ? <AccessPointList siteId={ids.site} query={query} path={base} near={near} /> : null}
       {tab === "staff" ? <StaffTab ids={ids} query={query} path={base} /> : null}
       {tab === "devices" ? <DevicesTab ids={ids} query={query} path={base} /> : null}

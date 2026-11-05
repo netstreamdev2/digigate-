@@ -71,7 +71,7 @@ function personPayload(person: PersonDocument, personKey: string, at: number): G
  */
 export async function checkPerson(
   db: SQLiteDatabase,
-  input: { direction: Direction; person: PersonDocument; visitType: string; guardId: string },
+  input: { direction: Direction; person: PersonDocument; visitType: string; expectedStayMinutes: number | null; guardId: string },
 ): Promise<CheckedPerson> {
   const { direction } = input;
   const at = Date.now();
@@ -88,7 +88,7 @@ export async function checkPerson(
     direction === 'exit' ? state.openVisits.find((visit) => visit.kind === 'pedestrian' && visit.personKey === personKey) : undefined;
   const pendingVisit: NewPedestrianVisit | null =
     direction === 'entry'
-      ? { id: newEventId(at), kind: 'pedestrian', personKey, visitType: input.visitType, enteredAt: at, personName: identity.name }
+      ? { id: newEventId(at), kind: 'pedestrian', personKey, visitType: input.visitType, enteredAt: at, expectedStayMinutes: input.expectedStayMinutes, personName: identity.name }
       : null;
   const visitId = pendingVisit?.id ?? openVisit?.id ?? null;
   const expected = direction === 'entry' ? await bookingFor(db, at, personKey, []) : null;
@@ -104,6 +104,7 @@ export async function checkPerson(
       hits: hitsPayload(hits),
       person: personPayload(input.person, personKey, at),
       visit_type: direction === 'entry' ? input.visitType : (openVisit?.visitType ?? null),
+      expected_stay_minutes: direction === 'entry' ? input.expectedStayMinutes : null,
       expected_visitor_id: expected?.id ?? null,
     },
   };

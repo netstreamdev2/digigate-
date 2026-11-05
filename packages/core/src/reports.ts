@@ -67,6 +67,7 @@ export const RULE_TITLES: Readonly<Record<string, string>> = {
   DISC_EXPIRED: 'Licence disc expired',
   LICENCE_EXPIRED: "Driver's licence expired",
   OCCUPANT_COUNT_DROP: 'Fewer people leaving',
+  OCCUPANT_COUNT_RISE: 'More people leaving',
   OVERSTAY: 'Overstay',
   IGNITION_RESTART_FAILED: "Engine didn't restart",
   BOOT_CHECK_PROBLEM: 'Problem found in the boot',

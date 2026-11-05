@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmAction } from "@/components/dialog";
 import { Icon, type IconName } from "@/components/icon";
@@ -86,7 +87,6 @@ async function Hotlist({ searchParams }: { searchParams: Promise<Query> }) {
       title="Hotlist"
       chips={
         <>
-          <SearchBox placeholder="Search a name, plate or reason" />
           <AddToHotlistButton company={formCompany ? { id: formCompany.id, name: formCompany.name } : null} />
         </>
       }
@@ -99,7 +99,11 @@ async function Hotlist({ searchParams }: { searchParams: Promise<Query> }) {
           ]}
         />
       </div>
-      <section className="dg-glass mt-4 overflow-hidden">
+      <FilterBar label="Filter the hotlist">
+        <SearchBox placeholder="Search a name, plate or reason" />
+      </FilterBar>
+
+      <section className="dg-glass mt-6 overflow-hidden">
         {rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-5 py-14 text-center">
             <Icon name="watchlist" className="size-8 text-ink-subtle" />

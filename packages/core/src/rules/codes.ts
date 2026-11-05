@@ -15,7 +15,9 @@ export const RULE_SEVERITY = {
   DISC_EXPIRED: 'amber',
   LICENCE_EXPIRED: 'amber',
   OCCUPANT_COUNT_DROP: 'info',
-  OVERSTAY: 'amber',
+  OCCUPANT_COUNT_RISE: 'info',
+  // A note, not a stop: the car is leaving anyway. The dashboard shows a visit running over while it's still on site.
+  OVERSTAY: 'info',
   IGNITION_RESTART_FAILED: 'red',
   BOOT_CHECK_PROBLEM: 'red',
   PEDESTRIAN_DUPLICATE_ENTRY: 'amber',

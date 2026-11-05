@@ -51,8 +51,9 @@ try {
     $job$);
     `,
   );
-  supabase(['db', 'query', '--linked', '--project-ref', ref, '--file', `"${file}"`]);
-  supabase(['secrets', 'set', '--project-ref', ref, `REPORTS_CRON_SECRET=${secret}`]);
+  // --yes answers the CLI's "change this project?" question: this script has no terminal to ask it in.
+  supabase(['db', 'query', `--remote=${ref}`, '--yes', '--file', `"${file}"`]);
+  supabase(['secrets', 'set', `--remote=${ref}`, '--yes', `REPORTS_CRON_SECRET=${secret}`]);
   console.log('Automated reports are running on this project.');
 } finally {
   rmSync(folder, { recursive: true, force: true });

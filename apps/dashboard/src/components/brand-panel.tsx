@@ -6,12 +6,12 @@ import { useEffect, useState } from "react";
 import { Icon, type IconName } from "./icon";
 
 const SLOGANS: readonly { icon: IconName; text: string }[] = [
-  { icon: "vehicle", text: "Same driver. Same car. Or the boom stays down." },
+  { icon: "vehicle", text: "Same driver. Same car. Or they don't get through." },
   { icon: "on-site", text: "Know who's on site, right now." },
   { icon: "offline", text: "No signal? The gate keeps working." },
   { icon: "guard", text: "Every shift, on the record." },
   { icon: "result-blocked", text: "Caught at the gate, not after the fact." },
-  { icon: "visits", text: "Every visit, from the boom in to the boom out." },
+  { icon: "visits", text: "Every visit, from the way in to the way out." },
 ];
 
 const SLOGAN_MS = 4_500;

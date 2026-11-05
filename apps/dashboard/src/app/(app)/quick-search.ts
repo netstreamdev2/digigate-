@@ -3,7 +3,7 @@
 import type { IconName } from "@/components/icon";
 import { addDays, shortDate, siteToday, timeOfDay } from "@/lib/format";
 import { canWatchGates } from "@/lib/nav";
-import { anyColumnLike, likePattern } from "@/lib/paging";
+import { anyColumnLike, likePattern, withEveryWord } from "@/lib/paging";
 import { currentUser } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -33,12 +33,12 @@ export async function quickSearch(term: string): Promise<{ hits: SearchHit[]; pr
   const [companies, sites, inside, checks, staff, hotlist] = await Promise.all([
     isSuperUser ? supabase.from("organisations").select("id, name").ilike("name", pattern).order("name").limit(EACH) : null,
     supabase.from("sites").select("id, name, code, organisations(name)").or(anyColumnLike(["name", "code"], text)).order("name").limit(EACH),
-    supabase.from("visit_records").select("id, site_id, person_name, plate, kind").is("exited_at", null).or(anyColumnLike(["person_name", "plate"], text)).limit(EACH),
-    supabase
-      .from("check_records")
-      .select("id, site_id, person_name, plate, type, occurred_at")
-      .gte("occurred_at", since)
-      .or(anyColumnLike(["person_name", "plate", "typed_plate"], text))
+    withEveryWord(supabase.from("visit_records").select("id, site_id, person_name, plate, kind").is("exited_at", null), ["person_name", "plate", "vehicle_search"], text).limit(EACH),
+    withEveryWord(
+      supabase.from("check_records").select("id, site_id, person_name, plate, type, occurred_at").gte("occurred_at", since),
+      ["person_name", "plate", "typed_plate", "vehicle_search"],
+      text,
+    )
       .order("occurred_at", { ascending: false })
       .limit(EACH),
     isAdministrator

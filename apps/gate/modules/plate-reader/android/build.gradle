@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.platereader'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.platereader"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // Google's text reader with its model inside the app, so plates read with no connection. Its native library is
+  // 16 KB-aligned (checked for 16.0.1).
+  implementation 'com.google.mlkit:text-recognition:16.0.1'
+}

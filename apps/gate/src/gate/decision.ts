@@ -58,6 +58,25 @@ export type Decision =
  * Records what the guard did after a warning or a block. Letting them through opens the visit on entry, or closes
  * it on exit, in the same transaction as the event.
  */
+/**
+ * Why a car left with a different number of people than came in, given after the check is on record. Its own event,
+ * so the check itself is never held up for it.
+ */
+export async function recordOccupantReason(
+  db: SQLiteDatabase,
+  checked: Pick<GateCheck, 'event' | 'visitId'>,
+  change: 'fewer' | 'more',
+  reason: string,
+  guardId: string,
+): Promise<void> {
+  const at = Date.now();
+  await commitGateEvent(
+    db,
+    { id: newEventId(at), type: 'occupant_reason', occurredAt: at, gateUserId: guardId, payload: { check_event_id: checked.event.id, visit_id: checked.visitId, change, reason } },
+    null,
+  );
+}
+
 export async function recordDecision(db: SQLiteDatabase, checked: GateCheck, decision: Decision, guardId: string): Promise<void> {
   const at = Date.now();
   const codes = checked.hits.map((ruleHit) => ruleHit.code);

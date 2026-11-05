@@ -25,9 +25,11 @@ import invite from "@digigate/design/icons/invite";
 import lock from "@digigate/design/icons/lock";
 import menu from "@digigate/design/icons/menu";
 import numberPlate from "@digigate/design/icons/number-plate";
+import occupants from "@digigate/design/icons/occupants";
 import offline from "@digigate/design/icons/offline";
 import onSite from "@digigate/design/icons/on-site";
 import override from "@digigate/design/icons/override";
+import overstay from "@digigate/design/icons/overstay";
 import overviewFilled from "@digigate/design/icons/overview-filled";
 import pedestrian from "@digigate/design/icons/pedestrian";
 import people from "@digigate/design/icons/people";
@@ -83,9 +85,11 @@ const icons = {
   lock,
   menu,
   "number-plate": numberPlate,
+  occupants,
   offline,
   "on-site": onSite,
   override,
+  overstay,
   "overview-filled": overviewFilled,
   pedestrian,
   people,

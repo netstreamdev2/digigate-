@@ -9,7 +9,8 @@ import { Text } from '@/components/text';
 import type { VisitDetails } from '@/db/visits';
 import type { SyncedBooking } from '@/db/watch-lists';
 import { formatPlate, titleCase } from '@/lib/format';
-import { ruleCopy } from '@/lib/rule-copy';
+import type { GateWords } from '@/lib/gate-words';
+import { ruleCopy, ruleMessage } from '@/lib/rule-copy';
 
 /** What the guard did after a warning or block. */
 export type Settled = 'let-through' | 'turned-away';
@@ -21,7 +22,7 @@ type Props = {
   hits: readonly RuleHit[];
   related: ReadonlyMap<string, VisitDetails>;
   settled: Settled | null;
-  /** The clear message, with what happens next, e.g. "No flags on this car or driver. Open the boom." */
+  /** The clear message, with what happens next, e.g. "No flags on this car or driver. Let them in." */
   clearMessage: string;
   /** Said when the guard lets them through after a warning or override. */
   letThroughMessage: string;
@@ -29,23 +30,25 @@ type Props = {
   hotlistNotes?: ReadonlyMap<string, string>;
   /** The booking that expects them, on the way in. */
   expected?: SyncedBooking | null;
+  /** What to tell the guard to do, in the words of their gate: a boom, an open gate, or a walk-in gate. */
+  words: GateWords;
 };
 
 const NO_NOTES: ReadonlyMap<string, string> = new Map();
 
 /** The result, first on screen: a banner the guard reads at a glance, then every hit and the visits behind it. */
-export function CheckResult({ outcome, hits, related, settled, clearMessage, letThroughMessage, hotlistNotes = NO_NOTES, expected = null }: Props) {
+export function CheckResult({ outcome, hits, related, settled, clearMessage, letThroughMessage, hotlistNotes = NO_NOTES, expected = null, words }: Props) {
   const top = hits[0];
   const banner =
     settled === 'turned-away'
-      ? { tone: 'blocked' as const, title: 'Turned away', message: 'Keep the boom closed. The attempt is recorded.' }
+      ? { tone: 'blocked' as const, title: 'Turned away', message: words.turnedAway }
       : settled === 'let-through'
         ? { tone: 'clear' as const, title: 'Let through', message: letThroughMessage }
         : outcome === 'clear' || !top
           ? { tone: 'clear' as const, title: 'All clear', message: clearMessage }
           : outcome === 'warning'
-            ? { tone: 'warning' as const, title: ruleCopy[top.code].title, message: `${ruleCopy[top.code].message} Look closely, then let them through or turn them away.` }
-            : { tone: 'blocked' as const, title: ruleCopy[top.code].title, message: ruleCopy[top.code].message };
+            ? { tone: 'warning' as const, title: ruleCopy[top.code].title, message: `${ruleMessage(top.code, words)} Look closely, then let them through or turn them away.` }
+            : { tone: 'blocked' as const, title: ruleCopy[top.code].title, message: ruleMessage(top.code, words) };
 
   return (
     <>

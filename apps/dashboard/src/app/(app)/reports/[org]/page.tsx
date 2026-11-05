@@ -173,7 +173,7 @@ async function CompanyReport({ params, searchParams }: { params: Promise<{ org: 
         <GlassStat label="Entries" value={compactCount(entriesOf(totals))} icon="entry" {...moved(entriesOf(totals), entriesOf(prior))} />
         <GlassStat label="Exits" value={compactCount(count(totals.exits))} icon="exit" {...moved(count(totals.exits), count(prior.exits))} />
         <GlassStat label="Average stay" value={stayLabel(averageStay(totals))} icon="duration" {...moved(averageStay(totals), averageStay(prior))} />
-        <GlassStat label="Blocked at the boom" value={compactCount(count(totals.blocked))} icon="result-blocked" attention={count(totals.blocked) > 0} {...moved(count(totals.blocked), count(prior.blocked), "bad")} />
+        <GlassStat label="Stopped at the gate" value={compactCount(count(totals.blocked))} icon="result-blocked" attention={count(totals.blocked) > 0} {...moved(count(totals.blocked), count(prior.blocked), "bad")} />
         <GlassStat label="Warnings" value={compactCount(count(totals.warnings))} icon="result-warning" {...moved(count(totals.warnings), count(prior.warnings), "bad")} />
         <GlassStat label="Supervisor overrides" value={compactCount(count(totals.overrides))} icon="override" {...moved(count(totals.overrides), count(prior.overrides), "bad")} />
         <GlassStat label="Turned away" value={compactCount(count(totals.turned_away))} icon="exit" {...moved(count(totals.turned_away), count(prior.turned_away))} />

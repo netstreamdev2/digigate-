@@ -41,8 +41,11 @@ export function evaluateVehicleExit(scan: VehicleExitScan, state: GateState, con
   }
 
   if (visit) {
+    // Either way it's only noted: a patient dropped off, a spouse fetched. The guard can say which.
     if (scan.occupants < visit.occupants) {
       hits.push(hit('OCCUPANT_COUNT_DROP', visit.id));
+    } else if (scan.occupants > visit.occupants) {
+      hits.push(hit('OCCUPANT_COUNT_RISE', visit.id));
     }
     if (isOverstay(visit, scan.at, config)) {
       hits.push(hit('OVERSTAY', visit.id));

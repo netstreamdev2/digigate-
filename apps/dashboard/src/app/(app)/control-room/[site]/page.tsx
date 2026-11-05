@@ -19,6 +19,7 @@ import {
   insideNow,
   latestChecks,
   longestInside,
+  overstaysAt,
   siteDay,
   siteParking,
   type SiteDay,
@@ -37,6 +38,7 @@ import { currentUser } from "@/lib/session";
 import { CheckActivity } from "../check-activity";
 import { LiveAlerts } from "../live-alerts";
 import { SelfieButton } from "../selfie-button";
+import { StayCell } from "../stay-cell";
 
 /** Handhelds sync every minute, so three missed rounds means this one has gone quiet. */
 const DEVICE_QUIET_MS = 3 * 60_000;
@@ -125,7 +127,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
   const page = pageParam(query);
 
   const now = readClock();
-  const [gates, open, counts, inside, checks, entries, today, parking, longest] = await Promise.all([
+  const [gates, open, counts, inside, checks, entries, today, parking, longest, overstays] = await Promise.all([
     gatesAt(siteId),
     openAlerts(siteId),
     insideCounts(siteId),
@@ -135,6 +137,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
     siteDay(siteId, now),
     siteParking(siteId),
     longestInside(siteId),
+    overstaysAt(siteId, now),
   ]);
 
   const path = `/control-room/${siteId}`;
@@ -230,7 +233,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
             )}
           </Card>
 
-          <Card title="On site now" subtitle="Longest stay first" action={<SearchBox placeholder="Search a plate or name" />}>
+          <Card title="On site now" subtitle={overstays ? `Longest stay first · ${plural(overstays, "visit")} over their time` : "Longest stay first"} action={<SearchBox placeholder="Name, plate or car: blue Mercedes" />}>
             <div className="mb-4">
               <Tabs
                 items={[
@@ -255,7 +258,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
                     who: <TwoLine main={row.person} sub={labelFor(row.visitType)} />,
                     vehicle: <TwoLine main={row.plate ?? NO_VALUE} sub={row.vehicle ?? NO_VALUE} />,
                     gate: <TwoLine main={timeOfDay(row.enteredAt)} sub={gateLabel(row.post)} />,
-                    stay: duration(row.enteredAt, now),
+                    stay: <StayCell enteredAt={row.enteredAt} expectedUntil={row.expectedUntil} now={now} />,
                   },
                 }))}
               />

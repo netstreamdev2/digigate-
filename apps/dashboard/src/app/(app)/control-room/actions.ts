@@ -48,6 +48,14 @@ export async function openCheck(eventId: string): Promise<{ detail: CheckDetail 
   return detail ? { detail, problem: null } : { detail: null, problem: "That check isn't one your account can see." };
 }
 
+/** A link to the photo of the car's number plate that works for a minute. Each look is logged. */
+export async function openPlatePhoto(eventId: string): Promise<{ url: string | null; problem: string | null }> {
+  const { data, status } = await callPeople({ action: "plate-photo-link", eventId });
+  if (data.url) return { url: data.url, problem: null };
+  if (status === 404) return { url: null, problem: "No plate photo for this check yet. The handheld sends it when it has a connection." };
+  return { url: null, problem: status === 403 ? "Your account can't see this photo." : "The photo didn't open. Try again." };
+}
+
 /** A link to the photo from the driver's licence that works for a minute. Each look is logged. */
 export async function openLicencePhoto(eventId: string): Promise<{ url: string | null; problem: string | null }> {
   const { data, status } = await callPeople({ action: "licence-photo-link", eventId });

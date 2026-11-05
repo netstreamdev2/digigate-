@@ -24,13 +24,16 @@ export { expectedVisitorFor, type ExpectedVisitor } from './expected-visitors';
 export { hotlistEntryFor, hotlistHit, type HotlistSubject } from './rules/hotlist';
 export { isExpired } from './rules/dates';
 export { normaliseIdentifier } from './identifiers';
+export { plateDifferences, plateReadings, type PlateCharacter, type ReadLine } from './plate-reading';
 export { sameVehicle, sameVin, vehicleVisits } from './rules/vehicles';
 export { missedHits, recheck, reportedCodes, SITE_RULE_DEFAULTS, type UploadedCheck } from './rules/recheck';
 export { uuidv7 } from './ids';
 export * from './reports';
 export { RULE_SEVERITY, type RuleCode, type Severity } from './rules/codes';
 export { outcomeOf } from './rules/hits';
-export { findOverstays } from './rules/overstay';
+export { findOverstays, isOverstay, stayLimitMinutes } from './rules/overstay';
+export * from './occupants';
+export { vehicleSearchTerms } from './vehicle-search';
 export { evaluatePedestrianEntry, evaluatePedestrianExit } from './rules/pedestrian';
 export type {
   BootCheck,

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AppShell } from "@/components/app-shell";
 import { PageSkeleton } from "@/components/skeleton";
 import { DataTable } from "@/components/data-table";
@@ -292,17 +293,6 @@ async function People({ searchParams }: { searchParams: Promise<Query> }) {
               { label: `Gate staff · ${countLabel(staff.total)}`, href: pageHref("/people", { ...query, view: "gate", role: undefined }, 1), active: onGateStaff },
             ]}
           />
-          <SearchBox placeholder={onGateStaff ? "Name, number or company" : "Name, username or company"} />
-          {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
-          <FilterSelect
-            name="status"
-            label="Any status"
-            options={[
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Deactivated" },
-            ]}
-          />
-          <FilterSelect name="sort" label="Name, A to Z" options={[{ value: "newest", label: "Newest first" }]} />
         </>
       }
     >
@@ -316,6 +306,20 @@ async function People({ searchParams }: { searchParams: Promise<Query> }) {
       <div className="mt-6">
         <RoleTabs tabs={tabs} counts={onGateStaff ? staff : logins} role={role} query={query} />
       </div>
+
+      <FilterBar label={onGateStaff ? "Filter the gate staff" : "Filter the logins"}>
+        <SearchBox placeholder={onGateStaff ? "Name, number or company" : "Name, username or company"} />
+        {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+        <FilterSelect
+          name="status"
+          label="Any status"
+          options={[
+            { value: "active", label: "Active" },
+            { value: "inactive", label: "Deactivated" },
+          ]}
+        />
+        <FilterSelect name="sort" label="Name, A to Z" options={[{ value: "newest", label: "Newest first" }]} />
+      </FilterBar>
 
       <GlassPanel
         className="mt-6"

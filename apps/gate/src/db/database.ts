@@ -143,6 +143,19 @@ const MIGRATIONS: readonly string[] = [
     valid_until INTEGER NOT NULL
   );
   `,
+  // The photo of a car's number plate waits here, encrypted with the rest, until the server has it, tied to its check.
+  `
+  CREATE TABLE plate_photos (
+    event_id TEXT PRIMARY KEY NOT NULL,
+    taken_at INTEGER NOT NULL,
+    jpeg_base64 TEXT NOT NULL
+  );
+  `,
+  // How long each open visit was expected to last, in minutes, so the overstay note works offline. Null is no limit.
+  `
+  ALTER TABLE visits ADD COLUMN expected_stay_minutes INTEGER;
+  ALTER TABLE site_visits ADD COLUMN expected_stay_minutes INTEGER;
+  `,
 ];
 
 export type LocalDatabase = {

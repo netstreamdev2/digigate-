@@ -1,7 +1,7 @@
 import "server-only";
 
 import { siteToday } from "./format";
-import { anyColumnLike, likePattern, PAGE_SIZE, rangeOf } from "./paging";
+import { likePattern, PAGE_SIZE, rangeOf, withEveryWord } from "./paging";
 import { counted, maybe, must } from "./reads";
 import { supabaseServer } from "./supabase/server";
 
@@ -38,6 +38,8 @@ export type Gate = {
 export type LiveAlert = {
   key: string;
   ids: readonly string[];
+  /** The check the alert came from, when there was one. */
+  eventId: string | null;
   severity: string;
   codes: readonly string[];
   raisedAt: string;
@@ -59,6 +61,8 @@ export type InsideNow = {
   visitType: string;
   post: string | null;
   enteredAt: string;
+  /** When the stay the guard recorded runs out; null for no limit. */
+  expectedUntil: string | null;
 };
 
 export type Check = {
@@ -169,6 +173,7 @@ export async function openAlerts(siteId: string): Promise<{ alerts: LiveAlert[];
     grouped.set(key, {
       key,
       ids: [alert.id],
+      eventId: alert.event_id,
       severity: alert.severity,
       codes: [alert.rule_code],
       raisedAt: alert.raised_at,
@@ -197,13 +202,13 @@ export async function insideNow(siteId: string, lane: Lane, search: string, page
   const [from, to] = rangeOf(page);
   let list = supabase
     .from("visit_records")
-    .select("id, person_name, plate, vehicle_description, visit_type, post, entered_at", { count: "exact" })
+    .select("id, person_name, plate, vehicle_description, visit_type, post, entered_at, expected_until", { count: "exact" })
     .eq("site_id", siteId)
     .is("exited_at", null)
     .eq("kind", lane)
     .order("entered_at")
     .range(from, to);
-  if (search) list = list.or(anyColumnLike(["plate", "person_name"], search));
+  if (search) list = withEveryWord(list, ["plate", "person_name", "vehicle_search"], search);
   const result = await list;
   return {
     total: counted(result),
@@ -217,6 +222,7 @@ export async function insideNow(siteId: string, lane: Lane, search: string, page
             visitType: row.visit_type ?? "",
             post: row.post,
             enteredAt: row.entered_at,
+            expectedUntil: row.expected_until,
           }]
         : [],
     ),
@@ -305,6 +311,19 @@ export async function siteParking(siteId: string): Promise<{ open: boolean; spac
 }
 
 /** When the longest stay still going began, or null when nobody is inside. */
+/** How many people or cars on site have stayed past the time the guard recorded for them. */
+export async function overstaysAt(siteId: string, now: number): Promise<number> {
+  const supabase = await supabaseServer();
+  return counted(
+    await supabase
+      .from("visit_records")
+      .select("id", { count: "exact", head: true })
+      .eq("site_id", siteId)
+      .is("exited_at", null)
+      .lt("expected_until", new Date(now).toISOString()),
+  );
+}
+
 export async function longestInside(siteId: string): Promise<string | null> {
   const supabase = await supabaseServer();
   const [row] = must(await supabase.from("visit_records").select("entered_at").eq("site_id", siteId).is("exited_at", null).order("entered_at").limit(1));

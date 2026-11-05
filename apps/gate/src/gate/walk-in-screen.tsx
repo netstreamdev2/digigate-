@@ -16,12 +16,14 @@ import { PersonCard, type PersonDocument } from '@/components/person-card';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
+import { StayPicker } from '@/components/stay-picker';
 import { VisitTypePicker } from '@/components/visit-type-picker';
 import { useLocalDatabase } from '@/db/database-context';
 import { masked, rememberLastScan, settleLastScan, visitTypeLabel } from '@/db/last-scan';
 import { signalOutcome } from '@/lib/feedback';
 import { titleCase } from '@/lib/format';
-import { siteConfig, visitTypeOf } from '@/site/site-config';
+import { gateWords } from '@/lib/gate-words';
+import { expectedStayFor, siteConfig, visitTypeOf } from '@/site/site-config';
 import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
@@ -86,6 +88,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
   const { eventRecorded } = useSync();
   const post = usePost();
   const [visitType, setVisitType] = useState<string>(siteConfig.defaultVisitType);
+  const [stay, setStay] = useState<number | null>(expectedStayFor(siteConfig.defaultVisitType));
   const [checked, setChecked] = useState<CheckedPerson | null>(null);
   const [settled, setSettled] = useState<Settled | null>(null);
   const [showingDetails, setShowingDetails] = useState(false);
@@ -102,7 +105,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
     setBusy(true);
     setProblem(null);
     try {
-      const result = await checkPerson(db, { direction, person, visitType, guardId: guard.id });
+      const result = await checkPerson(db, { direction, person, visitType, expectedStayMinutes: stay, guardId: guard.id });
       setChecked(result);
       signalOutcome(result.outcome);
       eventRecorded();
@@ -150,6 +153,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
     setShowingDetails(false);
     setProblem(null);
     setVisitType(siteConfig.defaultVisitType);
+    setStay(expectedStayFor(siteConfig.defaultVisitType));
   };
 
   const finished = checked !== null && (checked.outcome === 'clear' || settled !== null);
@@ -172,6 +176,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
             settled={settled}
             clearMessage={copy.clear}
             letThroughMessage={copy.through}
+            words={gateWords('on-foot')}
           />
         ) : (
           <View style={styles.heading}>
@@ -205,7 +210,19 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
 
         {direction === 'exit' && person ? <VisitSummary visits={visits} /> : null}
 
-        {direction === 'entry' ? <VisitTypePicker value={visitType} onChange={setVisitType} locked={checked !== null} /> : null}
+        {direction === 'entry' ? (
+          <>
+            <VisitTypePicker
+              value={visitType}
+              onChange={(code) => {
+                setVisitType(code);
+                setStay(expectedStayFor(code));
+              }}
+              locked={checked !== null}
+            />
+            <StayPicker value={stay} onChange={setStay} locked={checked !== null} />
+          </>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>

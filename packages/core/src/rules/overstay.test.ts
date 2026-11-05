@@ -13,8 +13,8 @@ describe('findOverstays', () => {
       ],
     });
     expect(findOverstays(state, NOW, config)).toEqual([
-      { code: 'OVERSTAY', severity: 'amber', relatedVisitId: 'long-car' },
-      { code: 'OVERSTAY', severity: 'amber', relatedVisitId: 'long-walk' },
+      { code: 'OVERSTAY', severity: 'info', relatedVisitId: 'long-car' },
+      { code: 'OVERSTAY', severity: 'info', relatedVisitId: 'long-walk' },
     ]);
   });
 

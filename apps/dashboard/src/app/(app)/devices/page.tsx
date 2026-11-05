@@ -8,6 +8,7 @@ import { Card } from "@/components/card";
 import { DataTable, TwoLine } from "@/components/data-table";
 import { ConfirmAction } from "@/components/dialog";
 import { Pagination, Tabs } from "@/components/list";
+import { FilterBar } from "@/components/filter-bar";
 import { LiveStatus } from "@/components/live-status";
 import { NoAccess } from "@/components/no-access";
 import { FilterSelect, SearchBox } from "@/components/search-box";
@@ -172,8 +173,6 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
       title="Devices"
       chips={
         <>
-          <SearchBox placeholder="Search a device, site or company" />
-          {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />
           <div className="sm:ml-auto">
             <PairDeviceButton company={companies.find((row) => row.id === company)} />
@@ -204,6 +203,11 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
           }))}
         />
       </div>
+
+      <FilterBar label="Filter the devices">
+        <SearchBox placeholder="Search a device, site or company" />
+        {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+      </FilterBar>
 
       <Card className="mt-6" title={active?.label ?? "All"} subtitle="A device that stops answering keeps working offline. Its scans arrive when it reconnects.">
         {devices.length === 0 ? (

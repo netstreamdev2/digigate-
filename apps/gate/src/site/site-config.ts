@@ -1,4 +1,14 @@
-import { DEFAULT_SHIFT_PERIODS, readShiftPeriods, shiftPeriodAt as periodAt, SITE_RULE_DEFAULTS, type CarPark, type Fence, type ShiftPeriod } from '@digigate/core';
+import {
+  DEFAULT_SHIFT_PERIODS,
+  occupantReasonsFor,
+  readShiftPeriods,
+  shiftPeriodAt as periodAt,
+  SITE_RULE_DEFAULTS,
+  stayMinutesFor,
+  type CarPark,
+  type Fence,
+  type ShiftPeriod,
+} from '@digigate/core';
 import type { colors } from '@digigate/design';
 
 import type { IconName } from '@/components/icon';
@@ -16,10 +26,14 @@ export type PostOption = {
   tint: keyof typeof colors;
   /** Where the post is, once someone has set it in the dashboard. A post without one isn't checked. */
   fence?: Fence | null;
+  /** False for a gate with no boom, where the guard waves cars through or asks them to stop. */
+  hasBoom: boolean;
 };
 
 /** A post as the dashboard sends it. The app adds its own icon and colour. */
 export type SyncedPost = Pick<PostOption, 'code' | 'label' | 'lanes'> & {
+  /** Its booms as the dashboard lists them; absent from an older server, when the post is taken to have one. */
+  booms?: readonly string[];
   latitude?: number | null;
   longitude?: number | null;
   radiusM?: number | null;
@@ -40,8 +54,22 @@ export function isSyncedPost(value: unknown): value is SyncedPost {
 /** A shift period as the start-shift screen offers it: the site's times, with an icon and colour added here. */
 export type ShiftPeriodOption = ShiftPeriod & Pick<PostOption, 'icon' | 'tint'> & { hours: string };
 
-/** The site as the dashboard sends it with each sync: its name, its shift times and its car park. */
-export type SyncedSite = { name: string; shiftPeriods: readonly ShiftPeriod[]; parking: CarPark | null };
+/** The site as the dashboard sends it with each sync: its name, type, shift times, car park and its own stays. */
+export type SyncedSite = {
+  name: string;
+  shiftPeriods: readonly ShiftPeriod[];
+  parking: CarPark | null;
+  siteType: string | null;
+  stayMinutes: Readonly<Record<string, number | null>>;
+};
+
+/** A site's own stay per visit type, in minutes or null for no limit. Anything else is left out, never guessed. */
+export function stayOverridesOf(value: unknown): Record<string, number | null> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, number | null] => entry[1] === null || (typeof entry[1] === 'number' && Number.isInteger(entry[1]) && entry[1] > 0)),
+  );
+}
 
 /** The car park as the server sends it. Anything else is no car park known, never a guess at one. */
 export function carParkOf(value: unknown): CarPark | null {
@@ -53,7 +81,13 @@ export function carParkOf(value: unknown): CarPark | null {
 
 export function syncedSiteOf(body: Record<string, unknown>): SyncedSite | null {
   if (typeof body.siteName !== 'string' || !body.siteName) return null;
-  return { name: body.siteName, shiftPeriods: readShiftPeriods(body.shiftPeriods), parking: carParkOf(body.parking) };
+  return {
+    name: body.siteName,
+    shiftPeriods: readShiftPeriods(body.shiftPeriods),
+    parking: carParkOf(body.parking),
+    siteType: typeof body.siteType === 'string' ? body.siteType : null,
+    stayMinutes: stayOverridesOf(body.stayMinutes),
+  };
 }
 
 export type VisitTypeOption = {
@@ -70,9 +104,9 @@ export type VisitTypeOption = {
 // open decision, so none apply yet.
 export const siteConfig = {
   posts: [
-    { code: 'main-gate', label: 'Main Gate', lanes: ALL_LANES, icon: 'vehicle', tint: 'tileSky' },
-    { code: 'back-gate', label: 'Back Gate', lanes: ['vehicle'], icon: 'vehicle', tint: 'tileLilac' },
-    { code: 'walk-in-gate', label: 'Walk-in Gate', lanes: ['pedestrian'], icon: 'pedestrian', tint: 'tileMint' },
+    { code: 'main-gate', label: 'Main Gate', lanes: ALL_LANES, icon: 'vehicle', tint: 'tileSky', hasBoom: true },
+    { code: 'back-gate', label: 'Back Gate', lanes: ['vehicle'], icon: 'vehicle', tint: 'tileLilac', hasBoom: true },
+    { code: 'walk-in-gate', label: 'Walk-in Gate', lanes: ['pedestrian'], icon: 'pedestrian', tint: 'tileMint', hasBoom: false },
   ] satisfies readonly PostOption[],
   /** A shift nobody ended is over after this long, so the next sign-in has to start a new one. */
   maxShiftHours: 14,
@@ -109,6 +143,7 @@ export function applySyncedPosts(posts: readonly SyncedPost[]): void {
     icon: post.lanes.includes('vehicle') ? 'vehicle' : 'pedestrian',
     tint: POST_TINTS[index % POST_TINTS.length] ?? 'tileSky',
     fence: fenceFrom(post),
+    hasBoom: Array.isArray(post.booms) ? post.booms.length > 0 : true,
   }));
 }
 
@@ -121,6 +156,11 @@ const postOf = (code: string): PostOption | undefined => currentPosts().find((po
 
 export function postLabel(code: string): string {
   return postOf(code)?.label ?? code;
+}
+
+/** Whether the post's vehicle lane has a boom. A post that has left the config mid-shift is taken to have one. */
+export function hasBoomAt(code: string): boolean {
+  return postOf(code)?.hasBoom ?? true;
 }
 
 /** A post that has left the config mid-shift keeps every lane, so a guard is never left with nothing to do. */
@@ -140,11 +180,34 @@ const periodOptions = (periods: readonly ShiftPeriod[]): ShiftPeriodOption[] =>
 
 const DEFAULT_PERIODS = periodOptions(DEFAULT_SHIFT_PERIODS);
 
-let syncedSite: { name: string; periods: readonly ShiftPeriodOption[]; parking: CarPark | null } | null = null;
+let syncedSite: {
+  name: string;
+  periods: readonly ShiftPeriodOption[];
+  parking: CarPark | null;
+  siteType: string | null;
+  stayMinutes: Readonly<Record<string, number | null>>;
+} | null = null;
 
 /** The site's name and shift times from the dashboard. Null forgets them, as a wiped device must. */
 export function applySyncedSite(site: SyncedSite | null): void {
-  syncedSite = site ? { name: site.name, periods: periodOptions(site.shiftPeriods), parking: site.parking } : null;
+  syncedSite = site
+    ? { name: site.name, periods: periodOptions(site.shiftPeriods), parking: site.parking, siteType: site.siteType, stayMinutes: site.stayMinutes }
+    : null;
+}
+
+/** The kind of site this is, once it has synced; until then this build's hospital defaults. */
+function currentSiteType(): string {
+  return syncedSite?.siteType ?? 'hospital';
+}
+
+/** How long a visit of this type is expected to last, in minutes; null for no limit. The guard can change it at entry. */
+export function expectedStayFor(visitType: string): number | null {
+  return stayMinutesFor(currentSiteType(), syncedSite?.stayMinutes)[visitType] ?? null;
+}
+
+/** The reasons a guard can give for a car leaving with fewer, or more, people than came in. */
+export function occupantReasons(change: 'fewer' | 'more'): readonly string[] {
+  return occupantReasonsFor(currentSiteType(), change);
 }
 
 /** The site's car park once it has synced; null until then, which the parking tile says plainly. */

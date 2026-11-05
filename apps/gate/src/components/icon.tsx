@@ -3,12 +3,14 @@ import add from '@digigate/design/icons/add';
 import alerts from '@digigate/design/icons/alerts';
 import back from '@digigate/design/icons/back';
 import bell from '@digigate/design/icons/bell';
+import camera from '@digigate/design/icons/camera';
 import check from '@digigate/design/icons/check';
 import close from '@digigate/design/icons/close';
 import contractor from '@digigate/design/icons/contractor';
 import delivery from '@digigate/design/icons/delivery';
 import device from '@digigate/design/icons/device';
 import duration from '@digigate/design/icons/duration';
+import edit from '@digigate/design/icons/edit';
 import emergency from '@digigate/design/icons/emergency';
 import entry from '@digigate/design/icons/entry';
 import exit from '@digigate/design/icons/exit';
@@ -20,6 +22,7 @@ import licenceCard from '@digigate/design/icons/licence-card';
 import licenceDisc from '@digigate/design/icons/licence-disc';
 import lock from '@digigate/design/icons/lock';
 import manualEntry from '@digigate/design/icons/manual-entry';
+import numberPlate from '@digigate/design/icons/number-plate';
 import occupants from '@digigate/design/icons/occupants';
 import offline from '@digigate/design/icons/offline';
 import onSite from '@digigate/design/icons/on-site';
@@ -29,9 +32,11 @@ import parking from '@digigate/design/icons/parking';
 import patientDropoff from '@digigate/design/icons/patient-dropoff';
 import pedestrian from '@digigate/design/icons/pedestrian';
 import remove from '@digigate/design/icons/remove';
+import rescan from '@digigate/design/icons/rescan';
 import resultBlocked from '@digigate/design/icons/result-blocked';
 import resultClear from '@digigate/design/icons/result-clear';
 import resultWarning from '@digigate/design/icons/result-warning';
+import rulePlateMismatch from '@digigate/design/icons/rule-plate-mismatch';
 import ruleVehicleSwap from '@digigate/design/icons/rule-vehicle-swap';
 import scan from '@digigate/design/icons/scan';
 import staff from '@digigate/design/icons/staff';
@@ -48,12 +53,14 @@ const icons = {
   alerts,
   back,
   bell,
+  camera,
   check,
   close,
   contractor,
   delivery,
   device,
   duration,
+  edit,
   emergency,
   entry,
   exit,
@@ -65,6 +72,7 @@ const icons = {
   'licence-disc': licenceDisc,
   lock,
   'manual-entry': manualEntry,
+  'number-plate': numberPlate,
   occupants,
   offline,
   'on-site': onSite,
@@ -74,9 +82,11 @@ const icons = {
   'patient-dropoff': patientDropoff,
   pedestrian,
   remove,
+  rescan,
   'result-blocked': resultBlocked,
   'result-clear': resultClear,
   'result-warning': resultWarning,
+  'rule-plate-mismatch': rulePlateMismatch,
   'rule-vehicle-swap': ruleVehicleSwap,
   scan,
   staff,

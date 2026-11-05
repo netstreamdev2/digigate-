@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AddedNotice } from "@/components/added-notice";
 import { AppShell } from "@/components/app-shell";
 import { PageSkeleton } from "@/components/skeleton";
@@ -52,7 +53,6 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
       title={company.name}
       chips={
         <>
-          <SearchBox placeholder="Search sites" />
           <Link href={`${path}/new-site`} className="inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink">
             Add site
           </Link>
@@ -62,6 +62,9 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
       {justAdded ? <AddedNotice title={`${company.name} is added`} next="Work down the checklist to get its first gate running." /> : null}
       <CompanyChecklist company={company} />
       <CompanyLook company={company} />
+      <FilterBar label="Filter the sites">
+        <SearchBox placeholder="Search sites" />
+      </FilterBar>
       <ListCard
         isEmpty={places.length === 0}
         empty={search ? "Nothing matches that search." : "No sites yet. Add the first one."}

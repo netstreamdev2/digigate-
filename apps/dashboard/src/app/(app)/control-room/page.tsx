@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { FilterBar } from "@/components/filter-bar";
 import { AppShell } from "@/components/app-shell";
 import { ListCard, ListRow, Pagination } from "@/components/list";
 import { LiveStatus } from "@/components/live-status";
@@ -38,11 +39,14 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
       title="Control room"
       chips={
         <>
-          <SearchBox placeholder="Search a site" />
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />
         </>
       }
     >
+      <FilterBar label="Filter the sites">
+        <SearchBox placeholder="Search a site" />
+      </FilterBar>
+
       <ListCard
         isEmpty={sites.length === 0}
         empty={search ? "Nothing matches that search." : "You don't look after any sites yet."}

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Check } from "./control-room";
 import { addDays, siteMidnightUtc } from "./format";
-import { anyColumnLike, rangeOf } from "./paging";
+import { rangeOf, withEveryWord } from "./paging";
 import { counted, must } from "./reads";
 import { supabaseServer } from "./supabase/server";
 
@@ -50,7 +50,7 @@ export async function checkPage(filter: CheckFilter, page: number): Promise<{ ch
   if (filter.result) list = list.eq("outcome", filter.result);
   if (filter.company) list = list.eq("org_id", filter.company);
   if (filter.site) list = list.eq("site_id", filter.site);
-  if (filter.search) list = list.or(anyColumnLike(["person_name", "plate", "typed_plate"], filter.search));
+  if (filter.search) list = withEveryWord(list, ["person_name", "plate", "typed_plate", "vehicle_search"], filter.search);
   const read = await list;
   const rows = must(read);
   const total = counted(read);

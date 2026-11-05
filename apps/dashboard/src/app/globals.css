@@ -125,6 +125,23 @@ body {
   animation: dg-ring 9s linear infinite;
 }
 
+/* A visit past its recorded stay, in the live list: a slow pulse that catches the eye. Steady for less motion. */
+.dg-overstay {
+  animation: dg-overstay 1.6s ease-in-out infinite;
+}
+
+@keyframes dg-overstay {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dg-overstay {
+    animation: none;
+  }
+}
+
 @keyframes dg-ring {
   from {
     opacity: 0.3;
