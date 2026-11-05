@@ -14,16 +14,29 @@ if (!ref || !/^[a-z]{20}$/.test(ref)) {
   process.exit(1);
 }
 
-/** The newest migration the project has, or 0 for a new project, which has no schema_version table yet. */
+/**
+ * The newest migration the project has, or 0 for a new project, which has no schema_version table yet. Anything it
+ * can't read stops the run: guessing "new project" would replay every migration over a live database.
+ */
 function appliedVersion() {
+  let out;
   try {
-    const out = execSync(`pnpm dlx supabase db query --remote=${ref} --read-only "select max(version) as v from digigate.schema_version"`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    const value = /"v"\s*:\s*(\d+)/.exec(out)?.[1];
-    return value ? Number(value) : 0;
+    // JSON whatever the terminal: the CLI prints a table to a person and JSON to a script, and this must read it the same way.
+    out = execSync(`pnpm dlx supabase db query --remote=${ref} --read-only --output json "select max(version) as v from digigate.schema_version"`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
   } catch (cause) {
     if (/schema_version" does not exist|schema "digigate" does not exist/.test(String(cause.stderr ?? ''))) return 0;
     throw cause;
   }
+  const value = /"v"\s*:\s*(\d+)/.exec(out)?.[1];
+  if (value === undefined) {
+    console.error("Couldn't read which migrations the project has, so nothing was changed. The project answered:");
+    console.error(out.split('\n').slice(0, 12).join('\n'));
+    process.exit(1);
+  }
+  return Number(value);
 }
 const applied = appliedVersion();
 console.log(applied ? `The project is at migration ${applied}.` : 'A new project: every migration will be applied.');
