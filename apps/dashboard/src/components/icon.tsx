@@ -6,7 +6,9 @@ import back from "@digigate/design/icons/back";
 import bell from "@digigate/design/icons/bell";
 import calendar from "@digigate/design/icons/calendar";
 import check from "@digigate/design/icons/check";
+import chevronDown from "@digigate/design/icons/chevron-down";
 import chevronRight from "@digigate/design/icons/chevron-right";
+import chevronUp from "@digigate/design/icons/chevron-up";
 import close from "@digigate/design/icons/close";
 import remove from "@digigate/design/icons/delete";
 import device from "@digigate/design/icons/device";
@@ -66,7 +68,9 @@ const icons = {
   bell,
   calendar,
   check,
+  "chevron-down": chevronDown,
   "chevron-right": chevronRight,
+  "chevron-up": chevronUp,
   close,
   delete: remove,
   device,

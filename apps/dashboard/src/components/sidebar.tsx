@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { signOut } from "@/app/login/actions";
 import type { CompanyBrand } from "@/lib/company-brand";
 import { leaveCompany, stillInside, useCompanyContext } from "@/lib/company-context";
 import { companyNav } from "@/lib/company-nav";
+import { digilog360, isSisterLinkTucked, setSisterLinkTucked, subscribeSisterLink } from "@/lib/sister-product";
 
 import { CompanyMark } from "./company-mark";
 import { Icon, type IconName } from "./icon";
@@ -100,6 +101,68 @@ function SignOutButton() {
   );
 }
 
+/** Slides between two heights: a closed panel takes no room and can't be tabbed into. */
+const shutter = (open: boolean) =>
+  `grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`;
+
+/**
+ * A way across to DigiLog360. It signs in on its own, so this is a plain link. It has a shutter: anyone can slide it
+ * down to a slim bar and open it again whenever they like.
+ */
+function SisterProductLink() {
+  const tucked = useSyncExternalStore(subscribeSisterLink, isSisterLinkTucked, () => false);
+  return (
+    <div className="dg-glass-soft mb-3 overflow-hidden rounded-lg transition hover:shadow-card">
+      <div className={shutter(!tucked)} inert={tucked}>
+        <div className="flex min-h-0 items-center overflow-hidden">
+          <a href={digilog360.href} className="group flex min-w-0 flex-1 items-center gap-3 rounded-lg p-3">
+            <Image src={digilog360.icon} alt="" width={36} height={36} unoptimized className="size-9 shrink-0 rounded-md" />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                {digilog360.name}
+                <Icon name="external-link" className="size-3.5 shrink-0 text-ink-muted transition group-hover:text-ink" />
+              </p>
+              <p className="truncate text-xs text-ink-muted">{digilog360.summary}</p>
+            </div>
+          </a>
+          <button
+            type="button"
+            onClick={() => setSisterLinkTucked(true)}
+            aria-label={`Tuck the ${digilog360.name} link away`}
+            title="Tuck away"
+            className="mr-2 grid size-8 shrink-0 place-items-center rounded-pill text-ink-subtle transition hover:bg-surface hover:text-ink"
+          >
+            <Icon name="chevron-down" className="size-4" />
+          </button>
+        </div>
+      </div>
+      <div className={shutter(tucked)} inert={!tucked}>
+        <div className="min-h-0 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setSisterLinkTucked(false)}
+            aria-label={`Show the ${digilog360.name} link`}
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-ink-muted transition hover:text-ink"
+          >
+            <Image src={digilog360.icon} alt="" width={18} height={18} unoptimized className="size-[1.125rem] shrink-0 rounded-[0.3rem]" />
+            <span className="flex-1 truncate text-left">{digilog360.name}</span>
+            <Icon name="chevron-up" className="size-4 shrink-0" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The same link as an icon in the super user's rail, which is compact already, so it has no shutter. */
+function SisterProductRailLink() {
+  return (
+    <a href={digilog360.href} data-tip={`Open ${digilog360.name}`} aria-label={`Open ${digilog360.name}`} className="dg-rail-link grid size-12 place-items-center rounded-[1.1rem]">
+      <Image src={digilog360.icon} alt="" width={34} height={34} unoptimized className="size-[2.125rem] rounded-md" />
+    </a>
+  );
+}
+
 function UserCard({ userName, userRole }: { userName: string; userRole: string }) {
   return (
     <div className="dg-glass-soft flex items-center gap-3 rounded-lg p-3">
@@ -148,6 +211,7 @@ function Rail({ items, inside, userName }: { items: readonly NavItem[]; inside: 
       </span>
 
       <div className="mt-auto flex flex-col items-center gap-2">
+        <SisterProductRailLink />
         <span data-tip={userName} className="dg-rail-link grid size-11 place-items-center rounded-pill bg-home font-display text-sm font-semibold text-ink-inverse">
           {userName.slice(0, 1)}
         </span>
@@ -234,6 +298,7 @@ export function Sidebar({ items, userName, userRole, company, isSuperUser }: Pro
             <div className="-mx-1 mt-6 flex-1 overflow-y-auto px-1">
               <NavLinks items={items} />
             </div>
+            <SisterProductLink />
             <UserCard userName={userName} userRole={userRole} />
           </aside>
         )}
@@ -280,7 +345,10 @@ export function Sidebar({ items, userName, userRole, company, isSuperUser }: Pro
             <div className="flex-1">
               <NavLinks items={items} onNavigate={() => setOpen(false)} />
             </div>
-            <UserCard userName={userName} userRole={userRole} />
+            <div>
+              <SisterProductLink />
+              <UserCard userName={userName} userRole={userRole} />
+            </div>
           </div>
         </div>
       ) : null}
