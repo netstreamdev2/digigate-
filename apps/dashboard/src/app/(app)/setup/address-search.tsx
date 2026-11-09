@@ -87,7 +87,7 @@ export function AddressSearch({ value, onChange, onPick }: { value: string; onCh
   };
 
   return (
-    <div ref={boxRef} className="relative flex min-w-0 flex-col gap-1.5">
+    <div ref={boxRef} className="relative z-30 flex min-w-0 flex-col gap-1.5">
       <label htmlFor={`${id}-input`} className="text-sm font-medium">
         Address
       </label>

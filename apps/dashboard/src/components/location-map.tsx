@@ -143,7 +143,8 @@ export function LocationMap({ location, radiusM, onLocation, near = null }: Prop
 
   return (
     <div className="flex flex-col gap-2">
-      <div ref={box} className="h-72 w-full overflow-hidden rounded-md border border-border bg-surface-muted" role="application" aria-label="Map. Click where it is, or drag the pin." />
+      {/* isolate keeps the map's own layers (tiles at 400, controls at 1000) inside it, so a list opened above it, like the address suggestions, is never drawn underneath. */}
+      <div ref={box} className="relative isolate z-0 h-72 w-full overflow-hidden rounded-md border border-border bg-surface-muted" role="application" aria-label="Map. Click where it is, or drag the pin." />
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
