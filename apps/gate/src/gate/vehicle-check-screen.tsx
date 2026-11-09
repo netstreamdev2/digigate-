@@ -12,11 +12,12 @@ import { Chip } from '@/components/chip';
 import { DocumentPreview } from '@/components/document-preview';
 import { DiscPopup } from '@/components/disc-popup';
 import { DocumentSheet } from '@/components/document-sheet';
-import { Icon, type IconName } from '@/components/icon';
+import type { IconName } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
 import { PersonCard } from '@/components/person-card';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
+import { ScanSteps } from '@/components/scan-steps';
 import { Text } from '@/components/text';
 import { VehicleCard } from '@/components/vehicle-card';
 import { driverOnly, OccupantCounter } from '@/components/occupant-counter';
@@ -250,23 +251,28 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         {/* The disc's plate stays back until the check, in its details and its drawing alike (see the plate input below). */}
         {disc ? <VehicleCard disc={disc} onOpen={() => setDetails('disc')} onShowDisc={() => setDetails('disc-drawing')} /> : null}
 
-        {disc && licence ? null : (
-          <Card style={styles.documents}>
-            {disc ? null : (
-              <DocumentRow icon="licence-disc" tint={colors.tileSky} caption="Licence disc" value="Scan the disc" detail="On the windscreen" />
-            )}
-            {disc || licence ? null : <View style={styles.divider} />}
-            {licence ? null : (
-              <DocumentRow
-                icon="licence-card"
-                tint={colors.tileLilac}
-                caption="Driver's licence"
-                value="Scan the licence"
-                detail="The barcode on the back"
-              />
-            )}
-          </Card>
-        )}
+        <ScanSteps
+          steps={[
+            {
+              key: 'disc',
+              icon: 'licence-disc',
+              tint: 'tileSky',
+              title: 'Licence disc',
+              instruction: 'Aim at the barcode on the disc',
+              where: 'Inside the windscreen',
+              done: disc !== null,
+            },
+            {
+              key: 'licence',
+              icon: 'licence-card',
+              tint: 'tileLilac',
+              title: "Driver's licence",
+              instruction: 'Aim at the barcode on the back',
+              where: 'Ask the driver to hand it to you',
+              done: licence !== null,
+            },
+          ]}
+        />
 
         <Card style={styles.plate}>
           <PlateField entry={plate} checked={checked !== null} discPlate={checked && disc ? disc.plate : null} lookAgain={lookAgain} />
@@ -328,27 +334,6 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   );
 }
 
-/** A document still to scan. */
-function DocumentRow({ icon, tint, caption, value, detail }: { icon: IconName; tint: string; caption: string; value: string; detail: string }) {
-  return (
-    <View style={styles.row}>
-      <View style={[styles.rowIcon, { backgroundColor: tint }]}>
-        <Icon name={icon} size={22} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text variant="overline" color={colors.inkMuted}>
-          {caption}
-        </Text>
-        <Text variant="bodyStrong">{value}</Text>
-        <Text variant="label" color={colors.inkMuted}>
-          {detail}
-        </Text>
-      </View>
-      <Icon name="scan" size={26} color={colors.inkSubtle} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -366,30 +351,6 @@ const styles = StyleSheet.create({
   },
   heading: {
     gap: space.xs,
-  },
-  documents: {
-    paddingVertical: space.xs,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    paddingVertical: space.sm,
-  },
-  rowIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
   },
   plate: {
     gap: space.xs,

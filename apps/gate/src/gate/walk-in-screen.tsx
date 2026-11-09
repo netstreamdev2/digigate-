@@ -10,11 +10,11 @@ import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import { DocumentPreview, IdBookPreview } from '@/components/document-preview';
 import { DocumentSheet } from '@/components/document-sheet';
-import { Icon } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
 import { PersonCard, type PersonDocument } from '@/components/person-card';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
+import { ScanSteps } from '@/components/scan-steps';
 import { Text } from '@/components/text';
 import { StayPicker } from '@/components/stay-picker';
 import { VisitTypePicker } from '@/components/visit-type-picker';
@@ -194,18 +194,19 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
         {person ? (
           <PersonCard document={person} onOpen={() => setShowingDetails(true)} />
         ) : (
-          <Card style={styles.prompt}>
-            <View style={styles.promptIcon}>
-              <Icon name="id-card" size={26} color={colors.brand} />
-            </View>
-            <View style={styles.promptCopy}>
-              <Text variant="bodyStrong">Scan their smart ID or licence</Text>
-              <Text variant="label" color={colors.inkMuted}>
-                The barcode on the back of the card
-              </Text>
-            </View>
-            <Icon name="scan" size={26} color={colors.inkSubtle} />
-          </Card>
+          <ScanSteps
+            steps={[
+              {
+                key: 'id',
+                icon: 'id-card',
+                tint: 'tileMint',
+                title: 'Smart ID or driver\'s licence',
+                instruction: 'Aim at the barcode on the back',
+                where: 'Ask them to hand it to you',
+                done: false,
+              },
+            ]}
+          />
         )}
 
         {direction === 'exit' && person ? <VisitSummary visits={visits} /> : null}
@@ -268,23 +269,6 @@ const styles = StyleSheet.create({
   },
   heading: {
     gap: space.xs,
-  },
-  prompt: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-  },
-  promptIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.tileSky,
-  },
-  promptCopy: {
-    flex: 1,
-    gap: 2,
   },
   footer: {
     position: 'absolute',
