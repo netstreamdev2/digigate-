@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="DigiLog360"><title>DigiLog360</title><g transform="scale(2)"><g fill="none" stroke-linecap="round" stroke-linejoin="round">
+ <g stroke="#328BD2" stroke-width="24">
+ <path d="M242 65 Q353 60 411 155"/><path d="M398 424 Q295 494 176 443"/>
+ </g>
+ <g fill="#328BD2" stroke="#328BD2" stroke-width="8"><path d="M374 107 L415 155 L423 91 Z"/><path d="M192 414 L176 443 L215 470 Z"/></g>
+ <g stroke="#AAB4C4" stroke-width="20"><path d="M271 202 L271 97 Q217 84 171 55 Q126 84 65 98 L65 219 Q66 323 171 381 L206 357"/><path d="M222 228 Q270 206 321 235 Q374 206 432 227 L432 382 Q373 363 321 394 Q270 364 222 382 Z M321 235 V394"/></g>
+ <g stroke="#AAB4C4" stroke-width="18"><path d="M118 185 Q169 135 218 185 L203 207 Q169 192 133 207 Z"/><path d="M136 221 Q136 267 170 271 Q202 265 202 221"/><path d="M112 326 L112 310 Q113 293 141 286 L169 310 L196 286"/><path d="M246 263 L293 272 M246 295 L293 304 M246 327 L293 336 M348 268 L402 258 M348 301 L370 297"/><path d="M363 354 L402 304" stroke-width="20"/><path d="M353 368 L357 351 L369 360 Z" fill="#AAB4C4" stroke-width="4"/></g>
+ </g></g></svg>

@@ -8,6 +8,7 @@
   "scripts": {
     "gate": "pnpm --filter gate",
     "dashboard": "pnpm --filter dashboard",
+    "home": "pnpm --filter home",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "test:db": "node supabase/tests/database.test.mjs",
