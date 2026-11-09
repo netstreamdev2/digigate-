@@ -66,6 +66,30 @@ describe('evaluateVehicleExit', () => {
     });
   });
 
+  describe('ARRIVED_BEFORE_DIGIGATE', () => {
+    const graced = { ...config, launchGraceUntil: NOW + 60 * MINUTE };
+
+    it('asks the guard, not stops the car, when a car with no entry leaves during the launch grace', () => {
+      const hits = evaluateVehicleExit(exit(), gateState(), graced);
+      expect(hits).toEqual([{ code: 'ARRIVED_BEFORE_DIGIGATE', severity: 'amber' }]);
+      expect(outcomeOf(hits)).toBe('warning');
+    });
+
+    it('ends by itself: after the grace a car with no entry is stopped again', () => {
+      expect(codes(evaluateVehicleExit(exit(), gateState(), { ...config, launchGraceUntil: NOW - 1 }))).toEqual(['NO_ENTRY_RECORD']);
+    });
+
+    it('never softens anything else: a driver who came in another car is still stopped', () => {
+      const hits = evaluateVehicleExit(exit(), gateState({ openVisits: [vehicleVisit({ id: 'other-car', vehicle: { vin: 'OTHERVIN', plate: 'OTHER 1', discNumber: 'D9' } })] }), graced);
+      expect(codes(hits)).toContain('DRIVER_VEHICLE_MISMATCH');
+      expect(outcomeOf(hits)).toBe('blocked');
+    });
+
+    it('does nothing for a car that has its entry', () => {
+      expect(evaluateVehicleExit(exit(), gateState({ openVisits: [carAInside] }), graced)).toEqual([]);
+    });
+  });
+
   describe('NO_ENTRY_RECORD', () => {
     it('fires on its own when the car never came in', () => {
       expect(codes(evaluateVehicleExit(exit(), gateState(), config))).toEqual(['NO_ENTRY_RECORD']);

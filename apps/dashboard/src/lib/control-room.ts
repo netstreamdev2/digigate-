@@ -311,6 +311,14 @@ export async function siteParking(siteId: string): Promise<{ open: boolean; spac
 }
 
 /** When the longest stay still going began, or null when nobody is inside. */
+/** When the site's launch grace ends, while it is still running; null otherwise. */
+export async function launchGraceEnd(siteId: string, now: number): Promise<string | null> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.from("sites").select("launch_grace_until").eq("id", siteId).maybeSingle();
+  const until = data?.launch_grace_until ?? null;
+  return until && new Date(until).getTime() > now ? until : null;
+}
+
 /** How many people or cars on site have stayed past the time the guard recorded for them. */
 export async function overstaysAt(siteId: string, now: number): Promise<number> {
   const supabase = await supabaseServer();

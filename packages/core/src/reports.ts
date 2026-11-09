@@ -58,6 +58,7 @@ export const RULE_TITLES: Readonly<Record<string, string>> = {
   WALKED_IN_DRIVING_OUT: 'Walked in, driving out',
   UNKNOWN_DRIVER: 'Unknown driver',
   NO_ENTRY_RECORD: 'No entry record',
+  ARRIVED_BEFORE_DIGIGATE: 'Came in before DigiGate',
   PLATE_DISC_MISMATCH: "Plate doesn't match disc",
   DISC_CLONE_ON_SITE: 'Possible cloned plate or disc',
   DISC_CHANGED_ON_SITE: 'Disc changed since entry',

@@ -1017,6 +1017,21 @@ check('the stays must be a list by visit type', (await as('authenticated', ADMIN
 await as('authenticated', ROOM_A, 'aal2', `update digigate.sites set stay_minutes = '{"visitor": 30}' where id = '${SITE_A}'`);
 check('the control room cannot change them', (await one(`select stay_minutes from digigate.sites where id = '${SITE_A}'`)).stay_minutes.visitor === 120);
 await db.exec(`update digigate.sites set stay_minutes = '{}' where id = '${SITE_A}'`);
+// The launch grace: 7 days from when an admin starts it, then it ends by itself.
+check('the control room cannot start a launch grace', (await as('authenticated', ROOM_A, 'aal2', 'select digigate.start_launch_grace($1)', [SITE_A])).error);
+check('nor can another company', (await as('authenticated', ADMIN_B, 'aal2', 'select digigate.start_launch_grace($1)', [SITE_A])).error);
+const graceStarted = await as('authenticated', ADMIN_A, 'aal2', 'select digigate.start_launch_grace($1) as until', [SITE_A]);
+check('an admin starts it', !graceStarted.error);
+const graceDays = Number((await one(`select extract(epoch from launch_grace_until - now()) / 86400 as d from digigate.sites where id = '${SITE_A}'`)).d);
+check('and it runs for 7 days', graceDays > 6.99 && graceDays <= 7);
+check('the handheld learns when it ends', (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.launchGraceUntil > Date.now());
+check('starting it is in the log, with when it ends', (await one(`select count(*)::int n from digigate.audit_log where action = 'site.grace_started' and detail like 'until %'`)).n === 1);
+await as('authenticated', ADMIN_A, 'aal2', 'select digigate.end_launch_grace($1)', [SITE_A]);
+check('an admin can end it early', (await one(`select launch_grace_until <= now() as ended from digigate.sites where id = '${SITE_A}'`)).ended === true);
+check('and that is in the log too', (await one(`select count(*)::int n from digigate.audit_log where action = 'site.grace_ended'`)).n === 1);
+await as('authenticated', ADMIN_A, 'aal2', 'select digigate.end_launch_grace($1)', [SITE_A]);
+check('ending one that has ended does nothing more', (await one(`select count(*)::int n from digigate.audit_log where action = 'site.grace_ended'`)).n === 1);
+await db.exec(`update digigate.sites set launch_grace_until = null where id = '${SITE_A}'`);
 check('dashboard users cannot write the log themselves', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.audit_log (category, action) values ('alerts', 'alert.raised')`)).error);
 
 // The nightly erasure: three years after a visit ends, its people's details go for good.

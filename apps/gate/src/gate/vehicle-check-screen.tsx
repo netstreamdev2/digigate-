@@ -12,7 +12,7 @@ import { Chip } from '@/components/chip';
 import { DocumentPreview } from '@/components/document-preview';
 import { DiscPopup } from '@/components/disc-popup';
 import { DocumentSheet } from '@/components/document-sheet';
-import type { IconName } from '@/components/icon';
+import { Icon, type IconName } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
 import { PersonCard } from '@/components/person-card';
 import { PillButton } from '@/components/pill-button';
@@ -28,7 +28,7 @@ import { masked, rememberLastScan, settleLastScan, visitTypeLabel } from '@/db/l
 import { signalOutcome } from '@/lib/feedback';
 import { titleCase } from '@/lib/format';
 import { vehicleGateWords } from '@/lib/gate-words';
-import { expectedStayFor, siteConfig, visitTypeOf } from '@/site/site-config';
+import { expectedStayFor, launchGraceEndsAt, siteConfig, visitTypeOf } from '@/site/site-config';
 import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
@@ -84,6 +84,8 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   const platePhotoProblem = useKeepPlatePhoto(db, checked?.event ?? null, plate.photo);
   const copy = COPY[direction];
   const words = vehicleGateWords(post.hasBoom);
+  // Read once per screen: the note only says when the grace ends, the rule itself checks the time of each scan.
+  const [graceEnds] = useState(() => launchGraceEndsAt(Date.now()));
   const occupants = occupantTotal(people);
 
   // The driver counts as the licence says, until the guard counts the car themselves.
@@ -238,6 +240,14 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
         {platePhotoProblem ? <ResultBanner tone="warning" title="Plate photo not kept" message={platePhotoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
+        {direction === 'exit' && !checked && graceEnds !== null ? (
+          <View style={styles.graceNote}>
+            <Icon name="info" size={20} color={colors.brand} />
+            <Text variant="label" color={colors.inkMuted} style={styles.graceCopy}>
+              {`Launch week until ${new Date(graceEnds).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short' })}: a car with no DigiGate entry is asked about, not stopped. Everything else is checked as normal.`}
+            </Text>
+          </View>
+        ) : null}
         {direction === 'entry' && !checked && carPark.kind === 'counted' && carPark.full ? (
           <ResultBanner
             tone="warning"
@@ -348,6 +358,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  graceNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    padding: space.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.tileSky,
+  },
+  graceCopy: {
+    flex: 1,
   },
   heading: {
     gap: space.xs,

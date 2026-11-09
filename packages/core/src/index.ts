@@ -59,4 +59,4 @@ export type {
   VehicleSighting,
 } from './rules/types';
 export { evaluateVehicleEntry } from './rules/vehicle-entry';
-export { evaluateVehicleExit } from './rules/vehicle-exit';
+export { evaluateVehicleExit, inLaunchGrace } from './rules/vehicle-exit';

@@ -33,7 +33,7 @@ export async function loadSyncedSite(db: SQLiteDatabase): Promise<void> {
   if (!stored) return;
   const parsed: unknown = JSON.parse(stored);
   if (typeof parsed !== 'object' || parsed === null) return;
-  const { name, shiftPeriods, parking, siteType, stayMinutes } = parsed as Record<string, unknown>;
+  const { name, shiftPeriods, parking, siteType, stayMinutes, launchGraceUntil } = parsed as Record<string, unknown>;
   if (typeof name !== 'string') return;
   applySyncedSite({
     name,
@@ -41,6 +41,7 @@ export async function loadSyncedSite(db: SQLiteDatabase): Promise<void> {
     parking: carParkOf(parking),
     siteType: typeof siteType === 'string' ? siteType : null,
     stayMinutes: stayOverridesOf(stayMinutes),
+    launchGraceUntil: typeof launchGraceUntil === 'number' ? launchGraceUntil : null,
   });
 }
 

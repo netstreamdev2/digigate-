@@ -90,6 +90,11 @@ export type RuleConfig = {
   /** Overstay limit per visit type, for visits that didn't record their own expected stay. Visit types without a limit never overstay. */
   overstayLimitMinutes: Readonly<Partial<Record<string, number>>>;
   disabledRules: readonly RuleCode[];
+  /**
+   * The end of the site's launch grace, if it has one: until then a car leaving with no entry record may have come in
+   * before DigiGate started, so it is checked and the guard decides, instead of being stopped. It ends by itself.
+   */
+  launchGraceUntil?: EpochMs | null;
 };
 
 export type VehicleEntryScan = {

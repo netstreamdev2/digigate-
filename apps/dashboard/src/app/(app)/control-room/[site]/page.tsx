@@ -18,6 +18,7 @@ import {
   insideCounts,
   insideNow,
   latestChecks,
+  launchGraceEnd,
   longestInside,
   overstaysAt,
   siteDay,
@@ -30,7 +31,7 @@ import {
 } from "@/lib/control-room";
 import { checkRowOf } from "@/lib/check-rows";
 import { siteCompanyBrand } from "@/lib/company-brand";
-import { duration, labelFor, plural, timeOfDay, timeWithSeconds } from "@/lib/format";
+import { duration, labelFor, plural, shortDate, timeOfDay, timeWithSeconds } from "@/lib/format";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
@@ -127,7 +128,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
   const page = pageParam(query);
 
   const now = readClock();
-  const [gates, open, counts, inside, checks, entries, today, parking, longest, overstays] = await Promise.all([
+  const [gates, open, counts, inside, checks, entries, today, parking, longest, overstays, graceEnd] = await Promise.all([
     gatesAt(siteId),
     openAlerts(siteId),
     insideCounts(siteId),
@@ -138,6 +139,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
     siteParking(siteId),
     longestInside(siteId),
     overstaysAt(siteId, now),
+    launchGraceEnd(siteId, now),
   ]);
 
   const path = `/control-room/${siteId}`;
@@ -164,6 +166,18 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
       }
       chips={<LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />}
     >
+      {graceEnd ? (
+        <div role="note" className="mt-6 flex items-start gap-3 rounded-lg bg-tile-butter px-4 py-3 text-sm">
+          <Icon name="duration" className="mt-0.5 size-5 shrink-0 text-brand" />
+          <p>
+            <span className="font-semibold">{`Launch grace: ${duration(now, graceEnd)} left.`}</span>
+            {" Cars leaving with no DigiGate entry are asked about at the gate, not stopped, until "}
+            <span className="font-semibold">{`${shortDate(graceEnd)}, ${timeOfDay(graceEnd)}`}</span>
+            {". Each one shows under Checks as \u201cCame in before DigiGate\u201d."}
+          </p>
+        </div>
+      ) : null}
+
       <section aria-label="Key figures" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="On site now"

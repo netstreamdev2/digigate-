@@ -26,6 +26,11 @@ export const ruleCopy: Record<RuleCode, { title: string; message: string }> = {
     title: 'No entry record',
     message: 'DigiGate has no record of this car coming in. {stop}',
   },
+  ARRIVED_BEFORE_DIGIGATE: {
+    title: 'Came in before DigiGate?',
+    message:
+      "DigiGate has no record of this car coming in, but it's still new at this site, so the car may have come in before it started. Check the licence and disc are theirs and the driver looks right.",
+  },
   PLATE_DISC_MISMATCH: {
     title: "Plate doesn't match disc",
     message: 'The plate on the car is not the plate on the disc. Check the plate again. If it still differs, call your supervisor.',

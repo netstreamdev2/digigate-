@@ -7,6 +7,7 @@ import {
   stayMinutesFor,
   type CarPark,
   type Fence,
+  type RuleConfig,
   type ShiftPeriod,
 } from '@digigate/core';
 import type { colors } from '@digigate/design';
@@ -61,6 +62,8 @@ export type SyncedSite = {
   parking: CarPark | null;
   siteType: string | null;
   stayMinutes: Readonly<Record<string, number | null>>;
+  /** When the site's launch grace ends, if it has one (epoch ms). */
+  launchGraceUntil: number | null;
 };
 
 /** A site's own stay per visit type, in minutes or null for no limit. Anything else is left out, never guessed. */
@@ -87,6 +90,7 @@ export function syncedSiteOf(body: Record<string, unknown>): SyncedSite | null {
     parking: carParkOf(body.parking),
     siteType: typeof body.siteType === 'string' ? body.siteType : null,
     stayMinutes: stayOverridesOf(body.stayMinutes),
+    launchGraceUntil: typeof body.launchGraceUntil === 'number' ? body.launchGraceUntil : null,
   };
 }
 
@@ -186,13 +190,32 @@ let syncedSite: {
   parking: CarPark | null;
   siteType: string | null;
   stayMinutes: Readonly<Record<string, number | null>>;
+  launchGraceUntil: number | null;
 } | null = null;
 
 /** The site's name and shift times from the dashboard. Null forgets them, as a wiped device must. */
 export function applySyncedSite(site: SyncedSite | null): void {
   syncedSite = site
-    ? { name: site.name, periods: periodOptions(site.shiftPeriods), parking: site.parking, siteType: site.siteType, stayMinutes: site.stayMinutes }
+    ? {
+        name: site.name,
+        periods: periodOptions(site.shiftPeriods),
+        parking: site.parking,
+        siteType: site.siteType,
+        stayMinutes: site.stayMinutes,
+        launchGraceUntil: site.launchGraceUntil,
+      }
     : null;
+}
+
+/** The rules as this site runs them now, with its launch grace while it lasts. */
+export function currentRules(): RuleConfig {
+  return { ...siteConfig.rules, launchGraceUntil: syncedSite?.launchGraceUntil ?? null };
+}
+
+/** When the site's launch grace ends, while it is still running; null once it has ended or if it never started. */
+export function launchGraceEndsAt(now: number): number | null {
+  const until = syncedSite?.launchGraceUntil ?? null;
+  return until !== null && until > now ? until : null;
 }
 
 /** The kind of site this is, once it has synced; until then this build's hospital defaults. */

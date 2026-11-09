@@ -42,6 +42,8 @@ const WORDS: Readonly<Record<string, string>> = {
   "client.moved": "moved the site to another company:",
   "site.added": "added the site",
   "site.changed": "changed the site",
+  "site.grace_started": "started the 7-day launch grace for",
+  "site.grace_ended": "ended the launch grace early for",
   "post.added": "added the access point",
   "post.changed": "changed the access point",
   "post.deactivated": "deactivated the access point",

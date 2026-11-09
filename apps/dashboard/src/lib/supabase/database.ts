@@ -1309,6 +1309,7 @@ export type Database = {
           id: string
           is_active: boolean
           latitude: number | null
+          launch_grace_until: string | null
           longitude: number | null
           name: string
           open_parking: boolean
@@ -1329,6 +1330,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           latitude?: number | null
+          launch_grace_until?: string | null
           longitude?: number | null
           name: string
           open_parking?: boolean
@@ -1349,6 +1351,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           latitude?: number | null
+          launch_grace_until?: string | null
           longitude?: number | null
           name?: string
           open_parking?: boolean
@@ -1768,6 +1771,7 @@ export type Database = {
           status: string
         }[]
       }
+      end_launch_grace: { Args: { _site: string }; Returns: undefined }
       erase_due: { Args: { _batch?: number }; Returns: Json }
       erasure_files_done: {
         Args: { _bucket: string; _paths: string[] }
@@ -2040,6 +2044,7 @@ export type Database = {
           total: number
         }[]
       }
+      start_launch_grace: { Args: { _site: string }; Returns: string }
       tally_event: {
         Args: {
           _at: string

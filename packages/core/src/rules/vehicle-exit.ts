@@ -1,8 +1,13 @@
 import { finalise, hit } from './hits';
 import { hotlistHit } from './hotlist';
 import { isOverstay } from './overstay';
-import type { GateState, OpenVehicleVisit, PersonKey, RuleConfig, RuleHit, VehicleExitScan } from './types';
+import type { EpochMs, GateState, OpenVehicleVisit, PersonKey, RuleConfig, RuleHit, VehicleExitScan } from './types';
 import { discChangedSince, findCloneOnSite, samePlate, sameVehicle, vehicleVisits } from './vehicles';
+
+/** True while the site's launch grace runs; it ends by itself at its time. */
+export function inLaunchGrace(at: EpochMs, config: RuleConfig): boolean {
+  return typeof config.launchGraceUntil === 'number' && at < config.launchGraceUntil;
+}
 
 export function evaluateVehicleExit(scan: VehicleExitScan, state: GateState, config: RuleConfig): RuleHit[] {
   const { disc } = scan;
@@ -19,7 +24,7 @@ export function evaluateVehicleExit(scan: VehicleExitScan, state: GateState, con
     hits.push(hit('PLATE_DISC_MISMATCH'));
   }
   if (!visit) {
-    hits.push(hit('NO_ENTRY_RECORD'));
+    hits.push(hit(inLaunchGrace(scan.at, config) ? 'ARRIVED_BEFORE_DIGIGATE' : 'NO_ENTRY_RECORD'));
   } else if (discChangedSince(visit, disc)) {
     hits.push(hit('DISC_CHANGED_ON_SITE', visit.id));
   }

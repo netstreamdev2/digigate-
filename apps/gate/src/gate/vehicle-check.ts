@@ -20,7 +20,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { commitGateEvent, loadGateState, type NewVehicleVisit, type VisitDetails } from '@/db/visits';
 import { newEventId } from '@/lib/ids';
 import { personKeyFor } from '@/lib/person-key';
-import { siteConfig } from '@/site/site-config';
+import { currentRules } from '@/site/site-config';
 
 import { bookingFor, hitsPayload, notesFor, type GateCheck } from './decision';
 import { demographicsPayload } from './demographics';
@@ -141,7 +141,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
 
   const hits =
     input.direction === 'entry'
-      ? evaluateVehicleEntry({ at, driver, disc: vehicle, typedPlate: input.typedPlate }, state, siteConfig.rules)
+      ? evaluateVehicleEntry({ at, driver, disc: vehicle, typedPlate: input.typedPlate }, state, currentRules())
       : evaluateVehicleExit(
           {
             at,
@@ -153,7 +153,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
             bootCheck: input.bootCheck,
           },
           state,
-          siteConfig.rules,
+          currentRules(),
         );
   const outcome = outcomeOf(hits);
 

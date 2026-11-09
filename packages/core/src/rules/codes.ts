@@ -6,6 +6,8 @@ export const RULE_SEVERITY = {
   WALKED_IN_DRIVING_OUT: 'red',
   UNKNOWN_DRIVER: 'red',
   NO_ENTRY_RECORD: 'red',
+  // In a site's launch grace only: a car with no entry may simply have come in before DigiGate started there.
+  ARRIVED_BEFORE_DIGIGATE: 'amber',
   PLATE_DISC_MISMATCH: 'red',
   DISC_CLONE_ON_SITE: 'red',
   DISC_CHANGED_ON_SITE: 'red',

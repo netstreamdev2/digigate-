@@ -85,10 +85,13 @@ async function serverFindings(orgId: string, siteId: string, events: readonly un
   if (checks.length === 0) return findings;
   const known = await sql`select id from digigate.events where id = any(${sql.array(checks.map((event) => event.id))}::uuid[])`;
   const seen = new Set(known.map((row) => row.id));
+  // The site's launch grace, so a car the handheld asked about isn't flagged again as having no entry.
+  const [site] = await sql`select (extract(epoch from launch_grace_until) * 1000)::float8 as grace_until from digigate.sites where id = ${siteId}`;
+  const config = { ...SITE_RULE_DEFAULTS, launchGraceUntil: site?.grace_until ?? null };
   for (const check of checks) {
     if (seen.has(check.id)) continue;
     try {
-      const hits = recheck(check, await siteState(orgId, siteId, check.payload), SITE_RULE_DEFAULTS);
+      const hits = recheck(check, await siteState(orgId, siteId, check.payload), config);
       const missed = hits ? missedHits(hits, reportedCodes(check.payload)) : [];
       if (missed.length > 0) findings.set(check.id, missed.map((hit) => ({ code: hit.code, severity: hit.severity })));
     } catch (cause) {

@@ -13,7 +13,7 @@ import { SearchBox } from "@/components/search-box";
 import { StatusChip } from "@/components/status-chip";
 import { companyBrand } from "@/lib/company-brand";
 import { anyColumnLike, likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
-import { counted, maybe, must } from "@/lib/reads";
+import { counted, maybe, must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
@@ -22,6 +22,7 @@ import { AccessPointList } from "../../access-point-list";
 import { addAccessPoint, revokeDevice, setGateUserActive } from "../../actions";
 import { AddGateStaffButton } from "../../gate-staff-form";
 import { PairDeviceButton } from "../../pair-device";
+import { LaunchGrace } from "../../launch-grace";
 import { SiteStaysButton } from "../../site-stays";
 
 type Tab = "points" | "staff" | "devices";
@@ -179,7 +180,7 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
   const supabase = await supabaseServer();
   const [companyRead, siteRead, points, staff, devices] = await Promise.all([
     supabase.from("organisations").select("name").eq("id", ids.org).maybeSingle(),
-    supabase.from("sites").select("name, code, site_type, address, latitude, longitude, radius_m, open_parking, parking_spaces, stay_minutes").eq("id", ids.site).eq("org_id", ids.org).maybeSingle(),
+    supabase.from("sites").select("name, code, site_type, address, latitude, longitude, radius_m, open_parking, parking_spaces, stay_minutes, launch_grace_until").eq("id", ids.site).eq("org_id", ids.org).maybeSingle(),
     supabase.from("posts").select("id", { count: "exact", head: true }).eq("site_id", ids.site),
     supabase.from("gate_users").select("id", { count: "exact", head: true }).contains("site_ids", [ids.site]),
     supabase.from("devices").select("id", { count: "exact", head: true }).eq("site_id", ids.site),
@@ -234,6 +235,7 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
       <FilterBar label={searchPlaceholder}>
         <SearchBox key={tab} placeholder={searchPlaceholder} />
       </FilterBar>
+      <LaunchGrace siteId={ids.site} until={site.launch_grace_until} now={readClock()} />
       {tab === "points" ? <AccessPointList siteId={ids.site} query={query} path={base} near={near} /> : null}
       {tab === "staff" ? <StaffTab ids={ids} query={query} path={base} /> : null}
       {tab === "devices" ? <DevicesTab ids={ids} query={query} path={base} /> : null}
