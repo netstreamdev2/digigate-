@@ -11,6 +11,7 @@ import { LiveStatus } from "@/components/live-status";
 import { NoAccess } from "@/components/no-access";
 import { SearchBox } from "@/components/search-box";
 import { StatTile } from "@/components/stat-tile";
+import { problemWhen, warningWhen } from "@/components/tile-colour";
 import { StatusChip } from "@/components/status-chip";
 import {
   entriesToday,
@@ -109,7 +110,7 @@ function CarParkTile({ vehicles, parking }: { vehicles: number; parking: { open:
       value={`${vehicles} of ${parking.spaces}`}
       icon="vehicle"
       detail={free === 0 ? "Full" : `${plural(free, "space")} free`}
-      tone={free === 0 ? "blocked" : share >= PARKING_NEARLY_FULL ? "warning" : "neutral"}
+      meaning={free === 0 ? "problem" : share >= PARKING_NEARLY_FULL ? "warning" : "neutral"}
     />
   );
 }
@@ -185,21 +186,21 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
           icon="on-site"
           detail={`${plural(counts.vehicle, "vehicle")} · ${plural(counts.pedestrian, "pedestrian")}`}
         />
-        <StatTile label="Entries today" value={String(entries)} icon="entry" detail={busiestHour(today)} />
-        <StatTile label="Exits today" value={String(today.exits)} icon="exit" detail="Since midnight" />
+        <StatTile label="Entries today" value={String(entries)} icon="entry" detail={busiestHour(today)} meaning="entry" />
+        <StatTile label="Exits today" value={String(today.exits)} icon="exit" detail="Since midnight" meaning="exit" />
         <StatTile
           label="Open alerts"
           value={String(openTotal)}
           icon="alerts"
           detail={openTotal ? `${open.red} blocked · ${plural(open.amber, "warning")}` : "Nothing waiting"}
-          tone={open.red > 0 ? "blocked" : "neutral"}
+          meaning={open.red > 0 ? "problem" : warningWhen(open.amber)}
         />
         <StatTile
           label="Gates staffed"
           value={`${gates.length - uncovered.length} of ${gates.length}`}
           icon="guard"
           detail={uncovered[0] ? `${uncovered[0].label} has nobody on duty` : "Every access point is covered"}
-          tone={uncovered.length ? "blocked" : "neutral"}
+          meaning={problemWhen(uncovered.length)}
         />
         <CarParkTile vehicles={counts.vehicle} parking={parking} />
         <StatTile
@@ -207,17 +208,18 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
           value={String(today.blocked)}
           icon="result-blocked"
           detail={today.blocked ? `${today.overrides} let through by a supervisor · ${today.turnedAway} turned away` : "Nobody stopped today"}
+          meaning={problemWhen(today.blocked)}
         />
         <StatTile
           label="Average stay today"
-          value={today.exits ? duration(0, (today.stayMinutes / today.exits) * 60_000) : NO_VALUE}
+          value={today.timedExits ? duration(0, (today.stayMinutes / today.timedExits) * 60_000) : NO_VALUE}
           icon="duration"
           detail={longest ? `Longest on site now: ${duration(longest, now)}` : "Nobody on site"}
         />
       </section>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
-        <div className="flex min-w-0 flex-col gap-6 xl:col-span-2">
+        <div className="min-w-0 xl:col-span-2">
           <Card title="Gates" subtitle="Who is on duty and when each gate last scanned">
             <DataTable
               columns={[
@@ -229,66 +231,68 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
               rows={gates.map((gate) => gateRow(gate, now))}
             />
           </Card>
-
-          <Card
-            title="Checks"
-            subtitle="The latest scans, as they reach the server"
-            action={
-              <Link href={`/checks?site=${siteId}`} className="inline-flex h-9 items-center gap-1.5 rounded-pill bg-surface/70 px-3.5 text-sm font-semibold text-ink transition hover:bg-surface">
-                Every check here
-                <Icon name="chevron-right" className="size-4" />
-              </Link>
-            }
-          >
-            {checks.length ? (
-              <CheckActivity rows={checks.map((check) => checkRowOf(check, gateLabel(check.post), now))} />
-            ) : (
-              <p className="py-8 text-center text-sm text-ink-muted">No scans at this site yet.</p>
-            )}
-          </Card>
-
-          <Card title="On site now" subtitle={overstays ? `Longest stay first · ${plural(overstays, "visit")} over their time` : "Longest stay first"} action={<SearchBox placeholder="Name, plate or car: blue Mercedes" />}>
-            <div className="mb-4">
-              <Tabs
-                items={[
-                  { label: "Vehicles", href: path, active: lane === "vehicle", count: counts.vehicle },
-                  { label: "Pedestrians", href: `${path}?lane=pedestrian`, active: lane === "pedestrian", count: counts.pedestrian },
-                ]}
-              />
-            </div>
-            {inside.rows.length === 0 ? (
-              <p className="py-8 text-center text-sm text-ink-muted">{search ? "Nobody on site matches that." : "Nobody here right now."}</p>
-            ) : (
-              <DataTable
-                columns={[
-                  { key: "who", label: lane === "vehicle" ? "Driver" : "Person" },
-                  ...(lane === "vehicle" ? [{ key: "vehicle", label: "Vehicle" }] : []),
-                  { key: "gate", label: "Came in" },
-                  { key: "stay", label: "On site", align: "right" },
-                ]}
-                rows={inside.rows.map((row) => ({
-                  id: row.id,
-                  cells: {
-                    who: <TwoLine main={row.person} sub={labelFor(row.visitType)} />,
-                    vehicle: <TwoLine main={row.plate ?? NO_VALUE} sub={row.vehicle ?? NO_VALUE} />,
-                    gate: <TwoLine main={timeOfDay(row.enteredAt)} sub={gateLabel(row.post)} />,
-                    stay: <StayCell enteredAt={row.enteredAt} expectedUntil={row.expectedUntil} now={now} />,
-                  },
-                }))}
-              />
-            )}
-            <div className="-mx-6 -mb-6 mt-4">
-              <Pagination page={page} total={inside.total} hrefFor={(next) => pageHref(path, query, next)} />
-            </div>
-          </Card>
-
         </div>
 
-        <div className="flex min-w-0 flex-col gap-6">
+        <div className="min-w-0">
           <Card title="Live alerts" subtitle="Blocked first, then the newest">
             <LiveAlerts alerts={alerts} total={openTotal} gateLabel={gateLabel} canClose={!user.roles.includes("client_viewer")} />
           </Card>
         </div>
+      </div>
+
+      {/* The checks and who is on site run the full width of the page, so their tables fit without scrolling sideways. */}
+      <div className="mt-6 flex min-w-0 flex-col gap-6">
+        <Card
+          title="Checks"
+          subtitle="The latest scans, as they reach the server"
+          action={
+            <Link href={`/checks?site=${siteId}`} className="inline-flex h-9 items-center gap-1.5 rounded-pill bg-surface/70 px-3.5 text-sm font-semibold text-ink transition hover:bg-surface">
+              Every check here
+              <Icon name="chevron-right" className="size-4" />
+            </Link>
+          }
+        >
+          {checks.length ? (
+            <CheckActivity rows={checks.map((check) => checkRowOf(check, gateLabel(check.post), now))} />
+          ) : (
+            <p className="py-8 text-center text-sm text-ink-muted">No scans at this site yet.</p>
+          )}
+        </Card>
+
+        <Card title="On site now" subtitle={overstays ? `Longest stay first · ${plural(overstays, "visit")} over their time` : "Longest stay first"} action={<SearchBox placeholder="Name, plate or car: blue Mercedes" />}>
+          <div className="mb-4">
+            <Tabs
+              items={[
+                { label: "Vehicles", href: path, active: lane === "vehicle", count: counts.vehicle },
+                { label: "Pedestrians", href: `${path}?lane=pedestrian`, active: lane === "pedestrian", count: counts.pedestrian },
+              ]}
+            />
+          </div>
+          {inside.rows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-muted">{search ? "Nobody on site matches that." : "Nobody here right now."}</p>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "who", label: lane === "vehicle" ? "Driver" : "Person" },
+                ...(lane === "vehicle" ? [{ key: "vehicle", label: "Vehicle" }] : []),
+                { key: "gate", label: "Came in" },
+                { key: "stay", label: "On site", align: "right" },
+              ]}
+              rows={inside.rows.map((row) => ({
+                id: row.id,
+                cells: {
+                  who: <TwoLine main={row.person} sub={labelFor(row.visitType)} />,
+                  vehicle: <TwoLine main={row.plate ?? NO_VALUE} sub={row.vehicle ?? NO_VALUE} />,
+                  gate: <TwoLine main={timeOfDay(row.enteredAt)} sub={gateLabel(row.post)} />,
+                  stay: <StayCell enteredAt={row.enteredAt} expectedUntil={row.expectedUntil} now={now} />,
+                },
+              }))}
+            />
+          )}
+          <div className="-mx-6 -mb-6 mt-4">
+            <Pagination page={page} total={inside.total} hrefFor={(next) => pageHref(path, query, next)} />
+          </div>
+        </Card>
       </div>
     </AppShell>
   );

@@ -273,6 +273,8 @@ export async function entriesToday(siteId: string, now: number): Promise<number>
 export type SiteDay = {
   checks: number;
   exits: number;
+  /** Exits with a known stay, which the average stay is taken over. The old system's exits have none. */
+  timedExits: number;
   stayMinutes: number;
   blocked: number;
   overrides: number;
@@ -288,13 +290,14 @@ export type SiteDay = {
 export async function siteDay(siteId: string, now: number): Promise<SiteDay> {
   const supabase = await supabaseServer();
   const rows = must(
-    await supabase.from("daily_activity").select("checks, exits, stay_minutes, blocked, overrides, turned_away, hours").eq("site_id", siteId).eq("day", siteToday(now)),
+    await supabase.from("daily_activity").select("checks, exits, untimed_exits, stay_minutes, blocked, overrides, turned_away, hours").eq("site_id", siteId).eq("day", siteToday(now)),
   );
   const hours = Array.from({ length: 24 }, (_, hour) => rows.reduce((sum, row) => sum + (row.hours[hour] ?? 0), 0));
   const total = (pick: (row: (typeof rows)[number]) => number) => rows.reduce((sum, row) => sum + pick(row), 0);
   return {
     checks: total((row) => row.checks),
     exits: total((row) => row.exits),
+    timedExits: total((row) => row.exits - row.untimed_exits),
     stayMinutes: total((row) => row.stay_minutes),
     blocked: total((row) => row.blocked),
     overrides: total((row) => row.overrides),

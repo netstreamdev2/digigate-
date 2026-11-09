@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import type { ActivityRow } from "@/components/activity-table";
 import { CancelButton, Dialog, useDialog } from "@/components/dialog";
+import { DirectionChip } from "@/components/direction-chip";
 import { Icon } from "@/components/icon";
 import { StatusChip } from "@/components/status-chip";
 import type { CheckDetail } from "@/lib/check-detail";
@@ -14,8 +15,14 @@ import { duration, labelFor, shortDate, timeOfDay } from "@/lib/format";
 
 import { openCheck, openLicencePhoto, openPlatePhoto } from "./actions";
 
-/** `resultLabel` replaces the chip's word, as when a supervisor let a blocked check through. */
-export type CheckRow = ActivityRow & { alerts: string[]; resultLabel: string | null };
+/** What the site's old gate system recorded about a check, beyond what every row shows. */
+export type OldSystemFacts = { occupants: number | null; scannedBy: string | null };
+
+/**
+ * A row in the list. `resultLabel` replaces the chip's word, as when a supervisor let a blocked check through;
+ * `oldSystem` is set for a check brought over from the site's old gate system.
+ */
+export type CheckRow = ActivityRow & { alerts: string[]; resultLabel: string | null; oldSystem: OldSystemFacts | null };
 
 const SAST_OFFSET_MINUTES = 120;
 const HOVER_CARD_WIDTH = 320;
@@ -67,7 +74,9 @@ function HoverCard({ hover }: { hover: Hover }) {
         <dd>{row.stay}</dd>
       </dl>
       {row.alerts.length > 0 ? <p className="mt-3 text-xs font-semibold text-warning">{row.alerts.join(" · ")}</p> : null}
-      <p className="mt-3 border-t border-border pt-2 text-xs text-ink-muted">Click for the photos and everything scanned.</p>
+      <p className="mt-3 border-t border-border pt-2 text-xs text-ink-muted">
+        {row.oldSystem ? "Recorded by the site's old gate system." : "Click for the photos and everything scanned."}
+      </p>
     </div>,
     document.body,
   );
@@ -318,6 +327,32 @@ function CheckDetails({ row, loaded }: { row: CheckRow; loaded: Loaded }) {
 }
 
 /**
+ * A check from the site's old gate system: what it recorded, all of it already on the row. It had no rule checks and no
+ * photos, so there is nothing more to open.
+ */
+function OldSystemDetails({ row, facts }: { row: CheckRow; facts: OldSystemFacts }) {
+  return (
+    <div className="mt-6 space-y-5">
+      <p className="flex items-start gap-2 rounded-md bg-tile-sky px-3 py-2 text-sm text-ink">
+        <Icon name="info" className="mt-0.5 size-4 shrink-0 text-brand" />
+        {"Recorded by the site’s old gate system before DigiGate, and brought over with its history. DigiGate’s checks and photos aren’t behind it."}
+      </p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+        <Fact label="Name">{row.person}</Fact>
+        <Fact label="Visiting as">{row.visitType}</Fact>
+        <Fact label="Vehicle">{row.vehicle}</Fact>
+        <Fact label="Plate">
+          <span className="tabular-nums">{row.plate}</span>
+        </Fact>
+        <Fact label="People in it">{facts.occupants ?? NO_VALUE}</Fact>
+        <Fact label="Where">{row.gate}</Fact>
+        {facts.scannedBy ? <Fact label="Scanned by">{facts.scannedBy}</Fact> : null}
+      </dl>
+    </div>
+  );
+}
+
+/**
  * The live list of checks. Hovering a row shows who it was at a glance; clicking it, or Enter, opens everything that
  * was scanned, with the photo from the driver's licence.
  */
@@ -343,6 +378,8 @@ export function CheckActivity({ rows }: { rows: readonly CheckRow[] }) {
     setLoaded(null);
     opened.current = row.id;
     dialog.open();
+    // An old-system check has everything it recorded on its row already.
+    if (row.oldSystem) return;
     startLoading(async () => {
       const at = Date.now();
       const { detail, problem } = await openCheck(row.id);
@@ -398,10 +435,7 @@ export function CheckActivity({ rows }: { rows: readonly CheckRow[] }) {
                   <p className="text-xs text-ink-muted">{row.visitType}</p>
                 </td>
                 <td className="py-3 pr-4">
-                  <span className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-surface-muted px-2.5 text-xs font-semibold">
-                    <Icon name={row.direction === "in" ? "entry" : "exit"} className="size-4" />
-                    {row.direction === "in" ? "In" : "Out"}
-                  </span>
+                  <DirectionChip direction={row.direction} />
                 </td>
                 <td className="py-3 pr-4">
                   <p>{row.vehicle}</p>
@@ -430,7 +464,7 @@ export function CheckActivity({ rows }: { rows: readonly CheckRow[] }) {
           <>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-start gap-4">
-                <span className="grid size-12 shrink-0 place-items-center rounded-pill bg-tile-sky text-brand">
+                <span className={`grid size-12 shrink-0 place-items-center rounded-pill ${open.direction === "in" ? "bg-clear-soft text-clear" : "bg-exit-soft text-exit"}`}>
                   <Icon name={open.direction === "in" ? "entry" : "exit"} className="size-6" />
                 </span>
                 <div className="min-w-0 self-center">
@@ -440,7 +474,13 @@ export function CheckActivity({ rows }: { rows: readonly CheckRow[] }) {
               </div>
               <StatusChip status={open.result} label={open.resultLabel ?? undefined} />
             </div>
-            {loaded ? <CheckDetails row={open} loaded={loaded} /> : <p className="py-10 text-center text-sm text-ink-muted">{loading ? "Opening…" : null}</p>}
+            {open.oldSystem ? (
+              <OldSystemDetails row={open} facts={open.oldSystem} />
+            ) : loaded ? (
+              <CheckDetails row={open} loaded={loaded} />
+            ) : (
+              <p className="py-10 text-center text-sm text-ink-muted">{loading ? "Opening…" : null}</p>
+            )}
             <div className="mt-6 flex justify-end">
               <CancelButton onClick={dialog.close} label="Close" />
             </div>

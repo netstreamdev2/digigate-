@@ -9,6 +9,7 @@ import { CompanyMark } from "@/components/company-mark";
 import { PageSkeleton } from "@/components/skeleton";
 import { GlassStat, type Trend } from "@/components/glass";
 import { Icon } from "@/components/icon";
+import { problemWhen } from "@/components/tile-colour";
 import { Pagination } from "@/components/list";
 import { NoAccess } from "@/components/no-access";
 import { Sparkline } from "@/components/report-charts";
@@ -104,8 +105,8 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
     >
       <section aria-label="Across every company" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <GlassStat label="Scans" value={compactCount(figures.checks)} icon="visits" {...moved(figures.checks, before.checks)} />
-        <GlassStat label="Entries" value={compactCount(figures.entries)} icon="entry" {...moved(figures.entries, before.entries)} />
-        <GlassStat label="Stopped at the gate" value={compactCount(figures.blocked)} icon="result-blocked" attention={figures.blocked > 0} {...moved(figures.blocked, before.blocked, "bad")} />
+        <GlassStat label="Entries" value={compactCount(figures.entries)} icon="entry" meaning="entry" {...moved(figures.entries, before.entries)} />
+        <GlassStat label="Stopped at the gate" value={compactCount(figures.blocked)} icon="result-blocked" meaning={problemWhen(figures.blocked)} {...moved(figures.blocked, before.blocked, "bad")} />
         <GlassStat label="Companies active" value={countLabel(figures.companies)} icon="sites" note={`of ${countLabel(total)} ${total === 1 ? "company" : "companies"}`} />
       </section>
 

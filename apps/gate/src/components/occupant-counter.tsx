@@ -1,4 +1,4 @@
-import { occupantTotal, type OccupantsBySex } from '@digigate/core';
+import { NO_OCCUPANTS, occupantTotal, type OccupantsBySex } from '@digigate/core';
 import { colors, space } from '@digigate/design';
 import { StyleSheet, View } from 'react-native';
 
@@ -15,16 +15,20 @@ type Props = {
 
 /** Just the driver, as their licence says: a man, a woman, or not said. */
 export function driverOnly(gender: 'male' | 'female' | null): OccupantsBySex {
-  return { male: gender === 'male' ? 1 : 0, female: gender === 'female' ? 1 : 0, unknown: gender === null ? 1 : 0 };
+  return { ...NO_OCCUPANTS, male: gender === 'male' ? 1 : 0, female: gender === 'female' ? 1 : 0, unknown: gender === null ? 1 : 0 };
 }
 
-const ROWS: readonly { key: keyof OccupantsBySex; label: string }[] = [
-  { key: 'male', label: 'Men' },
-  { key: 'female', label: 'Women' },
-  { key: 'unknown', label: 'Not sure' },
+// Children are counted apart from adults: a child leaving in a car they didn't arrive in is the case that matters most.
+// A baby the guard can't tell goes under "Not sure".
+const ROWS: readonly { key: keyof OccupantsBySex; label: string; one: string }[] = [
+  { key: 'male', label: 'Men', one: 'man' },
+  { key: 'female', label: 'Women', one: 'woman' },
+  { key: 'boy', label: 'Boys', one: 'boy' },
+  { key: 'girl', label: 'Girls', one: 'girl' },
+  { key: 'unknown', label: 'Not sure', one: 'person not sure' },
 ];
 
-/** The people in a car, counted as men, women and anyone the guard can't tell. Counts only: there's always at least the driver. */
+/** The people in a car, counted as men, women, boys, girls and anyone the guard can't tell. Counts only: there's always at least the driver. */
 export function OccupantCounter({ title, value, onChange, locked }: Props) {
   const total = occupantTotal(value);
   const change = (key: keyof OccupantsBySex, by: number) => onChange({ ...value, [key]: Math.max(0, value[key] + by) });
@@ -50,13 +54,13 @@ export function OccupantCounter({ title, value, onChange, locked }: Props) {
           <View style={styles.stepper}>
             <IconButton
               icon="remove"
-              label={`One ${row.label.toLowerCase()} fewer`}
+              label={`One ${row.one} fewer`}
               onPress={!locked && value[row.key] > 0 && total > 1 ? () => change(row.key, -1) : undefined}
             />
             <Text variant="title" style={styles.count}>
               {value[row.key]}
             </Text>
-            <IconButton icon="add" label={`One more: ${row.label.toLowerCase()}`} onPress={!locked ? () => change(row.key, 1) : undefined} />
+            <IconButton icon="add" label={`One more ${row.one}`} onPress={!locked ? () => change(row.key, 1) : undefined} />
           </View>
         </View>
       ))}

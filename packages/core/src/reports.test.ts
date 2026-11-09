@@ -113,6 +113,12 @@ describe('report figures', () => {
     expect(averageStay({})).toBe(0);
   });
 
+  it('leaves exits with no known stay out of the average', () => {
+    // 4 exits, 2 of them from the old system with no stay: 300 minutes over the 2 timed ones.
+    expect(averageStay({ stay_minutes: 300, exits: 4, timed_exits: 2 })).toBe(150);
+    expect(averageStay({ stay_minutes: 0, exits: 3, timed_exits: 0 })).toBe(0);
+  });
+
   it('adds cars and walk-ins into entries', () => {
     expect(entriesOf({ vehicles_in: 3, people_in: 2 })).toBe(5);
     expect(entriesOf({})).toBe(0);

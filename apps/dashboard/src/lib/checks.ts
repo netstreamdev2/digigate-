@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { OldSystemFacts } from "@/app/(app)/control-room/check-activity";
+
 import type { Check } from "./control-room";
 import { addDays, siteMidnightUtc } from "./format";
 import { rangeOf, withEveryWord } from "./paging";
@@ -21,8 +23,11 @@ export type CheckFilter = {
   site: string;
 };
 
-/** A check on the Checks page: the same as the control room's, with where it happened. */
-export type ListedCheck = Check & { siteId: string; siteName: string; gate: string };
+/**
+ * A check on the Checks page: the same as the control room's, with where it happened. DigiGate's own checks and the
+ * ones brought over from a site's old gate system share one list; `oldSystem` is set for the second kind.
+ */
+export type ListedCheck = Check & { siteId: string; siteName: string; gate: string; oldSystem: OldSystemFacts | null };
 
 const NO_NAME = "Erased";
 const NO_VALUE = "—";
@@ -31,15 +36,17 @@ const typesFor = (direction: CheckDirection, lane: CheckLane): string[] =>
   (lane ? [lane] : ["vehicle", "pedestrian"]).flatMap((kind) => (direction === "in" ? [`${kind}_entry`] : direction === "out" ? [`${kind}_exit`] : [`${kind}_entry`, `${kind}_exit`]));
 
 /**
- * One page of every check, in and out, newest first, for the days and filters asked for. Searched and paged in the
- * database, with names and plates masked after 365 days as everywhere else, so an old name can't be searched for.
+ * One page of every check, in and out, newest first, for the days and filters asked for: DigiGate's own and the old
+ * system's together (digigate.all_check_records), each half with its own company's visibility. Searched and paged in
+ * the database, with names and plates masked after 365 days as everywhere else, so an old name can't be searched for.
+ * The old system's checks have no result, so filtering by one leaves them out.
  */
 export async function checkPage(filter: CheckFilter, page: number): Promise<{ checks: ListedCheck[]; total: number }> {
   const supabase = await supabaseServer();
   const [from, to] = rangeOf(page);
   let list = supabase
-    .from("check_records")
-    .select("id, type, occurred_at, site_id, person_name, plate, vehicle_description, visit_type, post, visit_id, visit_entered_at, outcome, rule_codes", {
+    .from("all_check_records")
+    .select("id, type, occurred_at, site_id, person_name, plate, vehicle_description, visit_type, post, visit_id, visit_entered_at, outcome, rule_codes, source, occupants, scanned_by", {
       count: "exact",
     })
     .gte("occurred_at", siteMidnightUtc(filter.fromDay))
@@ -89,6 +96,7 @@ export async function checkPage(filter: CheckFilter, page: number): Promise<{ ch
               siteId: row.site_id,
               siteName: siteNames.get(row.site_id) ?? NO_VALUE,
               gate: (row.post && gateNames.get(`${row.site_id}:${row.post}`)) ?? row.post ?? NO_VALUE,
+              oldSystem: row.source === "old-system" ? { occupants: row.occupants, scannedBy: row.scanned_by } : null,
             },
           ]
         : [],

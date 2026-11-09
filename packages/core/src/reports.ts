@@ -10,6 +10,8 @@ export type ReportFigures = {
   vehicles_in: number;
   people_in: number;
   exits: number;
+  /** Exits whose stay is known. The old system's exits have none, so they count as exits but not towards the average stay. */
+  timed_exits?: number;
   stay_minutes: number;
   blocked: number;
   warnings: number;
@@ -166,9 +168,10 @@ export function percentChange(now: number, before: number): number | null {
   return before > 0 ? Math.round(((now - before) / before) * 100) : null;
 }
 
+/** The average stay over the exits whose stay is known; figures from before timed_exits existed use every exit. */
 export const averageStay = (figures: Partial<ReportFigures>): number => {
-  const exits = figures.exits ?? 0;
-  return exits > 0 ? Math.round((figures.stay_minutes ?? 0) / exits) : 0;
+  const timed = figures.timed_exits ?? figures.exits ?? 0;
+  return timed > 0 ? Math.round((figures.stay_minutes ?? 0) / timed) : 0;
 };
 
 export const entriesOf = (figures: Partial<ReportFigures>): number => (figures.vehicles_in ?? 0) + (figures.people_in ?? 0);

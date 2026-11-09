@@ -15,6 +15,8 @@ export type RollCallRow = {
   detail: string;
   /** People still to see for this row besides the one named: a car's passengers. */
   others: number;
+  /** How many of those passengers are children. */
+  children: number;
   cameIn: string;
   gate: string;
 };
@@ -28,6 +30,8 @@ type Props = {
   sections: readonly Section[];
   /** Everyone to account for, passengers and gate staff included. */
   headcount: number;
+  /** How many of them are children, counted in cars at the gate. */
+  childCount: number;
   /** False when the site has more people inside than one list holds. */
   complete: boolean;
 };
@@ -51,7 +55,7 @@ function Tick({ checked, label, onToggle }: { checked: boolean; label: string; o
  * The marshal's list for an evacuation: everyone inside right now, ticked off as they reach the assembly point. Ticks
  * live in this page only, never on the server, and survive a refresh of the list. It prints as plain A4.
  */
-export function RollCall({ site, company, generatedAt, sections, headcount, complete }: Props) {
+export function RollCall({ site, company, generatedAt, sections, headcount, childCount, complete }: Props) {
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
@@ -104,7 +108,9 @@ export function RollCall({ site, company, generatedAt, sections, headcount, comp
         <div className="rounded-lg bg-ink px-5 py-4 text-ink-inverse">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-inverse/70">To account for</p>
           <p className="font-display text-5xl font-bold tabular-nums tracking-tight">{headcount}</p>
-          <p className="text-xs text-ink-inverse/70">People inside, passengers and gate staff included</p>
+          <p className="text-xs text-ink-inverse/70">
+            {childCount ? `People inside, passengers and gate staff included: ${childCount === 1 ? "1 is a child" : `${childCount} are children`}` : "People inside, passengers and gate staff included"}
+          </p>
         </div>
         <div className={`rounded-lg px-5 py-4 ${allClear ? "bg-clear-soft" : "bg-surface-muted"}`}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -163,7 +169,9 @@ export function RollCall({ site, company, generatedAt, sections, headcount, comp
                         <p className={`font-semibold ${done ? "text-ink-muted line-through decoration-clear decoration-2" : ""}`}>{row.name}</p>
                         <p className="text-xs text-ink-muted">
                           {row.detail}
-                          {row.others > 0 ? <span className="font-semibold text-ink">{` · +${row.others} with them`}</span> : null}
+                          {row.others > 0 ? (
+                            <span className="font-semibold text-ink">{` · +${row.others} with them${row.children ? `, ${row.children === 1 ? "1 child" : `${row.children} children`}` : ""}`}</span>
+                          ) : null}
                         </p>
                       </td>
                       <td className="hidden py-2.5 align-top tabular-nums text-ink-muted sm:table-cell">{row.cameIn}</td>

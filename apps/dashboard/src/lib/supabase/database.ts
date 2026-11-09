@@ -176,6 +176,7 @@ export type Database = {
           site_id: string
           stay_minutes: number
           turned_away: number
+          untimed_exits: number
           vehicles_in: number
           visit_types: Json
           warnings: number
@@ -194,6 +195,7 @@ export type Database = {
           site_id: string
           stay_minutes?: number
           turned_away?: number
+          untimed_exits?: number
           vehicles_in?: number
           visit_types?: Json
           warnings?: number
@@ -212,6 +214,7 @@ export type Database = {
           site_id?: string
           stay_minutes?: number
           turned_away?: number
+          untimed_exits?: number
           vehicles_in?: number
           visit_types?: Json
           warnings?: number
@@ -1502,6 +1505,31 @@ export type Database = {
       }
     }
     Views: {
+      all_check_records: {
+        Row: {
+          id: string | null
+          in_full: boolean | null
+          occupants: number | null
+          occurred_at: string | null
+          org_id: string | null
+          outcome: string | null
+          person_name: string | null
+          plate: string | null
+          post: string | null
+          rule_codes: string[] | null
+          scanned_by: string | null
+          site_id: string | null
+          source: string | null
+          type: string | null
+          typed_plate: string | null
+          vehicle_description: string | null
+          vehicle_search: string | null
+          visit_entered_at: string | null
+          visit_id: string | null
+          visit_type: string | null
+        }
+        Relationships: []
+      }
       check_records: {
         Row: {
           details_erased: boolean | null
@@ -1889,6 +1917,10 @@ export type Database = {
         Args: { _org: string; _rows: Json; _site: string }
         Returns: number
       }
+      imported_kind: {
+        Args: { _colour: string; _make: string; _model: string; _plate: string }
+        Returns: string
+      }
       in_org: { Args: { _org: string }; Returns: boolean }
       ingest_events: {
         Args: { _device_id: string; _events: Json }
@@ -2052,6 +2084,12 @@ export type Database = {
           _payload: Json
           _site: string
           _type: string
+        }
+        Returns: undefined
+      }
+      tally_imported_check: {
+        Args: {
+          _check: Database["digigate"]["Tables"]["imported_checks"]["Row"]
         }
         Returns: undefined
       }

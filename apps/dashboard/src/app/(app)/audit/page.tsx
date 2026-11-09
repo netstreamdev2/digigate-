@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { problemWhen } from "@/components/tile-colour";
 import { PageSkeleton } from "@/components/skeleton";
 import { FilterBar } from "@/components/filter-bar";
 import { GlassStat } from "@/components/glass";
@@ -87,7 +88,7 @@ async function AuditLog({ searchParams }: { searchParams: Promise<Query> }) {
         <GlassStat label="Entries in this range" value={countLabel(everything)} icon="audit-log" note={`${longDate(fromDay)} to ${longDate(toDay)}`} />
         <GlassStat label="At the gate" value={countLabel(counts.gate ?? 0)} icon="guard" note="Overrides, decisions and shifts" />
         <GlassStat label="Dashboard changes" value={countLabel((counts.setup ?? 0) + (counts.people ?? 0) + (counts.devices ?? 0))} icon="settings" note="Setup, people and devices" />
-        <GlassStat label="Flags at the sites" value={countLabel(counts.alerts ?? 0)} icon="alerts" note="Every mismatch and alarm, and who closed it" />
+        <GlassStat label="Flags at the sites" value={countLabel(counts.alerts ?? 0)} icon="alerts" meaning={problemWhen(counts.alerts ?? 0)} note="Every mismatch and alarm, and who closed it" />
       </section>
 
       <div className="mt-6">

@@ -35,6 +35,7 @@ async function Evacuation({ params }: { params: Promise<{ site: string }> }) {
       name: person.person,
       detail: [person.plate, person.vehicle].filter(Boolean).join(" · ") || "Vehicle",
       others: person.occupants - 1,
+      children: person.children,
       cameIn: cameIn(person.enteredAt),
       gate: gateLabel(person.post),
     }));
@@ -45,16 +46,18 @@ async function Evacuation({ params }: { params: Promise<{ site: string }> }) {
       name: person.person,
       detail: person.visitType ? plainLabel(person.visitType) : "Pedestrian",
       others: 0,
+      children: 0,
       cameIn: cameIn(person.enteredAt),
       gate: gateLabel(person.post),
     }));
   // Gate staff stay at their posts last, but they're people to account for too.
   const staff: RollCallRow[] = gates.flatMap((gate) =>
     gate.onDutySince
-      ? [{ id: `post-${gate.post}`, name: gate.guard ?? "Guard on duty", detail: "Gate staff", others: 0, cameIn: cameIn(gate.onDutySince), gate: gate.label }]
+      ? [{ id: `post-${gate.post}`, name: gate.guard ?? "Guard on duty", detail: "Gate staff", others: 0, children: 0, cameIn: cameIn(gate.onDutySince), gate: gate.label }]
       : [],
   );
   const headcount = [...cars, ...onFoot, ...staff].reduce((sum, row) => sum + 1 + row.others, 0);
+  const children = cars.reduce((sum, row) => sum + row.children, 0);
 
   return (
     <AppShell
@@ -68,6 +71,7 @@ async function Evacuation({ params }: { params: Promise<{ site: string }> }) {
         company={company}
         generatedAt={`${timeOfDay(now)} on ${shortDate(now)}`}
         headcount={headcount}
+        childCount={children}
         complete={complete}
         sections={[
           { title: "In vehicles", icon: "vehicle", rows: cars, empty: "No vehicles inside." },

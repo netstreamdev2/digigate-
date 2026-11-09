@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Icon, type IconName } from "./icon";
+import { tileColour, type TileMeaning } from "./tile-colour";
 
 type PanelProps = {
   title?: string;
@@ -60,16 +61,17 @@ type StatProps = {
   icon: IconName;
   trend?: Trend;
   note?: string;
-  /** Tints the badge to draw the eye. */
-  attention?: boolean;
+  /** Sets the tile's colour: entries green, exits purple, problems red, warnings amber (components/tile-colour.ts). */
+  meaning?: TileMeaning;
 };
 
 /** One headline figure on glass. */
-export function GlassStat({ label, value, icon, trend, note, attention = false }: StatProps) {
+export function GlassStat({ label, value, icon, trend, note, meaning = "neutral" }: StatProps) {
+  const { style, chip } = tileColour(meaning);
   return (
-    <div className="dg-glass p-5">
+    <div className="dg-glass dg-tile p-5" style={style}>
       <div className="flex items-center gap-3">
-        <span className={`grid size-10 shrink-0 place-items-center rounded-pill ${attention ? "bg-blocked-soft text-blocked" : "dg-glass-soft text-brand"}`}>
+        <span className={`grid size-10 shrink-0 place-items-center rounded-pill ${chip}`}>
           <Icon name={icon} />
         </span>
         <p className="min-w-0 truncate text-sm font-medium text-ink-muted">{label}</p>

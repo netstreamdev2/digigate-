@@ -1095,6 +1095,25 @@ check('and can search them by the car', oldSeen[0].vehicle_search.includes('whit
 check('another company sees none of them', (await as('authenticated', ADMIN_B, 'aal2', 'select id from digigate.imported_check_records')).rows.length === 0);
 check('nobody reads the table itself', (await as('authenticated', ADMIN_A, 'aal2', 'select id from digigate.imported_checks')).rows.length === 0);
 check('neither the dashboard nor the service key can import', !(await one(`select has_function_privilege('service_role', 'digigate.import_old_checks(uuid, uuid, jsonb)', 'execute') a`)).a && !(await one(`select has_function_privilege('authenticated', 'digigate.import_old_checks(uuid, uuid, jsonb)', 'execute') a`)).a);
+
+// One list: DigiGate's checks and the old system's together, each company seeing only its own.
+const oneList = (profile) => as('authenticated', profile, 'aal2', `select type, source, person_name, occupants, scanned_by from digigate.all_check_records where source = 'old-system' order by occurred_at`);
+const listedOld = (await oneList(ADMIN_A)).rows;
+check('the old checks are in the one list of checks', listedOld.length === 2 && listedOld[0].person_name === 'N MOKOENA' && listedOld[0].scanned_by === 'Sipho Dube');
+check('with a car, an old check is a vehicle entry or exit', listedOld[0].type === 'vehicle_entry' && listedOld[1].type === 'vehicle_exit');
+check('DigiGate\x27s own checks are in the same list', (await as('authenticated', ADMIN_A, 'aal2', `select id from digigate.all_check_records where source = 'digigate'`)).rows.length > 0);
+check('another company sees none of the old checks in it', (await oneList(ADMIN_B)).rows.length === 0);
+
+// The old checks count in the day figures the reports read, once each.
+const dayOf = async (at) => (await one(`select ($1::timestamptz at time zone 'Africa/Johannesburg')::date::text as d`, [at])).d;
+const OLD_IN_DAY = await dayOf(oldRows[0].at), OLD_OUT_DAY = await dayOf(oldRows[1].at);
+const oldOutDay = await one(`select exits, untimed_exits from digigate.daily_activity where site_id = $1 and day = $2`, [SITE_A, OLD_OUT_DAY]);
+check('an old exit counts as an exit with no stay', oldOutDay?.exits >= 1 && oldOutDay?.untimed_exits === 1);
+check('importing it again counted nothing twice', oldOutDay?.untimed_exits === 1);
+const oldInCounted = await one(`select visits from digigate.daily_counts where site_id = $1 and day = $2 and kind = 'vehicle' and visit_type = 'visitor' and sex = 'female' and age_band = 'unknown'`, [SITE_A, OLD_IN_DAY]);
+check('an old entry counts by its visit type and the driver\x27s sex', (oldInCounted?.visits ?? 0) >= 1);
+const oldReport = (await service(`select digigate.report_data('${ORG_A}', null, 'daily', '${OLD_OUT_DAY}') as r`)).rows[0].r;
+check('the report leaves exits with no stay out of the average', oldReport.totals.timed_exits === oldReport.totals.exits - 1);
 await db.exec(`update digigate.imported_checks set erase_after = now() - interval '1 day' where source_ref = 'OLD-1'`);
 const oldErased = (await service('select digigate.erase_due(5000) as r')).rows[0]?.r;
 check('the nightly job erases an old check when its three years are up', oldErased?.imported === 1 && (await count(`digigate.imported_checks where source_ref = 'OLD-1'`)) === 0);

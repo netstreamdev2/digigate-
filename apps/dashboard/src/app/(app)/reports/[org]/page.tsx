@@ -23,6 +23,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { problemWhen, warningWhen } from "@/components/tile-colour";
 import { PageSkeleton } from "@/components/skeleton";
 import { DataTable, TwoLine } from "@/components/data-table";
 import { ConfirmAction } from "@/components/dialog";
@@ -170,13 +171,13 @@ async function CompanyReport({ params, searchParams }: { params: Promise<{ org: 
     >
       <section aria-label="Key figures" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <GlassStat label="Scans" value={compactCount(count(totals.checks))} icon="visits" {...moved(count(totals.checks), count(prior.checks))} />
-        <GlassStat label="Entries" value={compactCount(entriesOf(totals))} icon="entry" {...moved(entriesOf(totals), entriesOf(prior))} />
-        <GlassStat label="Exits" value={compactCount(count(totals.exits))} icon="exit" {...moved(count(totals.exits), count(prior.exits))} />
+        <GlassStat label="Entries" value={compactCount(entriesOf(totals))} icon="entry" meaning="entry" {...moved(entriesOf(totals), entriesOf(prior))} />
+        <GlassStat label="Exits" value={compactCount(count(totals.exits))} icon="exit" meaning="exit" {...moved(count(totals.exits), count(prior.exits))} />
         <GlassStat label="Average stay" value={stayLabel(averageStay(totals))} icon="duration" {...moved(averageStay(totals), averageStay(prior))} />
-        <GlassStat label="Stopped at the gate" value={compactCount(count(totals.blocked))} icon="result-blocked" attention={count(totals.blocked) > 0} {...moved(count(totals.blocked), count(prior.blocked), "bad")} />
-        <GlassStat label="Warnings" value={compactCount(count(totals.warnings))} icon="result-warning" {...moved(count(totals.warnings), count(prior.warnings), "bad")} />
-        <GlassStat label="Supervisor overrides" value={compactCount(count(totals.overrides))} icon="override" {...moved(count(totals.overrides), count(prior.overrides), "bad")} />
-        <GlassStat label="Turned away" value={compactCount(count(totals.turned_away))} icon="exit" {...moved(count(totals.turned_away), count(prior.turned_away))} />
+        <GlassStat label="Stopped at the gate" value={compactCount(count(totals.blocked))} icon="result-blocked" meaning={problemWhen(count(totals.blocked))} {...moved(count(totals.blocked), count(prior.blocked), "bad")} />
+        <GlassStat label="Warnings" value={compactCount(count(totals.warnings))} icon="result-warning" meaning={warningWhen(count(totals.warnings))} {...moved(count(totals.warnings), count(prior.warnings), "bad")} />
+        <GlassStat label="Supervisor overrides" value={compactCount(count(totals.overrides))} icon="override" meaning={warningWhen(count(totals.overrides))} {...moved(count(totals.overrides), count(prior.overrides), "bad")} />
+        <GlassStat label="Turned away" value={compactCount(count(totals.turned_away))} icon="exit" meaning={problemWhen(count(totals.turned_away))} {...moved(count(totals.turned_away), count(prior.turned_away))} />
       </section>
 
       <div className="mt-6 grid items-start gap-6 xl:grid-cols-3">

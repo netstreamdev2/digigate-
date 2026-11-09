@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { problemWhen } from "@/components/tile-colour";
 import { PageSkeleton } from "@/components/skeleton";
 import { Card } from "@/components/card";
 import { DataTable, TwoLine } from "@/components/data-table";
@@ -188,7 +189,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
           value={String(summary.quiet)}
           icon="result-warning"
           detail={summary.quiet ? `${plural(summary.quiet, "guard")} on duty on these` : "Every guard's device is answering"}
-          tone={summary.quiet ? "blocked" : "neutral"}
+          meaning={problemWhen(summary.quiet)}
         />
         <StatTile label="Offline" value={String(summary.offline)} icon="offline" detail="Nobody on duty on these" />
       </section>

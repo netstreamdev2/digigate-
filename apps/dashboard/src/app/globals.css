@@ -24,6 +24,8 @@
   --color-warning-soft: var(--dg-color-warning-soft);
   --color-blocked: var(--dg-color-blocked);
   --color-blocked-soft: var(--dg-color-blocked-soft);
+  --color-exit: var(--dg-color-exit);
+  --color-exit-soft: var(--dg-color-exit-soft);
   --color-series-1: var(--dg-color-series-1);
   --color-series-2: var(--dg-color-series-2);
   --color-series-3: var(--dg-color-series-3);
@@ -330,6 +332,27 @@ body {
     transition:
       box-shadow 300ms ease,
       border-color 300ms ease;
+  }
+
+  /*
+   * Figure tiles carry their meaning in colour (components/tile-colour.ts): entries green, exits purple, problems red,
+   * warnings amber, everything else DigiGate blue. A coloured top edge and a soft wash from the top corner, behind the
+   * content, so the figure itself stays plain ink and easy to read.
+   */
+  .dg-tile {
+    overflow: hidden;
+  }
+
+  .dg-tile::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      linear-gradient(var(--dg-tile-colour), var(--dg-tile-colour)) top / 100% 4px no-repeat,
+      linear-gradient(135deg, var(--dg-tile-soft) 0%, transparent 62%);
   }
 
   /* Light on the glass: a soft glow under the pointer, behind the panel's content (components/motion.tsx). */

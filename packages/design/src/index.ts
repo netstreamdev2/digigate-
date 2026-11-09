@@ -23,6 +23,10 @@ export const colors = {
   warningSoft: '#FFF1CC',
   blocked: '#D92D20',
   blockedSoft: '#FDE4E1',
+  // Exits are purple wherever the dashboard counts or lists them (the user's choice, 2026-11-09): entries take `clear`'s
+  // green, problems `blocked`'s red. 6.4:1 on white, so it can carry icons and small text.
+  exit: '#6B3FD3',
+  exitSoft: '#EEE9FC',
 } as const;
 
 // Categorical chart colours in fixed order. Validated 2026-10-28 for colour-blind separation on the white

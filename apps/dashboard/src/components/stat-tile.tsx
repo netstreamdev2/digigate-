@@ -1,22 +1,21 @@
 import { Icon, type IconName } from "./icon";
+import { tileColour, type TileMeaning } from "./tile-colour";
 
 export type Kpi = {
   label: string;
   value: string;
   icon: IconName;
   detail?: string;
-  /** Warning is for something nearing its limit, such as a car park almost full; blocked is for one past it. */
-  tone?: "neutral" | "warning" | "blocked";
+  /** Sets the tile's colour: entries green, exits purple, problems red, warnings amber (components/tile-colour.ts). */
+  meaning?: TileMeaning;
 };
 
-export function StatTile({ label, value, icon, detail, tone = "neutral" }: Kpi) {
-  const toneClass = tone === "blocked" ? "bg-blocked-soft text-blocked" : tone === "warning" ? "bg-warning-soft text-warning" : "bg-tile-sky text-brand shadow-glow";
+export function StatTile({ label, value, icon, detail, meaning = "neutral" }: Kpi) {
+  const { style, chip } = tileColour(meaning);
   return (
-    <div className="dg-glass p-5">
+    <div className="dg-glass dg-tile p-5" style={style}>
       <div className="flex items-center gap-3">
-        <span
-          className={`grid size-10 place-items-center rounded-pill ${toneClass}`}
-        >
+        <span className={`grid size-10 place-items-center rounded-pill shadow-glow ${chip}`}>
           <Icon name={icon} />
         </span>
         <p className="text-sm font-medium text-ink-muted">{label}</p>

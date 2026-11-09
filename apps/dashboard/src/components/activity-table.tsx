@@ -1,4 +1,4 @@
-import { Icon } from "./icon";
+import { DirectionChip } from "./direction-chip";
 import { StatusChip } from "./status-chip";
 
 export type ActivityRow = {
@@ -11,7 +11,8 @@ export type ActivityRow = {
   plate: string;
   gate: string;
   stay: string;
-  result: "clear" | "warning" | "blocked";
+  /** Info is a check from the site's old gate system, which had no result of its own. */
+  result: "clear" | "warning" | "blocked" | "info";
 };
 
 // The result sits beside the time so it can never scroll out of sight on a narrow screen.
@@ -42,10 +43,7 @@ export function ActivityTable({ rows }: { rows: readonly ActivityRow[] }) {
                 <p className="text-xs text-ink-muted">{row.visitType}</p>
               </td>
               <td className="py-3 pr-4">
-                <span className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-surface-muted px-2.5 text-xs font-semibold">
-                  <Icon name={row.direction === "in" ? "entry" : "exit"} className="size-4" />
-                  {row.direction === "in" ? "In" : "Out"}
-                </span>
+                <DirectionChip direction={row.direction} />
               </td>
               <td className="py-3 pr-4">
                 <p>{row.vehicle}</p>

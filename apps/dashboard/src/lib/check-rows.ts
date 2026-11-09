@@ -1,6 +1,6 @@
 import { ruleTitle } from "@digigate/core";
 
-import type { CheckRow } from "@/app/(app)/control-room/check-activity";
+import type { CheckRow, OldSystemFacts } from "@/app/(app)/control-room/check-activity";
 
 import type { Check } from "./control-room";
 import { duration, labelFor, shortDate, timeOfDay } from "./format";
@@ -24,8 +24,12 @@ function resultOf(check: Check): Pick<CheckRow, "result" | "resultLabel"> {
   return { result: "clear", resultLabel: null };
 }
 
-/** One check as the tables show it. `withDay` puts the date before the time, for lists that run over several days. */
-export function checkRowOf(check: Check, gate: string, now: number, withDay = false): CheckRow {
+/**
+ * One check as the tables show it. `withDay` puts the date before the time, for lists that run over several days. A
+ * check from the site's old gate system had no result and no paired visit, so it says where it came from instead.
+ */
+export function checkRowOf(check: Check & { oldSystem?: OldSystemFacts | null }, gate: string, now: number, withDay = false): CheckRow {
+  const oldSystem = check.oldSystem ?? null;
   return {
     id: check.id,
     time: withDay ? `${shortDate(check.occurredAt)}, ${timeOfDay(check.occurredAt)}` : timeOfDay(check.occurredAt),
@@ -35,8 +39,9 @@ export function checkRowOf(check: Check, gate: string, now: number, withDay = fa
     vehicle: check.vehicle ?? "Pedestrian",
     plate: check.plate ?? NO_VALUE,
     gate,
-    stay: stayOf(check, now),
-    ...resultOf(check),
+    stay: oldSystem ? NO_VALUE : stayOf(check, now),
+    ...(oldSystem ? { result: "info" as const, resultLabel: "Old system" } : resultOf(check)),
     alerts: check.ruleCodes.map(ruleTitle),
+    oldSystem,
   };
 }
