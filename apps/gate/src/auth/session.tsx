@@ -12,6 +12,9 @@ import type { GateUser } from './users';
 const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_MS = 5 * 60_000;
 const IDLE_CHECK_MS = 10_000;
+// Android reports DigiGate as gone to the background for any pause: a permission screen, or the camera taking over the
+// display for a moment. A pause shorter than this isn't leaving, so it doesn't lock.
+const AWAY_GRACE_MS = 5_000;
 
 export type LockReason = 'manual' | 'idle' | 'screen-off';
 
@@ -180,13 +183,29 @@ export function SessionProvider({ store, idleLockMinutes, children }: Props) {
     return () => clearInterval(timer);
   }, [idleLockMinutes, lockWith, state.status]);
 
-  // A shared device that goes dark, or leaves DigiGate, locks at once: whoever picks it up next needs a PIN.
+  // A shared device that goes dark, or leaves DigiGate, locks once it has been away a few seconds: whoever picks it up
+  // next needs a PIN. The lock is set while it's still away, so the screen it comes back to is already covered.
   useEffect(() => {
     if (state.status !== 'active') return;
+    let leftAt: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const subscription = AppState.addEventListener('change', (next) => {
-      if (next === 'background') lockWith('screen-off');
+      if (next === 'background') {
+        leftAt = Date.now();
+        timer = setTimeout(() => lockWith('screen-off'), AWAY_GRACE_MS);
+        return;
+      }
+      if (next !== 'active') return;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      // Android can hold a timer back while the device sleeps, so the time away decides as well.
+      if (leftAt !== null && Date.now() - leftAt >= AWAY_GRACE_MS) lockWith('screen-off');
+      leftAt = null;
     });
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      if (timer) clearTimeout(timer);
+    };
   }, [lockWith, state.status]);
 
   const api = useMemo<SessionApi>(

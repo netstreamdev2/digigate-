@@ -114,7 +114,8 @@ export const siteConfig = {
   ] satisfies readonly PostOption[],
   /** A shift nobody ended is over after this long, so the next sign-in has to start a new one. */
   maxShiftHours: 14,
-  idleLockMinutes: 3,
+  /** The screen locks after this long without a touch or a scan (8 minutes, the user's choice on 2026-11-10). */
+  idleLockMinutes: 8,
   /** How long the post's geofence stays quiet after a guard says they're stepping away. */
   steppingAwayMinutes: 10,
   steppingAwayReasons: ['Toilet break', 'Patrol', 'Helping someone', 'Called by a supervisor'],

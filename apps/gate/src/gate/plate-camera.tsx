@@ -70,7 +70,15 @@ function NoCamera({ message, onType }: { message: string; onType: () => void }) 
 }
 
 function CameraStep({ camera: library, onUse, onType }: { camera: Camera } & Pick<Props, 'onUse' | 'onType'>) {
-  const [permission] = library.useCameraPermissions({ request: true });
+  const [permission, requestPermission] = library.useCameraPermissions();
+  // Ask only when it isn't granted yet: asking again flashes Android's permission screen, which pauses DigiGate.
+  useEffect(() => {
+    if (permission && !permission.granted && permission.canAskAgain) {
+      requestPermission().catch(() => {
+        // Nothing to do: the camera stays closed and the guard can still go on without the photo.
+      });
+    }
+  }, [permission, requestPermission]);
   const camera = useRef<CameraHandle>(null);
   const [ready, setReady] = useState(false);
   const [size, setSize] = useState<string>();

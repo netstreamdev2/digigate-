@@ -109,7 +109,7 @@ export default function ShiftScreen() {
         <Field label="Employee number" value={user.employeeNumber} />
         <Field label="On duty since" value={clockTime(shift.startedAt)} />
         <Field label="Access point" value={`${postLabel(shift.post)} · ${periodHours(shift.period)}`} />
-        <Field label="Screen locks" value={`After ${siteConfig.idleLockMinutes} minutes without a touch or a scan, or when the screen goes off`} />
+        <Field label="Screen locks" value={`After ${siteConfig.idleLockMinutes} minutes without a touch or a scan, or once the screen has been off for 5 seconds`} />
         <Field label="Sync" value={syncSummary(sync.status, sync.pendingEvents)} />
         <Field label="Device storage" value={encrypted ? 'Encrypted' : 'Not encrypted (Expo Go, demo data only)'} />
         <Field label="App" value={appVersionLine()} />

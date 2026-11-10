@@ -1,6 +1,6 @@
 import { colors, radius, space } from '@digigate/design';
 import { Image } from 'expo-image';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -55,7 +55,15 @@ function NoCamera({ message, onDone }: { message: string; onDone: Props['onDone'
 }
 
 function CameraStep({ camera: library, onDone }: { camera: Camera; onDone: Props['onDone'] }) {
-  const [permission] = library.useCameraPermissions({ request: true });
+  const [permission, requestPermission] = library.useCameraPermissions();
+  // Ask only when it isn't granted yet: asking again flashes Android's permission screen, which pauses DigiGate.
+  useEffect(() => {
+    if (permission && !permission.granted && permission.canAskAgain) {
+      requestPermission().catch(() => {
+        // Nothing to do: the camera stays closed and the guard can still go on without the photo.
+      });
+    }
+  }, [permission, requestPermission]);
   const camera = useRef<CameraHandle>(null);
   const [ready, setReady] = useState(false);
   const [size, setSize] = useState<string>();
