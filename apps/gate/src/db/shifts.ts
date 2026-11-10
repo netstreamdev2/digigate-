@@ -21,6 +21,9 @@ export type ShiftPhoto = { status: 'taken'; jpegBase64: string } | { status: 'sk
 
 export type PendingSelfie = { shiftId: string; jpegBase64: string };
 
+/** A shift a supervisor moved here from another handheld, where this guard was still on duty. */
+export type ShiftMove = { fromShiftId: string; bySupervisorId: string };
+
 export type ShiftEndReason = 'ended' | 'handover' | 'timed-out';
 
 type ShiftRow = {
@@ -61,8 +64,11 @@ export async function clearShifts(db: SQLiteDatabase): Promise<void> {
   await db.runAsync('DELETE FROM shifts');
 }
 
-/** Puts a guard on duty, ending the shift of whoever the device was still on. The photo commits with the shift itself. */
-export async function beginShift(db: SQLiteDatabase, shift: Shift, photo: ShiftPhoto): Promise<void> {
+/**
+ * Puts a guard on duty, ending the shift of whoever the device was still on. The photo commits with the shift itself.
+ * A move tells the server to end the guard's shift on the other handheld, which signs them out there at its next sync.
+ */
+export async function beginShift(db: SQLiteDatabase, shift: Shift, photo: ShiftPhoto, move: ShiftMove | null = null): Promise<void> {
   await db.withTransactionAsync(async () => {
     const previous = await openShift(db);
     if (previous) await writeEnd(db, previous, shift.startedAt, 'handover');
@@ -78,7 +84,13 @@ export async function beginShift(db: SQLiteDatabase, shift: Shift, photo: ShiftP
       type: 'shift_start',
       occurredAt: shift.startedAt,
       gateUserId: shift.gateUserId,
-      payload: { shift_id: shift.id, post: shift.post, period: shift.period, selfie: photo.status },
+      payload: {
+        shift_id: shift.id,
+        post: shift.post,
+        period: shift.period,
+        selfie: photo.status,
+        ...(move ? { moved_from: move.fromShiftId, moved_by: move.bySupervisorId } : {}),
+      },
     });
     if (photo.status === 'taken') {
       await db.runAsync('INSERT INTO shift_selfies (shift_id, taken_at, jpeg_base64) VALUES (?, ?, ?)', [shift.id, shift.startedAt, photo.jpegBase64]);

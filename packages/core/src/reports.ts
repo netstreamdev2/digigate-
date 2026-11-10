@@ -79,6 +79,7 @@ export const RULE_TITLES: Readonly<Record<string, string>> = {
   DRIVER_LEFT_ON_FOOT: 'Driver left on foot',
   UNFAMILIAR_VEHICLE: 'Unfamiliar vehicle',
   LEFT_POST: 'Guard left their post',
+  GUARD_ON_TWO_DEVICES: 'Guard on two handhelds',
 };
 
 const FREQUENCY_LABELS: Readonly<Record<ReportFrequency, string>> = {

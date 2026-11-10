@@ -2,7 +2,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { isPinHash } from '@/auth/pin';
 import { isGateUserRole, type GateUser } from '@/auth/users';
-import { replaceGateUsers } from '@/db/gate-users';
+import { endMovedShift, saveDutyElsewhere } from '@/db/duty-elsewhere';
+import { gateUserFirstName, replaceGateUsers } from '@/db/gate-users';
 import { pendingEvents, removeEvents } from '@/db/outbox';
 import { pendingLicencePhoto, removeLicencePhoto } from '@/db/licence-photos';
 import { pendingPlatePhoto, removePlatePhoto } from '@/db/plate-photos';
@@ -214,6 +215,12 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
     }));
   }
   if (isSiteToday(body.siteToday)) await saveSiteToday(db, body.siteToday, Date.now());
+  // One guard, one handheld: who is on duty elsewhere, and whether a supervisor moved this handheld's shift away.
+  if (Array.isArray(body.onDutyElsewhere)) await saveDutyElsewhere(db, body.onDutyElsewhere);
+  if (Array.isArray(body.movedShifts)) {
+    const moved = body.movedShifts.filter((id): id is string => typeof id === 'string');
+    await endMovedShift(db, moved, (id) => gateUserFirstName(db, id));
+  }
 
   return { status: 'synced', at: Date.now(), uploaded, users: users.length };
 }

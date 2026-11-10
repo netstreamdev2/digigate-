@@ -1119,6 +1119,33 @@ const oldErased = (await service('select digigate.erase_due(5000) as r')).rows[0
 check('the nightly job erases an old check when its three years are up', oldErased?.imported === 1 && (await count(`digigate.imported_checks where source_ref = 'OLD-1'`)) === 0);
 check('and says so in the log, in counts', (await one(`select detail from digigate.audit_log where action = 'erasure.ran' order by at desc limit 1`)).detail === '1 old-system checks');
 
+// One guard, one handheld: another handheld knows who is on duty, a supervisor can move a shift, and a guard on duty
+// on two handhelds that couldn't see each other raises an alert.
+const minutesAgo = (minutes) => Date.now() - minutes * 60_000;
+const shiftEvent = (id, minutes, payload) => ({ id: u(id), type: 'shift_start', occurredAt: minutesAgo(minutes), gateUserId: ELSEWHERE, payload: { post: 'back-gate', period: 'day', ...payload } });
+const onDevice = (device, events) => service('select digigate.ingest_events($1, $2::jsonb) as ids', [device, JSON.stringify(events)]);
+const snapshotOf = async (device) => (await service('select digigate.device_snapshot($1) as s', [device])).rows[0].s;
+const FIRST_SHIFT = u(7001), SECOND_SHIFT = u(7003), MOVED_SHIFT = u(7005);
+await onDevice(DEVICE, [shiftEvent(7002, 30, { shift_id: FIRST_SHIFT })]);
+check('another handheld knows the guard is on duty', (await snapshotOf(SECOND_DEVICE)).onDutyElsewhere.some((row) => row.gateUserId === ELSEWHERE && row.shiftId === FIRST_SHIFT && row.post === 'Back Gate'));
+check('a handheld does not list its own shift as elsewhere', !(await snapshotOf(DEVICE)).onDutyElsewhere.some((row) => row.shiftId === FIRST_SHIFT));
+await onDevice(SECOND_DEVICE, [shiftEvent(7004, 20, { shift_id: SECOND_SHIFT })]);
+const twoDevices = await one(`select severity, source, status from digigate.alerts where event_id = '${u(7004)}' and rule_code = 'GUARD_ON_TWO_DEVICES'`);
+check('a guard on duty on two handhelds raises an amber alert', twoDevices?.severity === 'amber' && twoDevices.source === 'server' && twoDevices.status === 'open');
+await onDevice(SECOND_DEVICE, [{ id: u(7006), type: 'shift_end', occurredAt: minutesAgo(15), gateUserId: ELSEWHERE, payload: { shift_id: SECOND_SHIFT, reason: 'ended' } }]);
+await onDevice(SECOND_DEVICE, [shiftEvent(7007, 10, { shift_id: MOVED_SHIFT, moved_from: FIRST_SHIFT, moved_by: SUPERVISOR })]);
+check('a supervisor moving the shift ends the one it came from', (await one(`select end_reason from digigate.shifts where id = '${FIRST_SHIFT}'`)).end_reason === 'moved');
+check('and raises no alert, since it was approved', (await count(`digigate.alerts where event_id = '${u(7007)}'`)) === 0);
+check('the old handheld learns its shift moved', (await snapshotOf(DEVICE)).movedShifts.includes(FIRST_SHIFT));
+check('the move is logged with the supervisor', (await one(`select actor_name, detail from digigate.audit_log where action = 'gate.shift_moved' order by at desc limit 1`))?.actor_name === 'Kagiso Mokoena');
+const otherOpen = await one(`select id from digigate.shifts where gate_user_id <> '${ELSEWHERE}' and ended_at is null and device_id = '${DEVICE}' limit 1`);
+if (otherOpen) {
+  await onDevice(SECOND_DEVICE, [shiftEvent(7008, 5, { shift_id: u(7009), moved_from: otherOpen.id, moved_by: SUPERVISOR })]);
+  check('a move can only end that same guard\x27s shift', (await one(`select ended_at from digigate.shifts where id = '${otherOpen.id}'`)).ended_at === null);
+}
+await onDevice(SECOND_DEVICE, [{ id: u(7010), type: 'shift_end', occurredAt: minutesAgo(1), gateUserId: ELSEWHERE, payload: { shift_id: MOVED_SHIFT, reason: 'ended' } }]);
+await onDevice(SECOND_DEVICE, [{ id: u(7011), type: 'shift_end', occurredAt: minutesAgo(1), gateUserId: ELSEWHERE, payload: { shift_id: u(7009), reason: 'ended' } }]);
+
 // A client viewer, and a client changing security company.
 const VIEWER = u(17);
 await db.exec(`

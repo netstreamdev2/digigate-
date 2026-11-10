@@ -15,6 +15,7 @@ import { PinDots } from '@/components/pin-dots';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import { useLocalDatabase } from '@/db/database-context';
+import { takeMovedNotice, type MovedNotice } from '@/db/duty-elsewhere';
 import { countGateUsers } from '@/db/gate-users';
 import { siteName } from '@/site/site-config';
 import { useSync, type SyncStatus } from '@/sync/sync-context';
@@ -48,6 +49,18 @@ export function SignInPanel() {
   useEffect(() => {
     countGateUsers(db).then(setGuardCount, () => setGuardCount(null));
   }, [db, sync.status]);
+  // A guard signed out because a supervisor moved their shift to another handheld is told why, once.
+  const [moved, setMoved] = useState<MovedNotice | null>(null);
+  useEffect(() => {
+    takeMovedNotice(db).then(
+      (notice) => {
+        if (notice) setMoved(notice);
+      },
+      () => {
+        // Nothing to show: the guard simply signs in again.
+      },
+    );
+  }, [db, sync.status]);
   const [employeeNumber, setEmployeeNumber] = useState('');
   const [enteringPin, setEnteringPin] = useState(false);
   const [pin, setPin] = useState('');
@@ -74,6 +87,7 @@ export function SignInPanel() {
 
   const onDigit = (digit: string) => {
     setProblem(null);
+    setMoved(null);
     if (!pinStep) {
       if (employeeNumber.length < EMPLOYEE_NUMBER_MAX_LENGTH) setEmployeeNumber(employeeNumber + digit);
       return;
@@ -141,6 +155,13 @@ export function SignInPanel() {
           tone="warning"
           title="Record not saved"
           message="A lock or sign-out couldn't be saved on this device. Tell your supervisor."
+        />
+      ) : null}
+      {moved && !problem ? (
+        <ResultBanner
+          tone="warning"
+          title="Shift moved"
+          message={`A supervisor moved ${moved.firstName}'s shift to another handheld at ${new Date(moved.at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}, so they were signed out here.`}
         />
       ) : null}
       {guardCount === 0 && !lockedUser ? (

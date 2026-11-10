@@ -40,6 +40,12 @@ export async function findGateUser(db: SQLiteDatabase, employeeNumber: string): 
   return row ? toGateUser(row) : null;
 }
 
+/** A guard's first name, for a notice about them; null when they're no longer on this device's list. */
+export async function gateUserFirstName(db: SQLiteDatabase, id: string): Promise<string | null> {
+  const row = await db.getFirstAsync<{ first_name: string }>('SELECT first_name FROM gate_users WHERE id = ?', id);
+  return row?.first_name ?? null;
+}
+
 export async function countGateUsers(db: SQLiteDatabase): Promise<number> {
   const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM gate_users');
   return row?.count ?? 0;

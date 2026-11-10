@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import { useSession } from '@/auth/session';
 import { useLocalDatabase } from '@/db/database-context';
-import { beginShift, closeShift, openShift, type Shift, type ShiftPhoto } from '@/db/shifts';
+import { forgetDutyElsewhere } from '@/db/duty-elsewhere';
+import { beginShift, closeShift, openShift, type Shift, type ShiftMove, type ShiftPhoto } from '@/db/shifts';
 import { newEventId } from '@/lib/ids';
 import { hasBoomAt, lanesOf, postLabel, siteConfig, siteName, type Lane } from '@/site/site-config';
 import { useSync } from '@/sync/sync-context';
@@ -14,7 +15,8 @@ type ShiftApi = {
   shift: Shift | null | undefined;
   /** True when the device's shift record couldn't be read. */
   problem: boolean;
-  start(post: string, period: string, photo: ShiftPhoto): Promise<void>;
+  /** A move takes over the guard's shift from another handheld, with a supervisor's approval. */
+  start(post: string, period: string, photo: ShiftPhoto, move?: ShiftMove | null): Promise<void>;
   /** Ends the guard's shift and signs them out. */
   end(): Promise<void>;
 };
@@ -28,7 +30,8 @@ const ShiftContext = createContext<ShiftApi | null>(null);
  */
 export function ShiftProvider({ children }: { children: ReactNode }) {
   const { db } = useLocalDatabase();
-  const { eventRecorded } = useSync();
+  const { eventRecorded, status } = useSync();
+  const syncedAt = status.state === 'synced' ? status.lastSyncedAt : null;
   const { state, signOut } = useSession();
   const userId = state.status === 'signed-out' ? null : state.user.id;
   const [known, setKnown] = useState<{ forUser: string; shift: Shift | null } | null>(null);
@@ -64,12 +67,34 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
 
   const shift = userId !== null && known?.forUser === userId ? known.shift : undefined;
 
+  // A supervisor may have moved this guard's shift to another handheld. The sync has ended it here, so they're signed
+  // out, and the sign-in screen says why.
+  useEffect(() => {
+    if (syncedAt === null || !userId || !shift) return;
+    const onShift = shift.id;
+    let cancelled = false;
+    openShift(db).then(
+      (open) => {
+        if (cancelled || open?.id === onShift) return;
+        setKnown({ forUser: userId, shift: null });
+        signOut();
+      },
+      () => {
+        // The record couldn't be read this time; the next sync checks again.
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [db, shift, signOut, syncedAt, userId]);
+
   const start = useCallback(
-    async (post: string, period: string, photo: ShiftPhoto) => {
+    async (post: string, period: string, photo: ShiftPhoto, move: ShiftMove | null = null) => {
       if (!userId) return;
       const at = Date.now();
       const next: Shift = { id: newEventId(at), gateUserId: userId, post, period, startedAt: at, awayUntil: null };
-      await beginShift(db, next, photo);
+      await beginShift(db, next, photo, move);
+      if (move) await forgetDutyElsewhere(db, move.fromShiftId);
       setProblem(false);
       setKnown({ forUser: userId, shift: next });
       eventRecorded();

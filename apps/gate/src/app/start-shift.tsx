@@ -1,5 +1,5 @@
 import { colors, space } from '@digigate/design';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,16 +11,53 @@ import { OptionTile, wideTiles } from '@/components/option-tile';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
-import type { ShiftPhoto } from '@/db/shifts';
-import { currentPosts, currentShiftPeriods, shiftPeriodAt, siteName } from '@/site/site-config';
+import { useLocalDatabase } from '@/db/database-context';
+import { dutyElsewhereFor, type DutyElsewhere } from '@/db/duty-elsewhere';
+import type { ShiftMove, ShiftPhoto } from '@/db/shifts';
+import { SupervisorOverride } from '@/gate/supervisor-override';
+import { currentPosts, currentShiftPeriods, shiftPeriodAt, siteConfig, siteName } from '@/site/site-config';
 import { useShift } from '@/shift/shift-context';
 import { ShiftSelfie } from '@/shift/shift-selfie';
+
+const HOUR_MS = 60 * 60_000;
+
+/** Where and since when, in a guard's words: "Back Gate, Durban Hospital on DT50-2 since 06:00". */
+function whereOnDuty(duty: DutyElsewhere): string {
+  const since = new Date(duty.since);
+  const today = since.toDateString() === new Date().toDateString();
+  const time = since.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+  const when = today ? time : `${since.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}, ${time}`;
+  return `${duty.post}${duty.site ? `, ${duty.site}` : ''} on ${duty.device ?? 'another handheld'} since ${when}`;
+}
 
 export default function StartShiftScreen() {
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
   const { signOut } = useSession();
   const { start, problem } = useShift();
+  const { db } = useLocalDatabase();
+  // One guard, one handheld: a guard already on duty elsewhere can't start here unless a supervisor moves the shift.
+  const [elsewhere, setElsewhere] = useState<DutyElsewhere | null>(null);
+  const [move, setMove] = useState<ShiftMove | null>(null);
+  const [approving, setApproving] = useState(false);
+  const userId = user?.id ?? null;
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    dutyElsewhereFor(db, userId, Date.now(), siteConfig.maxShiftHours * HOUR_MS).then(
+      (duty) => {
+        if (!cancelled) setElsewhere(duty);
+      },
+      () => {
+        // The list couldn't be read. The shift can still start, and the server flags a guard on two handhelds.
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [db, userId]);
+  const blocked = elsewhere !== null && move === null;
   const [posts] = useState(currentPosts);
   const [post, setPost] = useState<string>(posts[0]?.code ?? '');
   const [periods] = useState(currentShiftPeriods);
@@ -36,7 +73,7 @@ export default function StartShiftScreen() {
     setStarting(true);
     setStartProblem(null);
     try {
-      await start(post, period, photo);
+      await start(post, period, photo, move);
     } catch (cause) {
       setStartProblem(`Your shift wasn't started (${cause instanceof Error ? cause.message : 'unknown error'}). Try the switch again.`);
       setStarting(false);
@@ -44,6 +81,22 @@ export default function StartShiftScreen() {
   };
 
   if (takingPhoto) return <ShiftSelfie onDone={begin} onCancel={() => setTakingPhoto(false)} />;
+
+  if (approving && elsewhere) {
+    return (
+      <SupervisorOverride
+        chip="Move shift"
+        fixedReason="Move the shift to this handheld"
+        notSupervisorMessage="Only a supervisor can move a guard's shift. Call one to the gate."
+        onCancel={() => setApproving(false)}
+        onConfirmed={(supervisor) => {
+          setApproving(false);
+          setMove({ fromShiftId: elsewhere.shiftId, bySupervisorId: supervisor.id });
+          setTakingPhoto(true);
+        }}
+      />
+    );
+  }
 
   return (
     <ScrollView
@@ -66,6 +119,19 @@ export default function StartShiftScreen() {
         <ResultBanner tone="warning" title="Shift record not read" message="DigiGate couldn't check who was on duty. Start your shift, and tell your supervisor." />
       ) : null}
       {startProblem ? <ResultBanner tone="warning" title="Not started" message={startProblem} /> : null}
+      {blocked && elsewhere && user ? (
+        <>
+          <ResultBanner
+            tone="blocked"
+            title="Already on duty"
+            message={`${user.firstName} is on duty at ${whereOnDuty(elsewhere)}. A guard can only be on duty on one handheld: end the shift there, or ask a supervisor to move it here.`}
+          />
+          <PillButton label="Move my shift here" icon="supervisor" onPress={() => setApproving(true)} />
+        </>
+      ) : null}
+      {move ? (
+        <ResultBanner tone="clear" title="Shift will move here" message="A supervisor approved it. The other handheld signs you out at its next sync." />
+      ) : null}
 
       <View style={styles.section}>
         <Text variant="overline" color={colors.inkMuted}>
@@ -118,7 +184,7 @@ export default function StartShiftScreen() {
         <Switch
           value={starting}
           onValueChange={() => setTakingPhoto(true)}
-          disabled={starting}
+          disabled={starting || blocked}
           trackColor={{ false: colors.border, true: colors.clear }}
           thumbColor={colors.surface}
           accessibilityLabel="Start my shift"
