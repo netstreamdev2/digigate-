@@ -14,6 +14,7 @@ import { saveSiteVisits, type SiteVisit } from '@/db/visits';
 import { saveBookings, saveHotlist, type SyncedBooking, type SyncedHotlistEntry } from '@/db/watch-lists';
 import { wipeRevokedDevice } from '@/db/wipe';
 import { isSyncedPost, syncedSiteOf, type SyncedPost } from '@/site/site-config';
+import { recordDeviceLog } from '@/device/device-log';
 
 import { callFunction, deviceToken } from './device-api';
 import { readDeviceHealth } from './device-health';
@@ -165,6 +166,9 @@ async function uploadPlatePhoto(db: SQLiteDatabase, token: string): Promise<void
 export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
   const token = await deviceToken();
   if (!token) return { status: 'not-paired' };
+
+  // What happened to the handheld since the last round goes into the outbox first, so it travels with everything else.
+  await recordDeviceLog(db);
 
   let uploaded = 0;
   for (let batch = await pendingEvents(db, UPLOAD_BATCH_SIZE); batch.length > 0; batch = await pendingEvents(db, UPLOAD_BATCH_SIZE)) {

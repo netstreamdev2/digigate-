@@ -31,7 +31,14 @@ export type GateEventType =
   /** A supervisor, standing at the access point, set where it is from the device's GPS. */
   | 'post_location_set'
   /** The guard said why a car left with a different number of people than came in. Sent after the check. */
-  | 'occupant_reason';
+  | 'occupant_reason'
+  /**
+   * Something happened to the handheld itself (switched off, no signal, mobile data off, DigiGate closed), recorded on
+   * the handheld when it happened and sent once it's back, so the control room knows why it went quiet.
+   */
+  | 'device_status'
+  /** A supervisor took the handheld out of DigiGate's control: its other apps, hotspot and settings are back. */
+  | 'handheld_released';
 
 export type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 

@@ -5,6 +5,11 @@ import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSession } from '@/auth/session';
+import type { GateUser } from '@/auth/users';
+import { appendEvent } from '@/db/outbox';
+import { gatePolicy, releaseHandheld, type GatePolicy } from '@/device/gate-policy';
+import { SupervisorOverride } from '@/gate/supervisor-override';
+import { newEventId } from '@/lib/ids';
 import { Card } from '@/components/card';
 import { IconButton } from '@/components/icon-button';
 import { PillButton } from '@/components/pill-button';
@@ -41,13 +46,54 @@ function syncSummary(status: SyncStatus, pending: number): string {
 export default function ShiftScreen() {
   const insets = useSafeAreaInsets();
   const { state, lock, signOut } = useSession();
-  const { encrypted } = useLocalDatabase();
+  const { db, encrypted } = useLocalDatabase();
   const sync = useSync();
   const { shift, end } = useShift();
   const [ending, setEnding] = useState(false);
   const [endProblem, setEndProblem] = useState<string | null>(null);
+  const [policy, setPolicy] = useState<GatePolicy>(gatePolicy);
+  const [releasing, setReleasing] = useState(false);
+  const [releaseResult, setReleaseResult] = useState<{ tone: 'clear' | 'warning'; title: string; message: string } | null>(null);
   if (state.status === 'signed-out' || !shift) return null;
   const { user } = state;
+
+  // Recorded either way, with the supervisor, so the control room knows a handheld left DigiGate's control.
+  const release = async (supervisor: GateUser) => {
+    setReleasing(false);
+    const result = releaseHandheld();
+    const at = Date.now();
+    try {
+      await appendEvent(db, {
+        id: newEventId(at),
+        type: 'handheld_released',
+        occurredAt: at,
+        gateUserId: supervisor.id,
+        payload: { released: result.released, problems: result.released ? [] : result.problems },
+      });
+      sync.eventRecorded();
+    } catch (cause) {
+      setReleaseResult({ tone: 'warning', title: 'Not recorded', message: `The release wasn't recorded (${cause instanceof Error ? cause.message : 'unknown error'}). Tell the control room.` });
+      return;
+    }
+    setPolicy(gatePolicy());
+    setReleaseResult(
+      result.released
+        ? { tone: 'clear', title: 'Handheld released', message: 'Its other apps, hotspot and settings are back, and DigiGate is an ordinary app on it now.' }
+        : { tone: 'warning', title: 'Not released', message: `Android refused part of it (${result.problems.join(', ')}). It's still locked to DigiGate.` },
+    );
+  };
+
+  if (releasing) {
+    return (
+      <SupervisorOverride
+        fixedReason="Releasing this handheld from DigiGate"
+        chip="Supervisor confirms"
+        notSupervisorMessage="Only a supervisor can release a handheld. Call one."
+        onConfirmed={(supervisor) => void release(supervisor)}
+        onCancel={() => setReleasing(false)}
+      />
+    );
+  }
 
   const endShift = async () => {
     setEnding(true);
@@ -77,6 +123,7 @@ export default function ShiftScreen() {
       </View>
 
       {endProblem ? <ResultBanner tone="warning" title="Still on duty" message={endProblem} /> : null}
+      {releaseResult ? <ResultBanner tone={releaseResult.tone} title={releaseResult.title} message={releaseResult.message} /> : null}
 
       <Card style={styles.onDuty}>
         <View style={styles.onDutyCopy}>
@@ -113,6 +160,7 @@ export default function ShiftScreen() {
         <Field label="Sync" value={syncSummary(sync.status, sync.pendingEvents)} />
         <Field label="Device storage" value={encrypted ? 'Encrypted' : 'Not encrypted (Expo Go, demo data only)'} />
         <Field label="App" value={appVersionLine()} />
+        <Field label="Handheld" value={handheldSummary(policy)} />
       </Card>
 
       <View style={styles.actions}>
@@ -122,9 +170,18 @@ export default function ShiftScreen() {
         {sync.status.state !== 'local-only' ? (
           <PillButton label="Sync now" icon="syncing" variant="secondary" onPress={() => void sync.syncNow()} />
         ) : null}
+        {policy.kind === 'managed' ? (
+          <PillButton label="Release this handheld" icon="override" variant="secondary" onPress={() => setReleasing(true)} />
+        ) : null}
       </View>
     </ScrollView>
   );
+}
+
+function handheldSummary(policy: GatePolicy): string {
+  if (policy.kind === 'not-managed') return 'Not locked to DigiGate';
+  const count = policy.problems.length;
+  return count === 0 ? 'Locked to DigiGate: no hotspot, other apps hidden' : `Locked to DigiGate, but ${count} ${count === 1 ? 'setting' : 'settings'} refused`;
 }
 
 function Field({ label, value }: { label: string; value: string }) {

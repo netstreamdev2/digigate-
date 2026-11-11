@@ -1,2 +1,4 @@
-<manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Whether the handheld has service, for the offline log. A device owner grants it; otherwise the guard is asked. -->
+  <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 </manifest>

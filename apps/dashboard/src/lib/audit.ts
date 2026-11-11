@@ -78,6 +78,7 @@ const WORDS: Readonly<Record<string, string>> = {
   "gate.override": "overrode a block at",
   "gate.occupant_reason": "explained a changed head count at",
   "gate.shift_moved": "moved a guard's shift to",
+  "gate.handheld_released": "released a handheld from DigiGate at",
   "gate.turned_away": "turned someone away at",
   "gate.alert_ack": "let someone through after a warning at",
   "gate.left_post": "left their post with",

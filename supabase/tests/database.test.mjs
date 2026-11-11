@@ -1211,6 +1211,38 @@ const LATE_CANCEL = (await inviteAs(HOST_A, SITE_A, 'Ayanda Khumalo')).rows[0];
 await hostAs(HOST_A, `select digigate.cancel_invite('${LATE_CANCEL.invite_id}')`);
 await onDevice(DEVICE, [{ id: u(7117), type: 'pedestrian_entry', occurredAt: minutesAgo(30), gateUserId: GUARD, payload: { visit_id: u(7118), outcome: 'clear', hits: [], person: { ...invitedPerson, person_key: 'key-late-cancel' }, visit_type: 'visitor', expected_visitor_id: LATE_CANCEL.invite_id } }]);
 check('a visitor who came in before the host cancelled raises nothing', (await count(`digigate.alerts where event_id = '${u(7117)}'`)) === 0);
+
+// Handhelds under DigiGate's control: their SIM, their data by day, and why one went quiet.
+const dataToday = (await one(`select to_char(current_date, 'YYYY-MM-DD') as d`)).d;
+const dataYesterday = (await one(`select to_char(current_date - 1, 'YYYY-MM-DD') as d`)).d;
+await health({ managed: true, policyProblems: ['no_config_tethering'], simState: 'ready', simOperator: 'Vodacom', networkOperator: 'Vodacom', roaming: false, dataEnabled: true,
+  mobileData: [{ day: dataToday, device: 52_000_000, app: 4_000_000 }, { day: dataYesterday, device: 310_000_000, app: 9_000_000 }, { day: '2001-01-01', device: 1, app: 1 }, { day: 'soon', device: 1, app: 1 }] });
+const managedHealth = (await one('select health from digigate.devices where id = $1', [DEVICE])).health;
+check('health says the handheld is DigiGate\'s, and its SIM', managedHealth.managed === true && managedHealth.policyProblems[0] === 'no_config_tethering' && managedHealth.simState === 'ready' && managedHealth.simOperator === 'Vodacom' && managedHealth.dataEnabled === true);
+const dataDays = (await db.query(`select to_char(day, 'YYYY-MM-DD') as day, device_bytes, app_bytes from digigate.device_data_days where device_id = $1 order by day`, [DEVICE])).rows;
+check('mobile data is kept by day', dataDays.length === 2 && dataDays[1].day === dataToday && Number(dataDays[1].device_bytes) === 52_000_000 && Number(dataDays[0].app_bytes) === 9_000_000);
+await health({ mobileData: [{ day: dataToday, device: 40_000_000, app: 5_000_000 }] });
+const todayAgain = await one(`select device_bytes, app_bytes from digigate.device_data_days where device_id = $1 and day = current_date`, [DEVICE]);
+check('a day\'s count only grows, whatever order reports arrive in', Number(todayAgain.device_bytes) === 52_000_000 && Number(todayAgain.app_bytes) === 5_000_000);
+check('no login reads data use directly', (await as('authenticated', ADMIN_A, 'aal2', 'select * from digigate.device_data_days')).error);
+check('a SIM number is kept in +27 form', await db.query(`update digigate.devices set sim_number = '0821234567' where id = '${DEVICE}'`).then(() => false, () => true));
+const deviceEvent = (id, type, payload, gateUserId = null) => ({ id: u(id), type, occurredAt: minutesAgo(5), gateUserId, payload });
+await onDevice(DEVICE, [
+  deviceEvent(7201, 'device_status', { status: 'sim_removed', battery: 60, reason: null }),
+  deviceEvent(7202, 'device_status', { status: 'data_off', battery: 60, reason: null }),
+  deviceEvent(7203, 'device_status', { status: 'app_closed', battery: null, reason: 'by_user' }),
+  deviceEvent(7204, 'device_status', { status: 'app_closed', battery: null, reason: 'crash' }),
+  deviceEvent(7205, 'device_status', { status: 'switched_off', battery: 4, reason: null }),
+  deviceEvent(7206, 'handheld_released', { released: true, problems: [] }, SUPERVISOR),
+]);
+const handheldAlert = async (id) => (await one(`select rule_code, severity, source from digigate.alerts where event_id = '${u(id)}'`)) ?? null;
+check('a SIM taken out raises an amber alert', (await handheldAlert(7201))?.rule_code === 'SIM_REMOVED' && (await handheldAlert(7201))?.severity === 'amber');
+check('so does mobile data switched off', (await handheldAlert(7202))?.rule_code === 'MOBILE_DATA_OFF');
+check('and DigiGate closed by hand', (await handheldAlert(7203))?.rule_code === 'DIGIGATE_CLOSED');
+check('a crash or switching off is only recorded', (await count(`digigate.alerts where event_id in ('${u(7204)}', '${u(7205)}')`)) === 0
+  && (await count(`digigate.events where id in ('${u(7204)}', '${u(7205)}')`)) === 2);
+check('a release raises an alert and is in the audit log, with the supervisor', (await handheldAlert(7206))?.rule_code === 'HANDHELD_RELEASED'
+  && (await count(`digigate.audit_log where action = 'gate.handheld_released' and device_id = '${DEVICE}'`)) === 1);
 check('invites are in the audit log', (await count(`digigate.audit_log where action in ('invite.created', 'invite.cancelled')`)) >= 4);
 check('a mobile number is kept in +27 form', await db.query(`update digigate.profiles set phone = '0821234567' where id = '${HOST_A}'`).then(() => false, () => true));
 check('and belongs to one login only', await db.query(`update digigate.profiles set phone = '+27821234567' where id = '${HOST_B}'`).then(() => false, () => true));

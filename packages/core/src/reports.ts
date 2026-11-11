@@ -82,6 +82,11 @@ export const RULE_TITLES: Readonly<Record<string, string>> = {
   GUARD_ON_TWO_DEVICES: 'Guard on two handhelds',
   INVITE_REUSED: 'One-visit invite used twice',
   INVITE_CANCELLED: 'Cancelled invite used',
+  HANDHELD_RELEASED: 'Handheld released from DigiGate',
+  SIM_REMOVED: 'SIM card taken out',
+  MOBILE_DATA_OFF: 'Mobile data switched off',
+  AIRPLANE_MODE_ON: 'Airplane mode switched on',
+  DIGIGATE_CLOSED: 'DigiGate closed on the handheld',
 };
 
 const FREQUENCY_LABELS: Readonly<Record<ReportFrequency, string>> = {

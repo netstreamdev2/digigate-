@@ -18,6 +18,7 @@ import { countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users'
 import { appendEvent } from '@/db/outbox';
 import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
 import { loadSyncedPosts, loadSyncedSite } from '@/db/site-posts';
+import { applyGatePolicy } from '@/device/gate-policy';
 import { useAppUpdates } from '@/lib/app-updates';
 import { siteConfig } from '@/site/site-config';
 import { seedUsers } from '@/demo/seed-users';
@@ -57,6 +58,11 @@ export default function RootLayout() {
   // Without its tones the gate still vibrates, so a failure here stops nothing.
   useEffect(() => {
     prepareTones().catch(() => undefined);
+  }, []);
+
+  // A handheld DigiGate owns is held to the gate policy at every start; anything else is left alone. Never throws.
+  useEffect(() => {
+    applyGatePolicy();
   }, []);
 
   useEffect(() => {

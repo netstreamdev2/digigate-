@@ -1,0 +1,60 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- To find the apps to hide, and the phone, camera, gallery, keyboard and home apps to keep. -->
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.LAUNCHER" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.MAIN" />
+      <category android:name="android.intent.category.HOME" />
+    </intent>
+    <intent>
+      <action android:name="android.media.action.IMAGE_CAPTURE" />
+    </intent>
+    <intent>
+      <action android:name="android.media.action.STILL_IMAGE_CAMERA" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:mimeType="image/*" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="https" />
+    </intent>
+    <intent>
+      <action android:name="android.intent.action.DIAL" />
+    </intent>
+  </queries>
+
+  <application>
+    <!-- Made device owner over adb on a freshly reset handheld:
+         adb shell dpm set-device-owner com.digigate.gate/expo.modules.handheld.GateDeviceAdmin -->
+    <receiver
+      android:name="expo.modules.handheld.GateDeviceAdmin"
+      android:exported="true"
+      android:label="DigiGate"
+      android:permission="android.permission.BIND_DEVICE_ADMIN">
+      <meta-data android:name="android.app.device_admin" android:resource="@xml/gate_device_admin" />
+      <intent-filter>
+        <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+      </intent-filter>
+    </receiver>
+
+    <!-- DigiGate as the home screen. Off until the handheld is a gate device, so on a phone it never offers itself as a
+         launcher. -->
+    <activity-alias
+      android:name="expo.modules.handheld.GateHome"
+      android:enabled="false"
+      android:exported="true"
+      android:targetActivity="${applicationId}.MainActivity">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.HOME" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity-alias>
+  </application>
+</manifest>
