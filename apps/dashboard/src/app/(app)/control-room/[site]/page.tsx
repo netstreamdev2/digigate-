@@ -179,6 +179,8 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
         </div>
       ) : null}
 
+      <LiveAlerts alerts={alerts} total={openTotal} gateLabel={gateLabel} canClose={!user.roles.includes("client_viewer")} />
+
       <section aria-label="Key figures" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="On site now"
@@ -218,8 +220,8 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
         />
       </section>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-3">
-        <div className="min-w-0 xl:col-span-2">
+      <div className="mt-6 min-w-0">
+        <div className="min-w-0">
           <Card title="Gates" subtitle="Who is on duty and when each gate last scanned">
             <DataTable
               columns={[
@@ -233,11 +235,6 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
           </Card>
         </div>
 
-        <div className="min-w-0">
-          <Card title="Live alerts" subtitle="Blocked first, then the newest">
-            <LiveAlerts alerts={alerts} total={openTotal} gateLabel={gateLabel} canClose={!user.roles.includes("client_viewer")} />
-          </Card>
-        </div>
       </div>
 
       {/* The checks and who is on site run the full width of the page, so their tables fit without scrolling sideways. */}
