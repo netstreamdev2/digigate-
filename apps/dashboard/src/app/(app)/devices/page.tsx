@@ -16,8 +16,8 @@ import { FilterSelect, SearchBox } from "@/components/search-box";
 import { StatTile } from "@/components/stat-tile";
 import { StatusChip } from "@/components/status-chip";
 import { companyBrand } from "@/lib/company-brand";
-import { asDeviceStatus, deviceBoard, deviceSummary, type DeviceHealth, type DeviceStatus, type FleetDevice } from "@/lib/devices";
-import { ago, plural, shortDate, timeOfDay, timeWithSeconds } from "@/lib/format";
+import { asDeviceStatus, deviceBoard, deviceSummary, type DataUse, type DeviceHealth, type DeviceStatus, type FleetDevice } from "@/lib/devices";
+import { ago, dataSize, MB, plural, shortDate, timeOfDay, timeWithSeconds } from "@/lib/format";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
@@ -29,6 +29,8 @@ import { PairDeviceButton } from "../setup/pair-device";
 const MOST_COMPANIES = 500;
 const NO_VALUE = "—";
 const LOW_BATTERY = 20;
+/** Below this share of the bundle left, a device's data shows amber. */
+const LOW_DATA = 0.2;
 
 const TABS: readonly { status: DeviceStatus | null; label: string }[] = [
   { status: null, label: "All" },
@@ -76,9 +78,29 @@ function signalWords({ network, wifiName, cellBars }: DeviceHealth): string | nu
   return network === "cellular" && cellBars !== null ? `${cellBars} of 4 bars` : null;
 }
 
+/** Used this bundle period against the bundle, with a bar; a bar only turns amber when little is left. */
+function DataCell({ data }: { data: DataUse | null }) {
+  if (!data) return <span className="text-ink-muted">Nothing yet</span>;
+  const { bundleMb, usedBytes, whole } = data;
+  if (bundleMb === null) return <TwoLine main={`${dataSize(usedBytes)} used`} sub={whole ? "No bundle set" : "DigiGate's own · no bundle set"} />;
+  const bundleBytes = bundleMb * MB;
+  const share = Math.min(1, usedBytes / bundleBytes);
+  const left = Math.max(0, bundleBytes - usedBytes);
+  const low = left < bundleBytes * LOW_DATA;
+  return (
+    <div className="flex w-36 flex-col gap-1">
+      <span className="text-sm font-medium text-ink">{`${dataSize(usedBytes)} of ${dataSize(bundleBytes)}`}</span>
+      <span className="h-1.5 overflow-hidden rounded-pill bg-ink/10" aria-hidden="true">
+        <span className={`block h-full rounded-pill ${low ? "bg-warning" : "bg-series-1"}`} style={{ width: `${share * 100}%` }} />
+      </span>
+      <span className={`text-xs ${low ? "font-semibold text-warning" : "text-ink-muted"}`}>{`${dataSize(left)} left`}</span>
+    </div>
+  );
+}
+
 function HealthCell({ health }: { health: DeviceHealth | null }) {
   if (!health) return <span className="text-ink-muted">No report yet</span>;
-  const { battery, charging, appVersion, latitude, longitude, locationAllowed } = health;
+  const { battery, charging, appVersion, latitude, longitude, locationAllowed, managed, simState, dataEnabled } = health;
   const low = battery !== null && battery <= LOW_BATTERY && !charging;
   const level = battery === null ? null : `${battery}%${charging ? " charging" : low ? " low" : ""}`;
   const details = [signalWords(health), appVersion ? `v${appVersion}` : null].filter(Boolean).join(" · ");
@@ -95,6 +117,8 @@ function HealthCell({ health }: { health: DeviceHealth | null }) {
         <span className="flex items-center gap-2">
           <span title={details} className="block max-w-36 truncate">{details || NO_VALUE}</span>
           {locationAllowed === false ? <span className="font-semibold text-warning">Location off</span> : null}
+          {simState === "absent" ? <span className="font-semibold text-warning">No SIM</span> : dataEnabled === false ? <span className="font-semibold text-warning">Data off</span> : null}
+          {managed === false ? <span className="font-semibold text-warning">Not locked</span> : null}
           {latitude !== null && longitude !== null ? (
             <a href={`https://www.google.com/maps?q=${latitude},${longitude}`} target="_blank" rel="noreferrer" className="font-semibold text-brand hover:text-ink">
               Map
@@ -111,7 +135,16 @@ function deviceRow(device: FleetDevice, now: number) {
     id: device.id,
     cells: {
       status: <DeviceChip device={device} />,
-      device: <TwoLine main={<Clipped text={device.name} />} sub={`Paired ${shortDate(device.pairedAt)}`} />,
+      device: (
+        <TwoLine
+          main={
+            <Link href={`/devices/${device.id}`} className="font-semibold transition-colors hover:text-brand">
+              <Clipped text={device.name} />
+            </Link>
+          }
+          sub={`Paired ${shortDate(device.pairedAt)}`}
+        />
+      ),
       where: (
         <TwoLine
           main={
@@ -125,6 +158,7 @@ function deviceRow(device: FleetDevice, now: number) {
       duty: device.guard ? <TwoLine main={device.guard} sub={device.post ?? NO_VALUE} /> : <span className="text-ink-muted">{device.status === "revoked" ? NO_VALUE : "Nobody on duty"}</span>,
       activity: <TwoLine main={device.lastSeenAt ? `Seen ${ago(device.lastSeenAt, now)}` : "Never seen"} sub={scansLine(device)} />,
       health: <HealthCell health={device.health} />,
+      data: <DataCell data={device.data} />,
       action:
         device.status === "revoked" ? null : (
           <ConfirmAction
@@ -222,6 +256,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
               { key: "duty", label: "On duty" },
               { key: "activity", label: "Activity" },
               { key: "health", label: "Health" },
+              { key: "data", label: "Data this period" },
               { key: "action", label: "", align: "right" },
             ]}
             rows={devices.map((device) => deviceRow(device, now))}

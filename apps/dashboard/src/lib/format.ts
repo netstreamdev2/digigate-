@@ -65,5 +65,16 @@ export function labelFor(code: string): string {
  */
 export const usernameOf = (login: string) => (/^[^@]+@[a-z0-9]+$/.test(login) ? (login.split("@")[0] ?? login) : login);
 
+/** Bytes as the networks sell data: 1 GB is 1024 MB. */
+export const MB = 1024 * 1024;
+
+/** Mobile data in plain words: 850 MB, 1.4 GB. */
+export function dataSize(bytes: number): string {
+  const megabytes = bytes / MB;
+  if (megabytes < 1) return megabytes > 0 ? "Under 1 MB" : "0 MB";
+  if (megabytes < 1024) return `${Math.round(megabytes)} MB`;
+  return `${(megabytes / 1024).toFixed(megabytes < 10 * 1024 ? 1 : 0).replace(/\.0$/, "")} GB`;
+}
+
 /** `3 guards`, or with an irregular plural, `3 people`. */
 export const plural = (count: number, word: string, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;

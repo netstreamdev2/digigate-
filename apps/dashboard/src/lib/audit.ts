@@ -59,6 +59,7 @@ const WORDS: Readonly<Record<string, string>> = {
   "pairing_code.added": "issued a pairing code for",
   "device.added": "paired the device",
   "device.changed": "renamed the device",
+  "device.plan_set": "set the SIM and data bundle of",
   "device.revoked": "revoked the device",
   "alert.raised": "flagged",
   "alert.closed": "closed the alert",

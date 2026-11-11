@@ -1274,6 +1274,34 @@ const viewerResolves = await as('authenticated', VIEWER, 'aal2', `update digigat
 check('client viewer cannot change alerts', viewerResolves.rows.length === 0);
 check('client viewer cannot add a post', (await as('authenticated', VIEWER, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_A}','v','V','{vehicle}')`)).error);
 
+// The Devices page: data used and left, a page per handheld, and its SIM and bundle, set by an admin.
+const periodStart = async (day, today) => (await one(`select to_char(digigate.data_period_start(${day}::smallint, '${today}'::date), 'YYYY-MM-DD') as d`)).d;
+check('a bundle with no renewal day runs from the 1st', (await periodStart('null', '2026-11-11')) === '2026-11-01');
+check('one renewing on the 15th started last month before the 15th', (await periodStart(15, '2026-11-11')) === '2026-10-15' && (await periodStart(15, '2026-11-15')) === '2026-11-15');
+check('a renewal day past a short month falls on its last day', (await periodStart(31, '2026-03-01')) === '2026-02-28' && (await periodStart(31, '2026-02-28')) === '2026-02-28' && (await periodStart(31, '2026-11-11')) === '2026-10-31');
+const setPlan = await as('authenticated', ADMIN_A, 'aal2', `update digigate.devices set sim_number = '+27821112222', data_bundle_mb = 2048, data_renews_day = 1 where id = '${DEVICE}' returning id`);
+check('an admin sets the SIM number and bundle', setPlan.rows.length === 1);
+check('another company\'s admin cannot', (await as('authenticated', ADMIN_B, 'aal2', `update digigate.devices set data_bundle_mb = 1 where id = '${DEVICE}' returning id`)).rows.length === 0);
+check('nor can the control room', (await as('authenticated', ROOM_A, 'aal2', `update digigate.devices set data_bundle_mb = 1 where id = '${DEVICE}' returning id`)).rows.length === 0);
+check('setting the plan is in the audit log', (await count(`digigate.audit_log where action = 'device.plan_set' and device_id = '${DEVICE}' and detail like '2048 MB bundle%'`)) === 1);
+const planBoardRow = (await as('authenticated', ADMIN_A, 'aal2', `select * from digigate.device_board('', '', 25, 0)`)).rows.find((row) => row.id === DEVICE);
+check('the list shows data used this period against the bundle', planBoardRow?.data_bundle_mb === 2048 && Number(planBoardRow.data_used_bytes) >= 52_000_000 && planBoardRow.data_whole === true);
+const viewerBoardRow = (await as('authenticated', VIEWER, 'aal2', `select * from digigate.device_board('', '', 25, 0)`)).rows.find((row) => row.id === DEVICE);
+check('a client\'s login gets no data use or bundle', viewerBoardRow !== undefined && viewerBoardRow.data_bundle_mb === null && viewerBoardRow.data_used_bytes === null);
+const devicePage = (await as('authenticated', ADMIN_A, 'aal2', 'select * from digigate.device_detail($1)', [DEVICE])).rows[0];
+check('a device page has its SIM, bundle and the right to change them', devicePage?.sim_number === '+27821112222' && devicePage.data_bundle_mb === 2048 && devicePage.can_manage === true);
+check('the control room sees the page but may not change the plan', (await as('authenticated', ROOM_A, 'aal2', 'select can_manage from digigate.device_detail($1)', [DEVICE])).rows[0]?.can_manage === false);
+check('another company sees no such device', (await as('authenticated', ADMIN_B, 'aal2', 'select id from digigate.device_detail($1)', [DEVICE])).rows.length === 0);
+check('a client\'s login sees the device without its SIM', (await as('authenticated', VIEWER, 'aal2', 'select sim_number from digigate.device_detail($1)', [DEVICE])).rows[0]?.sim_number === null);
+const dataByDay = (await as('authenticated', ADMIN_A, 'aal2', 'select * from digigate.device_data($1, 30)', [DEVICE])).rows;
+check('a device page has its data by day, oldest first', dataByDay.length === 2 && dataByDay[0].day < dataByDay[1].day);
+check('but not for another company or a client', (await as('authenticated', ADMIN_B, 'aal2', 'select * from digigate.device_data($1, 30)', [DEVICE])).rows.length === 0
+  && (await as('authenticated', VIEWER, 'aal2', 'select * from digigate.device_data($1, 30)', [DEVICE])).rows.length === 0);
+const deviceStory = (await as('authenticated', ADMIN_A, 'aal2', 'select * from digigate.device_story($1, 50)', [DEVICE])).rows;
+check('a device page tells what happened to it, with who released it', deviceStory.length === 6 && deviceStory.some((row) => row.kind === 'released' && row.actor !== null)
+  && deviceStory.some((row) => row.kind === 'switched_off' && row.battery === 4) && deviceStory.some((row) => row.kind === 'app_closed' && row.reason === 'by_user'));
+check('another company reads none of it', (await as('authenticated', ADMIN_B, 'aal2', 'select * from digigate.device_story($1, 50)', [DEVICE])).rows.length === 0);
+
 check('an admin cannot move a client', (await as('authenticated', ADMIN_A, 'aal2', `select digigate.transfer_client('${CLIENT_A}','${ORG_B}')`)).error);
 check('nor can a super user without MFA', (await as('authenticated', SUPER, 'aal1', `select digigate.transfer_client('${CLIENT_A}','${ORG_B}')`)).error);
 await db.exec(`insert into digigate.pairing_codes (org_id, site_id, device_name, code_hash, expires_at, created_by) values ('${ORG_A}','${SITE_A}','Spare','spare',now() + interval '10 minutes','${ADMIN_A}')`);

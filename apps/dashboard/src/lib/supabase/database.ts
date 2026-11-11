@@ -270,8 +270,48 @@ export type Database = {
           },
         ]
       }
+      device_data_days: {
+        Row: {
+          app_bytes: number | null
+          day: string
+          device_bytes: number | null
+          device_id: string
+          org_id: string
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          app_bytes?: number | null
+          day: string
+          device_bytes?: number | null
+          device_id: string
+          org_id: string
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          app_bytes?: number | null
+          day?: string
+          device_bytes?: number | null
+          device_id?: string
+          org_id?: string
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_data_days_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       devices: {
         Row: {
+          data_bundle_mb: number | null
+          data_renews_day: number | null
           health: Json | null
           health_at: string | null
           id: string
@@ -281,10 +321,13 @@ export type Database = {
           paired_at: string
           revoked_at: string | null
           revoked_by: string | null
+          sim_number: string | null
           site_id: string
           token_hash: string
         }
         Insert: {
+          data_bundle_mb?: number | null
+          data_renews_day?: number | null
           health?: Json | null
           health_at?: string | null
           id?: string
@@ -294,10 +337,13 @@ export type Database = {
           paired_at?: string
           revoked_at?: string | null
           revoked_by?: string | null
+          sim_number?: string | null
           site_id: string
           token_hash: string
         }
         Update: {
+          data_bundle_mb?: number | null
+          data_renews_day?: number | null
           health?: Json | null
           health_at?: string | null
           id?: string
@@ -307,6 +353,7 @@ export type Database = {
           paired_at?: string
           revoked_at?: string | null
           revoked_by?: string | null
+          sim_number?: string | null
           site_id?: string
           token_hash?: string
         }
@@ -1792,6 +1839,10 @@ export type Database = {
         }
         Returns: string
       }
+      data_period_start: {
+        Args: { _renews_day: number; _today: string }
+        Returns: string
+      }
       device_board: {
         Args: {
           _limit: number
@@ -1803,6 +1854,9 @@ export type Database = {
         Returns: {
           checks_today: number
           client_name: string
+          data_bundle_mb: number
+          data_used_bytes: number
+          data_whole: boolean
           guard: string
           health: Json
           health_at: string
@@ -1819,8 +1873,50 @@ export type Database = {
           total: number
         }[]
       }
+      device_data: {
+        Args: { _days: number; _device: string }
+        Returns: {
+          app_bytes: number
+          day: string
+          device_bytes: number
+        }[]
+      }
+      device_detail: {
+        Args: { _device: string }
+        Returns: {
+          can_manage: boolean
+          client_name: string
+          data_bundle_mb: number
+          data_period_start: string
+          data_renews_day: number
+          guard: string
+          health: Json
+          health_at: string
+          id: string
+          last_seen_at: string
+          name: string
+          org_id: string
+          org_name: string
+          paired_at: string
+          post: string
+          sim_number: string
+          site_id: string
+          site_name: string
+          status: string
+        }[]
+      }
       device_for_token: { Args: { _token_hash: string }; Returns: string }
       device_snapshot: { Args: { _device_id: string }; Returns: Json }
+      device_story: {
+        Args: { _before?: string; _device: string; _limit: number }
+        Returns: {
+          actor: string
+          at: string
+          battery: number
+          kind: string
+          reason: string
+        }[]
+      }
       device_summary: {
         Args: { _org?: string; _search: string }
         Returns: {
