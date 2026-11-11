@@ -34,19 +34,28 @@ const DOCK_HEIGHT = 156;
 type Destination = 'entry' | 'exit' | 'walk-in' | 'walk-out';
 
 /** A card scanned from home: the guard says where they're going and the scan travels with them. */
-type Pending = { bytes: Uint8Array; document: 'driver-licence' | 'licence-disc' | 'smart-id' | 'id-number' };
+type Pending = { bytes: Uint8Array; document: 'driver-licence' | 'licence-disc' | 'smart-id' | 'id-number' | 'invite' };
 
 const PENDING_CAPTION: Record<Pending['document'], string> = {
   'driver-licence': "Driver's licence scanned",
   'licence-disc': 'Licence disc scanned',
   'smart-id': 'Smart ID card scanned',
   'id-number': 'ID number scanned',
+  invite: 'Visitor invite scanned',
 };
+
+/** Which ways a document can go: an invite is for coming in, a disc only for a car, an ID only on foot. */
+function waysFor(document: Pending['document']): { byCar: boolean; onFoot: boolean; leaving: boolean } {
+  return {
+    byCar: document === 'driver-licence' || document === 'licence-disc' || document === 'invite',
+    onFoot: document !== 'licence-disc',
+    leaving: document !== 'invite',
+  };
+}
 
 /** Whether this post has a way to handle the document, so the chooser never opens with nothing to choose. */
 function postHandles(document: Pending['document'], lanes: readonly Lane[]): boolean {
-  const byCar = document === 'driver-licence' || document === 'licence-disc';
-  const onFoot = document !== 'licence-disc';
+  const { byCar, onFoot } = waysFor(document);
   return (byCar && lanes.includes('vehicle')) || (onFoot && lanes.includes('pedestrian'));
 }
 
@@ -113,13 +122,19 @@ export default function HomeScreen() {
         const bytes = fromBase64(event.bytes);
         const decoded = decodeDocument(bytes);
         setNotice(null);
-        if (decoded.kind === 'smart-id' || decoded.kind === 'id-number' || decoded.kind === 'driver-licence' || decoded.kind === 'licence-disc') {
+        if (
+          decoded.kind === 'smart-id' ||
+          decoded.kind === 'id-number' ||
+          decoded.kind === 'driver-licence' ||
+          decoded.kind === 'licence-disc' ||
+          decoded.kind === 'invite'
+        ) {
           if (postHandles(decoded.kind, lanes)) setPending({ bytes, document: decoded.kind });
           else setNotice({ title: "Not at this post", message: `${post.label} doesn't handle this. Send them to the right gate.` });
         } else if (decoded.kind === 'unreadable') {
           setNotice({ title: "Couldn't read that", message: 'Scan it again, holding it flat and steady.' });
         } else {
-          setNotice({ title: 'Not a document DigiGate knows', message: 'Scan a licence disc, a driver’s licence or a smart ID card.' });
+          setNotice({ title: 'Not a document DigiGate knows', message: 'Scan a licence disc, a driver’s licence, a smart ID card or a visitor’s invite.' });
         }
       });
       return () => {
@@ -128,6 +143,8 @@ export default function HomeScreen() {
       };
     }, [lanes, post.label]),
   );
+
+  const ways = pending ? waysFor(pending.document) : null;
 
   const goWith = (destination: Destination) => {
     if (!pending) return;
@@ -263,7 +280,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {pending ? (
+      {pending && ways ? (
         <View style={[styles.chooser, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
           <View style={styles.chooserTop}>
             <IconButton icon="close" label="Cancel" tone="dark" onPress={() => setPending(null)} />
@@ -275,21 +292,16 @@ export default function HomeScreen() {
             <Text variant="display">Where are they going?</Text>
           </View>
           <View style={styles.chooserActions}>
-            {cars && (pending.document === 'driver-licence' || pending.document === 'licence-disc') ? (
+            {cars && ways.byCar ? (
               <>
                 <PillButton label="Car coming in" icon="entry" onPress={() => goWith('entry')} />
-                <PillButton label="Car leaving" icon="exit" variant="secondary" onPress={() => goWith('exit')} />
+                {ways.leaving ? <PillButton label="Car leaving" icon="exit" variant="secondary" onPress={() => goWith('exit')} /> : null}
               </>
             ) : null}
-            {walkIns && pending.document !== 'licence-disc' ? (
+            {walkIns && ways.onFoot ? (
               <>
-                <PillButton
-                  label="Walking in"
-                  icon="pedestrian"
-                  variant={cars && pending.document === 'driver-licence' ? 'secondary' : 'primary'}
-                  onPress={() => goWith('walk-in')}
-                />
-                <PillButton label="Walking out" icon="exit" variant="secondary" onPress={() => goWith('walk-out')} />
+                <PillButton label="Walking in" icon="pedestrian" variant={cars && ways.byCar ? 'secondary' : 'primary'} onPress={() => goWith('walk-in')} />
+                {ways.leaving ? <PillButton label="Walking out" icon="exit" variant="secondary" onPress={() => goWith('walk-out')} /> : null}
               </>
             ) : null}
           </View>

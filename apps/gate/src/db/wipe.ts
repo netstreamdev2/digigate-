@@ -5,6 +5,7 @@ import { stopPostFence } from '@/shift/post-fence';
 import { applySyncedPosts, applySyncedSite } from '@/site/site-config';
 import { forgetDeviceToken } from '@/sync/device-api';
 
+import { ELSEWHERE_KEY, NOTICE_KEY } from './duty-elsewhere';
 import { removeValue } from './kv';
 import { SITE_DETAILS_KEY, SITE_POSTS_KEY } from './site-posts';
 import { SITE_TODAY_KEY } from './site-today';
@@ -27,7 +28,10 @@ export async function wipeRevokedDevice(db: SQLiteDatabase): Promise<void> {
     await db.runAsync('DELETE FROM closed_visits');
     await db.runAsync('DELETE FROM hotlist');
     await db.runAsync('DELETE FROM expected_visitors');
+    await db.runAsync('DELETE FROM used_invites');
     await removeValue(db, SITE_POSTS_KEY);
+    await removeValue(db, ELSEWHERE_KEY);
+    await removeValue(db, NOTICE_KEY);
     await removeValue(db, SITE_DETAILS_KEY);
     await removeValue(db, SITE_TODAY_KEY);
   });

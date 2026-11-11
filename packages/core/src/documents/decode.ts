@@ -1,3 +1,4 @@
+import { inviteCodeFromScan } from '../invites';
 import { decodeDriverLicence, isDriverLicenceBarcode, type DriverLicence } from './driver-licence';
 import { idNumberFromBarcode } from './id-number-barcode';
 import { isLicenceDiscBarcode, parseLicenceDisc, type ParsedLicenceDisc } from './licence-disc';
@@ -11,10 +12,14 @@ export type DecodedDocument =
   | { kind: 'id-number'; idNumber: string }
   /** Recognised, but its contents didn't decode: ask for a rescan, never guess. */
   | { kind: 'unreadable'; document: 'licence-disc' | 'driver-licence' | 'smart-id'; reason: string }
+  /** A visitor invite's QR: it says the visitor is expected, never who they are. */
+  | { kind: 'invite'; code: string }
   | { kind: 'unrecognised' };
 
 /** Works out which document a scan came from and decodes it. */
 export function decodeDocument(bytes: Uint8Array): DecodedDocument {
+  const invite = inviteCodeFromScan(bytes);
+  if (invite) return { kind: 'invite', code: invite };
   if (isLicenceDiscBarcode(bytes)) {
     const result = parseLicenceDisc(bytes);
     return result.ok ? { kind: 'licence-disc', disc: result.disc } : { kind: 'unreadable', document: 'licence-disc', reason: result.reason };

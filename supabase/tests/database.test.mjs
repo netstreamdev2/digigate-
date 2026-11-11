@@ -1195,6 +1195,22 @@ const TO_CANCEL = (await inviteAs(HOST_A, SITE_A, 'Thandi Mokoena')).rows[0];
 check('another host cannot cancel it', (await hostAs(HOST_B, `select digigate.cancel_invite('${TO_CANCEL.invite_id}')`)).error);
 await hostAs(HOST_A, `select digigate.cancel_invite('${TO_CANCEL.invite_id}')`);
 check('a host cancels their invite, and its code goes with it', (await mine(HOST_A)).some((row) => row.id === TO_CANCEL.invite_id && row.status === 'cancelled' && row.code === null));
+check('the first visit on an invite raises nothing', (await count(`digigate.alerts where event_id = '${u(7111)}'`)) === 0);
+// Two handhelds offline can't see each other: the second to let a one-visit invite in is caught when it syncs.
+await onDevice(SECOND_DEVICE, [{ id: u(7113), type: 'pedestrian_entry', occurredAt: minutesAgo(1), gateUserId: GUARD, payload: { visit_id: u(7114), outcome: 'clear', hits: [], person: invitedPerson, visit_type: 'visitor', expected_visitor_id: INVITE.invite_id } }]);
+const reused = await one(`select severity, source, status, visit_id from digigate.alerts where event_id = '${u(7113)}' and rule_code = 'INVITE_REUSED'`);
+check('a one-visit invite let in twice raises an amber alert on the second check', reused?.severity === 'amber' && reused.source === 'server' && reused.status === 'open' && reused.visit_id === u(7114));
+check('and the first arrival stands', (await one(`select arrived_event from digigate.expected_visitors where id = '${INVITE.invite_id}'`)).arrived_event === u(7111));
+// A handheld that hadn't synced since the host cancelled still lets the visitor in, and the control room is told.
+await db.query(`update digigate.expected_visitors set cancelled_at = now() - interval '10 minutes' where id = '${TO_CANCEL.invite_id}'`);
+await onDevice(DEVICE, [{ id: u(7115), type: 'pedestrian_entry', occurredAt: minutesAgo(1), gateUserId: GUARD, payload: { visit_id: u(7116), outcome: 'clear', hits: [], person: { ...invitedPerson, person_key: 'key-cancelled' }, visit_type: 'visitor', expected_visitor_id: TO_CANCEL.invite_id } }]);
+const cancelledUsed = await one(`select severity, source from digigate.alerts where event_id = '${u(7115)}' and rule_code = 'INVITE_CANCELLED'`);
+check('an invite used after it was cancelled raises an amber alert', cancelledUsed?.severity === 'amber' && cancelledUsed.source === 'server');
+check('and is not counted as reused', (await count(`digigate.alerts where event_id = '${u(7115)}' and rule_code = 'INVITE_REUSED'`)) === 0);
+const LATE_CANCEL = (await inviteAs(HOST_A, SITE_A, 'Ayanda Khumalo')).rows[0];
+await hostAs(HOST_A, `select digigate.cancel_invite('${LATE_CANCEL.invite_id}')`);
+await onDevice(DEVICE, [{ id: u(7117), type: 'pedestrian_entry', occurredAt: minutesAgo(30), gateUserId: GUARD, payload: { visit_id: u(7118), outcome: 'clear', hits: [], person: { ...invitedPerson, person_key: 'key-late-cancel' }, visit_type: 'visitor', expected_visitor_id: LATE_CANCEL.invite_id } }]);
+check('a visitor who came in before the host cancelled raises nothing', (await count(`digigate.alerts where event_id = '${u(7117)}'`)) === 0);
 check('invites are in the audit log', (await count(`digigate.audit_log where action in ('invite.created', 'invite.cancelled')`)) >= 4);
 check('a mobile number is kept in +27 form', await db.query(`update digigate.profiles set phone = '0821234567' where id = '${HOST_A}'`).then(() => false, () => true));
 check('and belongs to one login only', await db.query(`update digigate.profiles set phone = '+27821234567' where id = '${HOST_B}'`).then(() => false, () => true));

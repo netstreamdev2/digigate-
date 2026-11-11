@@ -11,6 +11,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { PersonDocument } from '@/components/person-card';
 import { commitGateEvent, loadGateState, type NewPedestrianVisit, type VisitDetails } from '@/db/visits';
+import type { SyncedBooking } from '@/db/watch-lists';
 import { newEventId } from '@/lib/ids';
 import { personKeyFor } from '@/lib/person-key';
 import { siteConfig } from '@/site/site-config';
@@ -71,7 +72,15 @@ function personPayload(person: PersonDocument, personKey: string, at: number): G
  */
 export async function checkPerson(
   db: SQLiteDatabase,
-  input: { direction: Direction; person: PersonDocument; visitType: string; expectedStayMinutes: number | null; guardId: string },
+  input: {
+    direction: Direction;
+    person: PersonDocument;
+    visitType: string;
+    expectedStayMinutes: number | null;
+    guardId: string;
+    /** The booking a scanned invite opened, on the way in. */
+    invitedBooking?: SyncedBooking | null;
+  },
 ): Promise<CheckedPerson> {
   const { direction } = input;
   const at = Date.now();
@@ -91,7 +100,7 @@ export async function checkPerson(
       ? { id: newEventId(at), kind: 'pedestrian', personKey, visitType: input.visitType, enteredAt: at, expectedStayMinutes: input.expectedStayMinutes, personName: identity.name }
       : null;
   const visitId = pendingVisit?.id ?? openVisit?.id ?? null;
-  const expected = direction === 'entry' ? await bookingFor(db, at, personKey, []) : null;
+  const expected = direction === 'entry' ? (input.invitedBooking ?? (await bookingFor(db, at, personKey, []))) : null;
 
   const event: GateEvent = {
     id: newEventId(at),
@@ -110,7 +119,7 @@ export async function checkPerson(
   };
 
   const change = outcome !== 'clear' ? null : pendingVisit ? { open: pendingVisit } : openVisit ? { close: openVisit.id } : null;
-  await commitGateEvent(db, event, change);
+  await commitGateEvent(db, event, change, expected?.singleUse ? expected.id : null);
 
   const related = new Map<string, VisitDetails>();
   for (const ruleHit of hits) {

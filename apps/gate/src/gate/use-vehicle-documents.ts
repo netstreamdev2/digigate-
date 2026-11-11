@@ -16,9 +16,11 @@ export type VehicleDocumentsState = {
   photo: LicencePhotoResult | null;
   /** Why the last scan wasn't used, in the guard's words. Cleared by the next good scan. */
   notice: ScanNotice | null;
+  /** The code from a visitor invite's QR, scanned alongside the documents. */
+  inviteCode: string | null;
 };
 
-const EMPTY: VehicleDocumentsState = { disc: null, licence: null, photo: null, notice: null };
+const EMPTY: VehicleDocumentsState = { disc: null, licence: null, photo: null, notice: null, inviteCode: null };
 
 const RESCAN = 'Scan it again, holding it flat and steady. If it still fails, type the details in by hand.';
 
@@ -54,6 +56,9 @@ export function useVehicleDocuments(listening: boolean): VehicleDocumentsState &
                 })),
             ),
           );
+          return;
+        case 'invite':
+          setDocuments((current) => ({ ...current, inviteCode: decoded.code, notice: null }));
           return;
         case 'smart-id':
         case 'id-number':

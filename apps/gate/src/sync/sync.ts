@@ -102,8 +102,21 @@ function toBooking(value: unknown): SyncedBooking | null {
   if (typeof id !== 'string' || typeof name !== 'string' || typeof from !== 'number' || typeof until !== 'number') return null;
   const personKey = textOrNull(value.personKey);
   const plate = textOrNull(value.plate);
-  if (personKey === null && plate === null) return null;
-  return { id, name, personKey, plate, visitType: textOrNull(value.visitType), note: textOrNull(value.note), from, until };
+  // An invite's QR is a match of its own, so an invite with neither an ID number nor a plate still counts.
+  const invite = typeof value.invite === 'string' && /^[0-9a-f]{64}$/.test(value.invite) ? value.invite : null;
+  if (personKey === null && plate === null && invite === null) return null;
+  return {
+    id,
+    name,
+    personKey,
+    plate,
+    visitType: textOrNull(value.visitType),
+    note: textOrNull(value.note),
+    from,
+    until,
+    invite,
+    singleUse: value.singleUse === true,
+  };
 }
 
 function acceptedIds(body: unknown): string[] {

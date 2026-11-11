@@ -21,6 +21,7 @@ export { parseSmartId, type SmartIdCard, type SmartIdResult } from './documents/
 export { checkSmartId, smartIdPassesChecks, type SmartIdChecks } from './documents/smart-id-checks';
 export type { GateEvent, GateEventPayload, GateEventType, JsonValue } from './events';
 export { expectedVisitorFor, type ExpectedVisitor } from './expected-visitors';
+export { INVITE_QR_PREFIX, inviteBookingFor, inviteCodeFromScan, inviteQrText, type InviteBooking, type InviteMatch } from './invites';
 export { hotlistEntryFor, hotlistHit, type HotlistSubject } from './rules/hotlist';
 export { isExpired } from './rules/dates';
 export { normaliseIdentifier } from './identifiers';

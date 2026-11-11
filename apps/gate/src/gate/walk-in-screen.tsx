@@ -1,6 +1,6 @@
 import { colors, space } from '@digigate/design';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -29,8 +29,10 @@ import { useSync } from '@/sync/sync-context';
 
 import { CheckResult, type Settled } from './check-result';
 import { recordDecision, type Decision, type Direction } from './decision';
+import { ExpectedCard } from './expected-card';
 import { personIdOf } from './person-id';
 import { IdNumberPopup } from './id-number-popup';
+import { useInvite } from './use-invite';
 import { useKeepLicencePhoto } from './use-keep-licence-photo';
 import { usePersonDocument } from './use-person-document';
 import { usePersonVisits } from './use-person-visits';
@@ -98,14 +100,24 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
   const { person, notice } = scan;
   const photoProblem = useKeepLicencePhoto(db, checked?.event ?? null, person?.kind === 'driver-licence' ? person.photo : null);
   const visits = usePersonVisits(direction === 'exit' ? person : null);
+  const invite = useInvite(db, scan.inviteCode, direction);
+  const invitedBooking = invite?.kind === 'expected' ? invite.booking : null;
   const copy = COPY[direction];
+
+  // The host said why they're coming; the guard can still change it.
+  const invitedVisitType = invitedBooking?.visitType ?? null;
+  useEffect(() => {
+    if (!invitedVisitType || !visitTypeOf(invitedVisitType)) return;
+    setVisitType(invitedVisitType);
+    setStay(expectedStayFor(invitedVisitType));
+  }, [invitedVisitType]);
 
   const runCheck = async () => {
     if (!person) return;
     setBusy(true);
     setProblem(null);
     try {
-      const result = await checkPerson(db, { direction, person, visitType, expectedStayMinutes: stay, guardId: guard.id });
+      const result = await checkPerson(db, { direction, person, visitType, expectedStayMinutes: stay, guardId: guard.id, invitedBooking });
       setChecked(result);
       signalOutcome(result.outcome);
       eventRecorded();
@@ -190,6 +202,8 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
         {problem ? <ResultBanner tone="warning" title="Not saved" message={problem} /> : null}
         {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
+        {invite?.kind === 'refused' && !checked ? <ResultBanner tone="warning" title={invite.title} message={invite.message} /> : null}
+        {invitedBooking && !checked ? <ExpectedCard booking={invitedBooking} next="Invite valid. Scan their ID or licence, and check the name matches." /> : null}
 
         {person ? (
           <PersonCard document={person} onOpen={() => setShowingDetails(true)} />

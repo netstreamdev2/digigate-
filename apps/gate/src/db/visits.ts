@@ -11,7 +11,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getValue, removeValue, setValue } from './kv';
 import { appendEvent } from './outbox';
-import { loadHotlist } from './watch-lists';
+import { loadHotlist, markInviteUsed } from './watch-lists';
 
 const GENERATION_KEY = 'site-visits:generation';
 /** How long a visit this device ended stays hidden from the server's list, which can lag by a sync or two. */
@@ -169,11 +169,13 @@ export type VisitChange = { open: NewVisit } | { close: string } | null;
 
 /**
  * Writes an event and the visit change it causes in one transaction, before the guard sees the result. A vehicle
- * visit that opens also records the plate and VIN as seen together.
+ * visit that opens also records the plate and VIN as seen together. `usedBooking` is a one-visit booking the check
+ * used, so it can't let anyone in again here, as the server marks it arrived whatever the outcome.
  */
-export async function commitGateEvent(db: SQLiteDatabase, event: GateEvent, change: VisitChange): Promise<void> {
+export async function commitGateEvent(db: SQLiteDatabase, event: GateEvent, change: VisitChange, usedBooking: string | null = null): Promise<void> {
   await db.withTransactionAsync(async () => {
     await appendEvent(db, event);
+    if (usedBooking) await markInviteUsed(db, usedBooking, event.occurredAt);
     if (change && 'open' in change && change.open.kind === 'pedestrian') {
       const visit = change.open;
       await db.runAsync(

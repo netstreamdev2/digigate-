@@ -18,6 +18,7 @@ import {
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { commitGateEvent, loadGateState, type NewVehicleVisit, type VisitDetails } from '@/db/visits';
+import type { SyncedBooking } from '@/db/watch-lists';
 import { newEventId } from '@/lib/ids';
 import { personKeyFor } from '@/lib/person-key';
 import { currentRules } from '@/site/site-config';
@@ -63,6 +64,8 @@ export type CheckInput = Passage & {
   /** Entry only: how long the visit should last, in minutes; null for no limit. */
   expectedStayMinutes: number | null;
   guardId: string;
+  /** The booking a scanned invite opened, on the way in. */
+  invitedBooking?: SyncedBooking | null;
 };
 
 /** A checked vehicle: what the rules found, already written to the device's records. */
@@ -176,7 +179,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
         }
       : null;
   const visitId = pendingVisit?.id ?? openVisit?.id ?? null;
-  const expected = direction === 'entry' ? await bookingFor(db, at, personKey, [vehicle.plate, input.typedPlate]) : null;
+  const expected = direction === 'entry' ? (input.invitedBooking ?? (await bookingFor(db, at, personKey, [vehicle.plate, input.typedPlate]))) : null;
 
   const event: GateEvent = {
     id: newEventId(at),
@@ -201,7 +204,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
   };
 
   const change = outcome !== 'clear' ? null : pendingVisit ? { open: pendingVisit } : openVisit ? { close: openVisit.id } : null;
-  await commitGateEvent(db, event, change);
+  await commitGateEvent(db, event, change, expected?.singleUse ? expected.id : null);
 
   const related = new Map<string, VisitDetails>();
   for (const ruleHit of hits) {

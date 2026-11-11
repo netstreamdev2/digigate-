@@ -156,6 +156,18 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE visits ADD COLUMN expected_stay_minutes INTEGER;
   ALTER TABLE site_visits ADD COLUMN expected_stay_minutes INTEGER;
   `,
+  // Visitor invites: a booking can be matched by the hash of the visitor's QR, and a one-visit invite is let in once.
+  // used_invites outlives each sync's new list of bookings, so an invite used here can't be used again before the
+  // server has heard about it.
+  `
+  ALTER TABLE expected_visitors ADD COLUMN invite_hash TEXT;
+  ALTER TABLE expected_visitors ADD COLUMN single_use INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX expected_visitors_invite ON expected_visitors (invite_hash);
+  CREATE TABLE used_invites (
+    booking_id TEXT PRIMARY KEY NOT NULL,
+    used_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export type LocalDatabase = {

@@ -12,6 +12,8 @@ import { formatPlate, titleCase } from '@/lib/format';
 import type { GateWords } from '@/lib/gate-words';
 import { ruleCopy, ruleMessage } from '@/lib/rule-copy';
 
+import { ExpectedCard } from './expected-card';
+
 /** What the guard did after a warning or block. */
 export type Settled = 'let-through' | 'turned-away';
 
@@ -53,19 +55,7 @@ export function CheckResult({ outcome, hits, related, settled, clearMessage, let
   return (
     <>
       <ResultBanner tone={banner.tone} title={banner.title} message={banner.message} />
-      {expected ? (
-        <Card style={styles.expected}>
-          <Icon name="visitor" size={22} color={colors.brand} />
-          <View style={styles.hitCopy}>
-            <Text variant="bodyStrong">{`Expected: ${titleCase(expected.name)}`}</Text>
-            <Text variant="label" color={colors.inkMuted}>
-              {[expected.visitType ? titleCase(expected.visitType.replace(/_/g, ' ')) : null, expected.note, 'Check the name on their document matches.']
-                .filter((part): part is string => part !== null && part !== '')
-                .join(' · ')}
-            </Text>
-          </View>
-        </Card>
-      ) : null}
+      {expected ? <ExpectedCard booking={expected} next="Check the name on their document matches." /> : null}
       {hits.length > 0 ? (
         <Card style={styles.hits}>
           {hits.map((ruleHit) => {
@@ -106,11 +96,6 @@ export function CheckResult({ outcome, hits, related, settled, clearMessage, let
 
 const styles = StyleSheet.create({
   hits: {
-    gap: space.sm,
-  },
-  expected: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: space.sm,
   },
   hit: {

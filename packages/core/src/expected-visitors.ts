@@ -15,6 +15,10 @@ export type ExpectedVisitor = {
   visitType: string | null;
   from: EpochMs;
   until: EpochMs;
+  /** A visitor invite's hash, when the booking came from one; matched by scanning the visitor's QR. */
+  invite?: string | null;
+  /** One visit only, as an invite is. */
+  singleUse?: boolean;
 };
 
 /**

@@ -15,9 +15,11 @@ export type PersonDocumentState = {
   /** A scan that held only an ID number, waiting for the guard to say whether it's an ID book or a smart ID. */
   idNumberOnly: string | null;
   notice: ScanNotice | null;
+  /** The code from a visitor invite's QR, scanned alongside their document. */
+  inviteCode: string | null;
 };
 
-const EMPTY: PersonDocumentState = { person: null, idNumberOnly: null, notice: null };
+const EMPTY: PersonDocumentState = { person: null, idNumberOnly: null, notice: null, inviteCode: null };
 
 const AIM_AT_THE_BIG_BARCODE: ScanNotice = {
   title: 'Scan the large square barcode',
@@ -39,11 +41,11 @@ export function usePersonDocument(listening: boolean) {
       const decoded = decodeDocument(bytes);
       switch (decoded.kind) {
         case 'smart-id':
-          setState({ person: { kind: 'smart-id', card: decoded.card }, idNumberOnly: null, notice: null });
+          setState((current) => ({ ...current, person: { kind: 'smart-id', card: decoded.card }, idNumberOnly: null, notice: null }));
           return;
         case 'driver-licence': {
           const { licence } = decoded;
-          setState({ person: { kind: 'driver-licence', licence, photo: null }, idNumberOnly: null, notice: null });
+          setState((current) => ({ ...current, person: { kind: 'driver-licence', licence, photo: null }, idNumberOnly: null, notice: null }));
           cancels.add(
             decodeLicencePhotoLater(
               bytes,
@@ -65,6 +67,9 @@ export function usePersonDocument(listening: boolean) {
         }
         case 'id-number':
           setState((current) => ({ ...current, idNumberOnly: decoded.idNumber, notice: null }));
+          return;
+        case 'invite':
+          setState((current) => ({ ...current, inviteCode: decoded.code, notice: null }));
           return;
         case 'licence-disc':
           setState((current) => ({
@@ -101,7 +106,7 @@ export function usePersonDocument(listening: boolean) {
   const retryForSmartId = useCallback(() => setState((current) => ({ ...current, idNumberOnly: null, notice: AIM_AT_THE_BIG_BARCODE })), []);
   /** The guard said it's an ID book and typed in the rest. */
   const acceptIdBook = useCallback(
-    (book: IdBookDetails) => setState({ person: { kind: 'id-book', ...book }, idNumberOnly: null, notice: null }),
+    (book: IdBookDetails) => setState((current) => ({ ...current, person: { kind: 'id-book', ...book }, idNumberOnly: null, notice: null })),
     [],
   );
   const dismissIdNumber = useCallback(() => setState((current) => ({ ...current, idNumberOnly: null })), []);

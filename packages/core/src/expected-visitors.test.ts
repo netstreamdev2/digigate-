@@ -50,4 +50,9 @@ describe('expectedVisitorFor', () => {
   it('does not match someone else', () => {
     expect(expectedVisitorFor({ personKey: 'someone-else', plates: ['TEST 999'] }, NOW, [booking()])).toBeUndefined();
   });
+
+  it('leaves an invite with no ID number or plate to its QR', () => {
+    const invite = booking({ personKey: null, plate: null, invite: 'ab'.repeat(32), singleUse: true });
+    expect(expectedVisitorFor({ personKey: 'anyone', plates: ['TEST 123', ''] }, NOW, [invite])).toBeUndefined();
+  });
 });

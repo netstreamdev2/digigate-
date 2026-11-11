@@ -377,6 +377,9 @@ export function DocumentPreview({ decoded, photo, plateHidden = false }: { decod
           message="This barcode holds only an ID number: a green ID book, or the small barcode on a smart ID card. On a smart ID, scan the large square barcode for the full details."
         />
       );
+    case 'invite':
+      // The code lets someone in, so it's never shown, only recognised.
+      return <ResultBanner tone="clear" title="Visitor invite" message="A DigiGate invite. On an entry screen it shows who's expected." />;
     case 'unreadable':
       return (
         <ResultBanner

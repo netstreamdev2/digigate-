@@ -80,6 +80,8 @@ export const RULE_TITLES: Readonly<Record<string, string>> = {
   UNFAMILIAR_VEHICLE: 'Unfamiliar vehicle',
   LEFT_POST: 'Guard left their post',
   GUARD_ON_TWO_DEVICES: 'Guard on two handhelds',
+  INVITE_REUSED: 'One-visit invite used twice',
+  INVITE_CANCELLED: 'Cancelled invite used',
 };
 
 const FREQUENCY_LABELS: Readonly<Record<ReportFrequency, string>> = {

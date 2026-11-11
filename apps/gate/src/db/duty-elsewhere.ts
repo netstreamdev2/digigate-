@@ -23,8 +23,8 @@ export type DutyElsewhere = {
 /** Who was signed out here because their shift moved, for the sign-in screen to explain. */
 export type MovedNotice = { firstName: string; at: number };
 
-const ELSEWHERE_KEY = 'on_duty_elsewhere';
-const NOTICE_KEY = 'shift_moved_notice';
+export const ELSEWHERE_KEY = 'on_duty_elsewhere';
+export const NOTICE_KEY = 'shift_moved_notice';
 
 const text = (value: unknown) => (typeof value === 'string' && value !== '' ? value : null);
 
