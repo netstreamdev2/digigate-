@@ -66,6 +66,8 @@ export type CheckInput = Passage & {
   guardId: string;
   /** The booking a scanned invite opened, on the way in. */
   invitedBooking?: SyncedBooking | null;
+  /** What kind of emergency, when the guard said it is one; recorded with the check for the control room. */
+  emergency?: GateEventPayload | null;
 };
 
 /** A checked vehicle: what the rules found, already written to the device's records. */
@@ -200,6 +202,7 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
       exit_checks: input.direction === 'exit' ? { ignition_restart: input.ignitionRestart, boot_check: input.bootCheck } : null,
       visit_type: direction === 'entry' ? input.visitType : (openVisit?.visitType ?? null),
       expected_visitor_id: expected?.id ?? null,
+      ...(direction === 'entry' && input.emergency ? { emergency: input.emergency } : {}),
     },
   };
 

@@ -1265,6 +1265,9 @@ await onDevice(DEVICE, [{ id: u(7304), type: 'vehicle_entry', occurredAt: minute
   vehicle: { vin: null, plate: '', disc_number: null, manual: true }, emergency: { kind: 'other', label: 'Other', note: 'Gas leak' } } }]);
 check('an emergency in the guard\'s own words is named by them', (await one(`select person_name from digigate.visit_details where visit_id = '${u(7305)}'`))?.person_name === 'Emergency: Gas leak');
 check('the checks list names an emergency by its kind', (await as('authenticated', ADMIN_A, 'aal2', `select person_name from digigate.check_records where id = '${u(7302)}'`)).rows[0]?.person_name === 'Ambulance (EMS)');
+await onDevice(DEVICE, [{ id: u(7306), type: 'pedestrian_entry', occurredAt: minutesAgo(1), gateUserId: GUARD, payload: { visit_id: u(7307), outcome: 'clear', hits: [], person: { person_key: 'key-officer', document: 'smart-id', names: 'THABO', surname: 'MOKOENA', manual: false }, visit_type: 'emergency', emergency: { kind: 'police', label: 'Police', note: null } } }]);
+check('an emergency on foot, ID scanned, still tells the control room', (await one(`select rule_code from digigate.alerts where event_id = '${u(7306)}'`))?.rule_code === 'EMERGENCY_ENTRY'
+  && (await one(`select person_name from digigate.visit_details where visit_id = '${u(7307)}'`))?.person_name === 'THABO MOKOENA');
 check('invites are in the audit log', (await count(`digigate.audit_log where action in ('invite.created', 'invite.cancelled')`)) >= 4);
 check('a mobile number is kept in +27 form', await db.query(`update digigate.profiles set phone = '0821234567' where id = '${HOST_A}'`).then(() => false, () => true));
 check('and belongs to one login only', await db.query(`update digigate.profiles set phone = '+27821234567' where id = '${HOST_B}'`).then(() => false, () => true));

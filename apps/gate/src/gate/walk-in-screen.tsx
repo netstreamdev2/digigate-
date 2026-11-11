@@ -29,6 +29,8 @@ import { useSync } from '@/sync/sync-context';
 
 import { CheckResult, type Settled } from './check-result';
 import { recordDecision, type Decision, type Direction } from './decision';
+import { EMERGENCY_VISIT, emergencyName, emergencyPayload, type EmergencyChoice } from './emergency';
+import { EmergencySheet } from './emergency-sheet';
 import { ExpectedCard } from './expected-card';
 import { personIdOf } from './person-id';
 import { IdNumberPopup } from './id-number-popup';
@@ -96,6 +98,8 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
   const [showingDetails, setShowingDetails] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [emergency, setEmergency] = useState<EmergencyChoice | null>(null);
+  const [choosingEmergency, setChoosingEmergency] = useState(false);
   const scan = usePersonDocument(checked === null);
   const { person, notice } = scan;
   const photoProblem = useKeepLicencePhoto(db, checked?.event ?? null, person?.kind === 'driver-licence' ? person.photo : null);
@@ -117,7 +121,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
     setBusy(true);
     setProblem(null);
     try {
-      const result = await checkPerson(db, { direction, person, visitType, expectedStayMinutes: stay, guardId: guard.id, invitedBooking });
+      const result = await checkPerson(db, { direction, person, visitType, expectedStayMinutes: stay, guardId: guard.id, invitedBooking, emergency: emergency ? emergencyPayload(emergency) : null });
       setChecked(result);
       signalOutcome(result.outcome);
       eventRecorded();
@@ -166,6 +170,7 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
     setProblem(null);
     setVisitType(siteConfig.defaultVisitType);
     setStay(expectedStayFor(siteConfig.defaultVisitType));
+    setEmergency(null);
   };
 
   const finished = checked !== null && (checked.outcome === 'clear' || settled !== null);
@@ -202,6 +207,9 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
         {problem ? <ResultBanner tone="warning" title="Not saved" message={problem} /> : null}
         {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
+        {emergency && !checked ? (
+          <ResultBanner tone="warning" title={emergencyName(emergency)} message="Ask them to wait a moment: scan their ID or licence, then press Check. Let them in once it's done." />
+        ) : null}
         {invite?.kind === 'refused' && !checked ? <ResultBanner tone="warning" title={invite.title} message={invite.message} /> : null}
         {invitedBooking && !checked ? <ExpectedCard booking={invitedBooking} next="Invite valid. Scan their ID or licence, and check the name matches." /> : null}
 
@@ -230,6 +238,12 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
             <VisitTypePicker
               value={visitType}
               onChange={(code) => {
+                // An emergency asks what kind first; they still show their ID or licence.
+                if (code === EMERGENCY_VISIT) {
+                  setChoosingEmergency(true);
+                  return;
+                }
+                setEmergency(null);
                 setVisitType(code);
                 setStay(expectedStayFor(code));
               }}
@@ -257,6 +271,18 @@ function WalkIn({ direction, guard }: { direction: Direction; guard: GateUser })
         <DocumentSheet onClose={() => setShowingDetails(false)}>
           <Details person={person} />
         </DocumentSheet>
+      ) : null}
+
+      {choosingEmergency ? (
+        <EmergencySheet
+          onChoose={(choice) => {
+            setChoosingEmergency(false);
+            setEmergency(choice);
+            setVisitType(EMERGENCY_VISIT);
+            setStay(expectedStayFor(EMERGENCY_VISIT));
+          }}
+          onCancel={() => setChoosingEmergency(false)}
+        />
       ) : null}
 
       {scan.idNumberOnly && !checked ? (

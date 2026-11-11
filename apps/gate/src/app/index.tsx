@@ -112,7 +112,6 @@ export default function HomeScreen() {
   const [notice, setNotice] = useState<ScanNotice | null>(null);
   const [walkInOpen, setWalkInOpen] = useState(false);
   const figures = useHomeFigures(shift);
-  const openAlerts = figures?.openAlerts ?? null;
   const lastScan = figures?.lastScan ?? null;
 
   // Only while home is in front: the screen it opens listens for itself. Leaving folds the walk-in tile back.
@@ -168,11 +167,6 @@ export default function HomeScreen() {
           </Pressable>
           <View style={styles.topActions}>
             <SyncPill />
-            <IconButton
-              icon="bell"
-              label={openAlerts === null ? 'Open alerts not synced yet' : `${openAlerts} open alerts`}
-              {...(openAlerts ? { badge: openAlerts } : {})}
-            />
           </View>
         </View>
 

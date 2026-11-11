@@ -45,11 +45,12 @@ import { OccupantReasonCard } from './occupant-reason-card';
 import { CheckResult, type Settled } from './check-result';
 import { completedExitChecks, ExitChecksCard, NO_EXIT_CHECKS, type ExitChecks } from './exit-checks';
 import { ExpectedCard } from './expected-card';
+import { EMERGENCY_VISIT, emergencyName, emergencyPayload, type EmergencyChoice } from './emergency';
+import { EmergencySheet } from './emergency-sheet';
 import { useInvite } from './use-invite';
 import { checkVehicle, scannedSubject, type CheckedVehicle, type Passage } from './vehicle-check';
 
 const FOOTER_HEIGHT = 160;
-const EMERGENCY_VISIT = 'emergency';
 const MIN_PLATE_LENGTH = 2;
 
 const COPY = {
@@ -81,6 +82,8 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   const [visitType, setVisitType] = useState<string>(siteConfig.defaultVisitType);
   const [stay, setStay] = useState<number | null>(expectedStayFor(siteConfig.defaultVisitType));
   const [exitChecks, setExitChecks] = useState<ExitChecks>(NO_EXIT_CHECKS);
+  const [emergency, setEmergency] = useState<EmergencyChoice | null>(null);
+  const [choosingEmergency, setChoosingEmergency] = useState(false);
   const documents = useVehicleDocuments(checked === null);
   const { disc, licence, photo, notice } = documents;
   const invite = useInvite(db, documents.inviteCode, direction);
@@ -105,13 +108,21 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   };
 
   const chooseVisitType = (code: string) => {
-    // Emergencies are let in first, on their own screen: no licence scan holds an ambulance up.
-    if (code === EMERGENCY_VISIT && direction === 'entry') {
-      router.replace('/emergency');
+    // An emergency asks what kind first; the check still needs the disc and the licence.
+    if (code === EMERGENCY_VISIT) {
+      setChoosingEmergency(true);
       return;
     }
+    setEmergency(null);
     setVisitType(code);
     setStay(expectedStayFor(code));
+  };
+
+  const chooseEmergency = (choice: EmergencyChoice) => {
+    setChoosingEmergency(false);
+    setEmergency(choice);
+    setVisitType(EMERGENCY_VISIT);
+    setStay(expectedStayFor(EMERGENCY_VISIT));
   };
 
   // The host said why they're coming; the guard can still change it.
@@ -145,6 +156,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         expectedStayMinutes: stay,
         guardId: guard.id,
         invitedBooking,
+        emergency: emergency ? emergencyPayload(emergency) : null,
       });
       setChecked(result);
       signalOutcome(result.outcome);
@@ -207,6 +219,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
     setVisitType(siteConfig.defaultVisitType);
     setStay(expectedStayFor(siteConfig.defaultVisitType));
     setExitChecks(NO_EXIT_CHECKS);
+    setEmergency(null);
   };
 
   const finished = checked !== null && (checked.outcome === 'clear' || settled !== null);
@@ -259,6 +272,13 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
         {platePhotoProblem ? <ResultBanner tone="warning" title="Plate photo not kept" message={platePhotoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
+        {emergency && !checked ? (
+          <ResultBanner
+            tone="warning"
+            title={emergencyName(emergency)}
+            message={`Ask them to wait a moment: scan the disc and the driver's licence, then press Check. ${words.letIn.replace(/.$/, '')} once it's done.`}
+          />
+        ) : null}
         {invite?.kind === 'refused' && !checked ? <ResultBanner tone="warning" title={invite.title} message={invite.message} /> : null}
         {invitedBooking && !checked ? <ExpectedCard booking={invitedBooking} next="Invite valid. Scan the disc and their licence, and check the name matches." /> : null}
         {direction === 'exit' && !checked && graceEnds !== null ? (
@@ -354,6 +374,8 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
       {details === 'disc-drawing' && disc ? <DiscPopup disc={disc} plateShown={checked !== null} onClose={() => setDetails(null)} /> : null}
 
       {plate.cameraOpen ? <PlateCamera onUse={plate.acceptPhoto} onType={plate.typeIt} onCancel={plate.closeCamera} /> : null}
+
+      {choosingEmergency ? <EmergencySheet onChoose={chooseEmergency} onCancel={() => setChoosingEmergency(false)} /> : null}
 
       {overriding ? (
         <SupervisorOverride

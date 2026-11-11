@@ -80,6 +80,8 @@ export async function checkPerson(
     guardId: string;
     /** The booking a scanned invite opened, on the way in. */
     invitedBooking?: SyncedBooking | null;
+    /** What kind of emergency, when the guard said it is one; recorded with the check for the control room. */
+    emergency?: GateEventPayload | null;
   },
 ): Promise<CheckedPerson> {
   const { direction } = input;
@@ -115,6 +117,7 @@ export async function checkPerson(
       visit_type: direction === 'entry' ? input.visitType : (openVisit?.visitType ?? null),
       expected_stay_minutes: direction === 'entry' ? input.expectedStayMinutes : null,
       expected_visitor_id: expected?.id ?? null,
+      ...(direction === 'entry' && input.emergency ? { emergency: input.emergency } : {}),
     },
   };
 

@@ -19,7 +19,6 @@ export type HomeFigures = {
   vehicles: number;
   people: number;
   averageStayMs: number | null;
-  openAlerts: number | null;
   lastScan: LastScan | null;
   readAt: number;
 };
@@ -45,7 +44,6 @@ export function useHomeFigures(shift: Shift | null | undefined): HomeFigures | n
         setFigures({
           ...headcount,
           averageStayMs: today && today.exits > 0 ? (today.stayMinutes / today.exits) * 60_000 : null,
-          openAlerts: today?.openAlerts ?? null,
           lastScan,
           readAt: now,
         });
