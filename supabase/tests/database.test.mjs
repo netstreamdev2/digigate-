@@ -1,5 +1,6 @@
 // Runs every migration on a real Postgres engine (PGlite), then proves who can reach what and walks whole gate stories
 // through digigate.ingest_events the way the Edge Functions do. Run from the repo root: pnpm test:db
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1145,6 +1146,58 @@ if (otherOpen) {
 }
 await onDevice(SECOND_DEVICE, [{ id: u(7010), type: 'shift_end', occurredAt: minutesAgo(1), gateUserId: ELSEWHERE, payload: { shift_id: MOVED_SHIFT, reason: 'ended' } }]);
 await onDevice(SECOND_DEVICE, [{ id: u(7011), type: 'shift_end', occurredAt: minutesAgo(1), gateUserId: ELSEWHERE, payload: { shift_id: u(7009), reason: 'ended' } }]);
+
+// Visitor invites from the phone app: hosts with no MFA, their own invites at their own sites, and nothing else.
+const HOST_A = u(7101), HOST_B = u(7102), HOST_OFF = u(7103);
+await db.exec(`
+  insert into auth.users (id) values ('${HOST_A}'), ('${HOST_B}'), ('${HOST_OFF}');
+  insert into digigate.profiles (id, org_id, full_name, login, roles, site_ids, is_active, phone) values
+    ('${HOST_A}', '${ORG_A}', 'Dr Naidoo', 'host-a', '{host}', '{${SITE_A}}', true, '+27821234567'),
+    ('${HOST_B}', '${ORG_B}', 'Resident B', 'host-b', '{host}', '{${SITE_B}}', true, '+27831234567'),
+    ('${HOST_OFF}', '${ORG_A}', 'Left Host', 'host-off', '{host}', '{${SITE_A}}', false, null);
+`);
+const hostAs = (profile, sql, aal = 'aal1') => as('authenticated', profile, aal, sql);
+check('a host signs in without MFA and reaches no gate records', (await hostAs(HOST_A, 'select id from digigate.check_records')).rows.length === 0 && (await hostAs(HOST_A, 'select id from digigate.sites')).rows.length === 0);
+check('nor does a host who enrolled MFA', (await hostAs(HOST_A, 'select id from digigate.check_records', 'aal2')).rows.length === 0
+  && (await hostAs(HOST_A, 'select id from digigate.visit_records', 'aal2')).rows.length === 0
+  && (await hostAs(HOST_A, 'select id from digigate.organisations', 'aal2')).rows.length === 0
+  && (await hostAs(HOST_A, 'select id from digigate.sites', 'aal2')).rows.length === 0);
+const hostSites = (await hostAs(HOST_A, 'select site_id from digigate.invite_sites()')).rows;
+check('a host may invite to their own site only', hostSites.length === 1 && hostSites[0].site_id === SITE_A);
+const inviteAs = (profile, site, name, from = 'now()', until = "now() + interval '1 day'", idNumber = null) =>
+  hostAs(profile, `select * from digigate.create_invite('${site}', '${name}', ${idNumber ? `'${idNumber}'` : 'null'}, null, 'visitor', ${from}, ${until}, 'Meeting')`);
+const INVITE = (await inviteAs(HOST_A, SITE_A, 'Lerato Dube')).rows[0];
+check('a host invites a visitor, without MFA', /^[0-9a-f]{64}$/.test(INVITE?.code ?? ''));
+const inviteRow = await one(`select invite_hash, created_by, created_by_name, single_use from digigate.expected_visitors where id = '${INVITE.invite_id}'`);
+check('the gate only ever gets a hash of the QR', inviteRow.invite_hash === createHash('sha256').update(INVITE.code).digest('hex'));
+check('an invite is good for one visit', inviteRow.single_use === true);
+check('at a hospital the inviter is recorded, but not named on the booking', inviteRow.created_by === HOST_A && inviteRow.created_by_name === null);
+const ESTATE_INVITE = (await inviteAs(HOST_B, SITE_B, 'Sipho Zulu')).rows[0];
+check('at an estate the host is named', (await one(`select created_by_name from digigate.expected_visitors where id = '${ESTATE_INVITE.invite_id}'`)).created_by_name === 'Resident B');
+check('a host cannot invite to another of the company\x27s sites', (await inviteAs(HOST_A, SITE_A2, 'Someone')).error);
+check('nor to another company\x27s', (await inviteAs(HOST_A, SITE_B, 'Someone')).error);
+check('a deactivated host cannot invite', (await inviteAs(HOST_OFF, SITE_A, 'Someone')).error);
+check('an ID number must be 13 digits', (await inviteAs(HOST_A, SITE_A, 'Someone', 'now()', "now() + interval '1 day'", '12345')).error);
+check('an invite cannot be over already', (await inviteAs(HOST_A, SITE_A, 'Someone', "now() - interval '2 days'", "now() - interval '1 day'")).error);
+const mine = async (profile) => (await hostAs(profile, 'select id, status, code from digigate.my_invites()')).rows;
+check('a host sees their invite, with its QR to share again', (await mine(HOST_A)).some((row) => row.id === INVITE.invite_id && row.code === INVITE.code && row.status === 'active'));
+check('nobody else sees it', !(await mine(HOST_B)).some((row) => row.id === INVITE.invite_id));
+check('the dashboard can never read an invite\x27s code', (await as('authenticated', ADMIN_A, 'aal2', 'select invite_code from digigate.expected_visitors')).error);
+const invitedOnDevice = (await snapshotOf(DEVICE)).expectedVisitors.find((row) => row.id === INVITE.invite_id);
+check('the handheld gets the invite as a hash, for one visit', invitedOnDevice?.invite === inviteRow.invite_hash && invitedOnDevice.singleUse === true && !JSON.stringify(invitedOnDevice).includes(INVITE.code));
+const INVITE_VISIT = u(7110);
+const invitedPerson = { person_key: 'key-invited', document: 'smart-id', names: 'LERATO', surname: 'DUBE', manual: false };
+await onDevice(DEVICE, [{ id: u(7111), type: 'pedestrian_entry', occurredAt: minutesAgo(2), gateUserId: GUARD, payload: { visit_id: INVITE_VISIT, outcome: 'clear', hits: [], person: invitedPerson, visit_type: 'visitor', expected_visitor_id: INVITE.invite_id } }]);
+check('using an invite marks it used and clears its code', (await mine(HOST_A)).some((row) => row.id === INVITE.invite_id && row.status === 'used' && row.code === null));
+check('a used invite is no longer sent to handhelds', !(await snapshotOf(DEVICE)).expectedVisitors.some((row) => row.id === INVITE.invite_id));
+await onDevice(DEVICE, [{ id: u(7112), type: 'pedestrian_exit', occurredAt: minutesAgo(1), gateUserId: GUARD, payload: { visit_id: INVITE_VISIT, outcome: 'clear', hits: [], person: invitedPerson } }]);
+const TO_CANCEL = (await inviteAs(HOST_A, SITE_A, 'Thandi Mokoena')).rows[0];
+check('another host cannot cancel it', (await hostAs(HOST_B, `select digigate.cancel_invite('${TO_CANCEL.invite_id}')`)).error);
+await hostAs(HOST_A, `select digigate.cancel_invite('${TO_CANCEL.invite_id}')`);
+check('a host cancels their invite, and its code goes with it', (await mine(HOST_A)).some((row) => row.id === TO_CANCEL.invite_id && row.status === 'cancelled' && row.code === null));
+check('invites are in the audit log', (await count(`digigate.audit_log where action in ('invite.created', 'invite.cancelled')`)) >= 4);
+check('a mobile number is kept in +27 form', await db.query(`update digigate.profiles set phone = '0821234567' where id = '${HOST_A}'`).then(() => false, () => true));
+check('and belongs to one login only', await db.query(`update digigate.profiles set phone = '+27821234567' where id = '${HOST_B}'`).then(() => false, () => true));
 
 // A client viewer, and a client changing security company.
 const VIEWER = u(17);

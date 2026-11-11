@@ -91,8 +91,10 @@ const WORDS: Readonly<Record<string, string>> = {
   "hotlist.removed": "took off the hotlist:",
   "expected.added": "booked in",
   "expected.cancelled": "cancelled the booking of",
+  "invite.created": "invited",
+  "invite.cancelled": "cancelled the invite of",
   "erasure.ran": "erased the personal details in",
-  "import.old_checks": "brought in from the old system, for",
+  "import.old_checks": "imported earlier checks for",
 };
 
 export type AuditEntry = {
@@ -110,6 +112,9 @@ export type AuditFilter = { search: string; category: AuditCategory | null; comp
 
 function detailOf(action: string, detail: string | null): string | null {
   if (!detail) return null;
+  // A site's earlier records are its own history: the log never calls where they came from 'the old system'.
+  if (action === "import.old_checks") return detail.replace(" from the old system", "");
+  if (action === "erasure.ran") return detail.replace("old-system checks", "earlier checks");
   if (action === "gate.override" || action === "gate.turned_away" || action === "gate.alert_ack" || action === "gate.occupant_reason") return detail.split(", ").map(ruleTitle).join(", ");
   if (action.startsWith("gate.shift") || action.endsWith("_post")) return detail.split(" · ").map(plainLabel).join(" · ");
   if (action === "gate.stepping_away") return detail.split(" · ").map((part, index) => (index === 0 ? plainLabel(part) : part)).join(" · ");

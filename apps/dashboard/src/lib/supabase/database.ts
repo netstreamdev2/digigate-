@@ -497,11 +497,14 @@ export type Database = {
           erase_after: string
           id: string
           id_last_four: string | null
+          invite_code: string | null
+          invite_hash: string | null
           note: string | null
           org_id: string
           person_key: string | null
           plate: string | null
           plate_key: string | null
+          single_use: boolean
           site_id: string
           valid_from: string
           valid_until: string
@@ -519,11 +522,14 @@ export type Database = {
           erase_after: string
           id?: string
           id_last_four?: string | null
+          invite_code?: string | null
+          invite_hash?: string | null
           note?: string | null
           org_id: string
           person_key?: string | null
           plate?: string | null
           plate_key?: string | null
+          single_use?: boolean
           site_id: string
           valid_from: string
           valid_until: string
@@ -541,11 +547,14 @@ export type Database = {
           erase_after?: string
           id?: string
           id_last_four?: string | null
+          invite_code?: string | null
+          invite_hash?: string | null
           note?: string | null
           org_id?: string
           person_key?: string | null
           plate?: string | null
           plate_key?: string | null
+          single_use?: boolean
           site_id?: string
           valid_from?: string
           valid_until?: string
@@ -1029,6 +1038,7 @@ export type Database = {
           is_active: boolean
           login: string
           org_id: string | null
+          phone: string | null
           roles: Database["digigate"]["Enums"]["dashboard_role"][]
           site_ids: string[]
         }
@@ -1040,6 +1050,7 @@ export type Database = {
           is_active?: boolean
           login: string
           org_id?: string | null
+          phone?: string | null
           roles: Database["digigate"]["Enums"]["dashboard_role"][]
           site_ids?: string[]
         }
@@ -1051,6 +1062,7 @@ export type Database = {
           is_active?: boolean
           login?: string
           org_id?: string | null
+          phone?: string | null
           roles?: Database["digigate"]["Enums"]["dashboard_role"][]
           site_ids?: string[]
         }
@@ -1713,6 +1725,7 @@ export type Database = {
       can_manage_org: { Args: { _org: string }; Returns: boolean }
       can_watch_org: { Args: { _org: string }; Returns: boolean }
       cancel_expected_visitor: { Args: { _id: string }; Returns: undefined }
+      cancel_invite: { Args: { _id: string }; Returns: undefined }
       check_detail: { Args: { _event: string }; Returns: Json }
       claim_pairing_code: {
         Args: {
@@ -1752,6 +1765,22 @@ export type Database = {
           open_alerts: number
           sites: number
           total: number
+        }[]
+      }
+      create_invite: {
+        Args: {
+          _from: string
+          _id_number: string
+          _name: string
+          _note: string
+          _plate: string
+          _site: string
+          _until: string
+          _visit_type: string
+        }
+        Returns: {
+          code: string
+          invite_id: string
         }[]
       }
       create_site: {
@@ -1926,6 +1955,15 @@ export type Database = {
         Args: { _device_id: string; _events: Json }
         Returns: string[]
       }
+      invite_sites: {
+        Args: never
+        Returns: {
+          org_id: string
+          site_id: string
+          site_name: string
+          site_type: string
+        }[]
+      }
       is_super_user: { Args: never; Returns: boolean }
       licence_photo_for: {
         Args: { _event: string }
@@ -1939,6 +1977,24 @@ export type Database = {
       logo_company: { Args: { _name: string }; Returns: string }
       mask: { Args: { _value: string }; Returns: string }
       mfa_passed: { Args: never; Returns: boolean }
+      my_invites: {
+        Args: never
+        Returns: {
+          arrived_at: string
+          code: string
+          id: string
+          id_last_four: string
+          note: string
+          plate: string
+          site_id: string
+          site_name: string
+          status: string
+          valid_from: string
+          valid_until: string
+          visit_type: string
+          visitor_name: string
+        }[]
+      }
       next_report_run: {
         Args: { _after: string; _frequency: string; _send_at: string }
         Returns: string
@@ -2138,6 +2194,7 @@ export type Database = {
         | "control_room"
         | "supervisor"
         | "client_viewer"
+        | "host"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2272,6 +2329,7 @@ export const Constants = {
         "control_room",
         "supervisor",
         "client_viewer",
+        "host",
       ],
     },
   },
