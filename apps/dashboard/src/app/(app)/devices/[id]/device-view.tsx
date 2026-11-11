@@ -137,7 +137,7 @@ export function DeviceView({ device, data, story, now }: { device: DevicePage; d
     <div className="mt-6 grid gap-6 xl:grid-cols-2">
       <Card title="What happened" subtitle="Written down on the handheld as it happened, and sent when it was back.">
         {lines.length === 0 ? (
-          <p className="py-8 text-center text-sm text-ink-muted">Nothing yet. It notes when it's switched off, loses signal, or its SIM or mobile data changes.</p>
+          <p className="py-8 text-center text-sm text-ink-muted">Nothing yet. It notes when it&apos;s switched off, loses signal, or its SIM or mobile data changes.</p>
         ) : (
           <ol className="flex flex-col">
             {lines.map((line) => {
