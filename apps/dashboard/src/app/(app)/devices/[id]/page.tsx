@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { ConfirmAction } from "@/components/dialog";
 import { Icon } from "@/components/icon";
 import { LiveStatus } from "@/components/live-status";
 import { NoAccess } from "@/components/no-access";
@@ -12,6 +13,7 @@ import { timeWithSeconds } from "@/lib/format";
 import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
 
+import { revokeDevice } from "../../setup/actions";
 import { DeviceView, StatusOf } from "./device-view";
 
 // A bundle period can run 31 days, so a little more than the chart is read for what was used since it renewed.
@@ -43,6 +45,22 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
         </span>
       }
       title={device.name}
+      actions={
+        device.canManage ? (
+          <ConfirmAction
+            label="Revoke"
+            title={`Revoke ${device.name}?`}
+            confirmLabel="Yes, revoke it"
+            pendingLabel="Revoking…"
+            tone="danger"
+            icon="result-warning"
+            action={revokeDevice}
+            fields={{ id: device.id }}
+          >
+            It stops working with DigiGate, signs out whoever is on it, and wipes its guards and data the next time it connects. To use it again you&apos;d pair it with a new code.
+          </ConfirmAction>
+        ) : null
+      }
       chips={
         <>
           <StatusOf device={device} />

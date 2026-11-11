@@ -181,12 +181,12 @@ export function DataColumns({ days, caption }: { days: readonly DataColumn[]; ca
                   onBlur={() => setActive(null)}
                 >
                   {other > 0 ? (
-                    <span className={`w-full max-w-6 rounded-t-[4px] bg-series-2 transition-opacity duration-150 ${dimmed}`} style={{ height: `max(2px, ${heightOf(other)})` }} />
+                    <span className={`dg-grow-up w-full max-w-6 rounded-t-[4px] bg-series-2 transition-opacity duration-150 ${dimmed}`} style={{ height: `max(2px, ${heightOf(other)})`, animationDelay: `${index * 16 + 80}ms` }} />
                   ) : null}
                   {app > 0 ? (
                     <span
-                      className={`w-full max-w-6 bg-series-1 transition-opacity duration-150 ${other > 0 ? "" : "rounded-t-[4px]"} ${dimmed}`}
-                      style={{ height: `max(2px, ${heightOf(app)})` }}
+                      className={`dg-grow-up w-full max-w-6 bg-series-1 transition-opacity duration-150 ${other > 0 ? "" : "rounded-t-[4px]"} ${dimmed}`}
+                      style={{ height: `max(2px, ${heightOf(app)})`, animationDelay: `${index * 16}ms` }}
                     />
                   ) : null}
                 </button>

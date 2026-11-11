@@ -872,3 +872,152 @@ body {
   fill: var(--color-brand);
   fill-opacity: 0.12;
 }
+
+/* Devices: a handheld's live signs. Gauges fill and sweep in on arrival, a live handheld pings, one in trouble
+   flashes a red ring, and the attention rail slides. All of it holds still for people who turn animation off. */
+.dg-ping {
+  position: relative;
+}
+
+.dg-ping::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: dg-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes dg-ping {
+  75%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.dg-trouble {
+  animation: dg-trouble 1.6s ease-in-out infinite;
+}
+
+@keyframes dg-trouble {
+  0%,
+  100% {
+    box-shadow: var(--dg-glass-shadow), 0 0 0 0 color-mix(in srgb, var(--dg-color-blocked) 0%, transparent);
+  }
+  50% {
+    box-shadow: var(--dg-glass-shadow), 0 0 0 5px color-mix(in srgb, var(--dg-color-blocked) 28%, transparent);
+  }
+}
+
+.dg-fill-up {
+  transform-origin: bottom;
+  animation: dg-fill-up 1s cubic-bezier(0.22, 1, 0.36, 1) 150ms backwards;
+}
+
+@keyframes dg-fill-up {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.dg-sweep {
+  animation: dg-sweep 1.2s cubic-bezier(0.22, 1, 0.36, 1) 200ms backwards;
+}
+
+@keyframes dg-sweep {
+  from {
+    stroke-dashoffset: var(--dg-sweep-from);
+  }
+}
+
+.dg-bars > * {
+  transform-origin: bottom;
+  animation: dg-fill-up 520ms cubic-bezier(0.34, 1.4, 0.64, 1) backwards;
+  animation-delay: calc(var(--dg-i, 0) * 110ms + 200ms);
+}
+
+.dg-charging {
+  animation: dg-charging 2.2s ease-in-out infinite;
+}
+
+@keyframes dg-charging {
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+.dg-rail {
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
+}
+
+.dg-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.dg-rail > * {
+  scroll-snap-align: start;
+}
+
+.dg-slider {
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--color-brand) var(--dg-slider-fill, 0%), var(--color-surface-muted) var(--dg-slider-fill, 0%));
+  outline: none;
+  cursor: pointer;
+}
+
+.dg-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--color-surface);
+  border: 3px solid var(--color-brand);
+  box-shadow: var(--shadow-floating);
+  transition: transform 160ms ease;
+}
+
+.dg-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--color-surface);
+  border: 3px solid var(--color-brand);
+  box-shadow: var(--shadow-floating);
+}
+
+.dg-slider:active::-webkit-slider-thumb,
+.dg-slider:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.dg-segment-pill {
+  transition:
+    left 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dg-ping::after,
+  .dg-trouble,
+  .dg-fill-up,
+  .dg-sweep,
+  .dg-bars > *,
+  .dg-charging {
+    animation: none;
+  }
+
+  .dg-rail {
+    scroll-behavior: auto;
+  }
+
+  .dg-segment-pill {
+    transition: none;
+  }
+}
