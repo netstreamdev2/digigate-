@@ -75,7 +75,7 @@ function HoverCard({ hover }: { hover: Hover }) {
       </dl>
       {row.alerts.length > 0 ? <p className="mt-3 text-xs font-semibold text-warning">{row.alerts.join(" · ")}</p> : null}
       <p className="mt-3 border-t border-border pt-2 text-xs text-ink-muted">
-        {row.oldSystem ? "Recorded by the site's old gate system." : "Click for the photos and everything scanned."}
+        {row.oldSystem ? "Click for everything recorded." : "Click for the photos and everything scanned."}
       </p>
     </div>,
     document.body,
@@ -333,10 +333,6 @@ function CheckDetails({ row, loaded }: { row: CheckRow; loaded: Loaded }) {
 function OldSystemDetails({ row, facts }: { row: CheckRow; facts: OldSystemFacts }) {
   return (
     <div className="mt-6 space-y-5">
-      <p className="flex items-start gap-2 rounded-md bg-tile-sky px-3 py-2 text-sm text-ink">
-        <Icon name="info" className="mt-0.5 size-4 shrink-0 text-brand" />
-        {"Recorded by the site’s old gate system before DigiGate, and brought over with its history. DigiGate’s checks and photos aren’t behind it."}
-      </p>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
         <Fact label="Name">{row.person}</Fact>
         <Fact label="Visiting as">{row.visitType}</Fact>

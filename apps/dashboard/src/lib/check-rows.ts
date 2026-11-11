@@ -40,7 +40,7 @@ export function checkRowOf(check: Check & { oldSystem?: OldSystemFacts | null },
     plate: check.plate ?? NO_VALUE,
     gate,
     stay: oldSystem ? NO_VALUE : stayOf(check, now),
-    ...(oldSystem ? { result: "info" as const, resultLabel: "Old system" } : resultOf(check)),
+    ...(oldSystem ? { result: "info" as const, resultLabel: "Logged" } : resultOf(check)),
     alerts: check.ruleCodes.map(ruleTitle),
     oldSystem,
   };
