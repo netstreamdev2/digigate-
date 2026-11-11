@@ -49,6 +49,7 @@ import { useInvite } from './use-invite';
 import { checkVehicle, scannedSubject, type CheckedVehicle, type Passage } from './vehicle-check';
 
 const FOOTER_HEIGHT = 160;
+const EMERGENCY_VISIT = 'emergency';
 const MIN_PLATE_LENGTH = 2;
 
 const COPY = {
@@ -104,6 +105,11 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   };
 
   const chooseVisitType = (code: string) => {
+    // Emergencies are let in first, on their own screen: no licence scan holds an ambulance up.
+    if (code === EMERGENCY_VISIT && direction === 'entry') {
+      router.replace('/emergency');
+      return;
+    }
     setVisitType(code);
     setStay(expectedStayFor(code));
   };

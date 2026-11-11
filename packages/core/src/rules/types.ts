@@ -28,7 +28,8 @@ export type Driver = {
 export type OpenVehicleVisit = {
   id: string;
   kind: 'vehicle';
-  driverKey: PersonKey;
+  /** Null for an emergency vehicle let in first, before anyone's licence was scanned. */
+  driverKey: PersonKey | null;
   coDriverKeys: readonly PersonKey[];
   vehicle: VehicleIdentity;
   /** The expiry on the disc scanned at entry. Absent for visits recorded before it was kept. */

@@ -1243,6 +1243,28 @@ check('a crash or switching off is only recorded', (await count(`digigate.alerts
   && (await count(`digigate.events where id in ('${u(7204)}', '${u(7205)}')`)) === 2);
 check('a release raises an alert and is in the audit log, with the supervisor', (await handheldAlert(7206))?.rule_code === 'HANDHELD_RELEASED'
   && (await count(`digigate.audit_log where action = 'gate.handheld_released' and device_id = '${DEVICE}'`)) === 1);
+
+// Emergencies, let in first: no driver scanned, named by their kind, and the control room told of each one.
+const AMBULANCE_VISIT = u(7301);
+await onDevice(DEVICE, [{ id: u(7302), type: 'vehicle_entry', occurredAt: minutesAgo(4), gateUserId: GUARD, payload: {
+  visit_id: AMBULANCE_VISIT, outcome: 'clear', hits: [], driver: null, typed_plate: 'ND123456', occupants: 1, visit_type: 'emergency', expected_stay_minutes: null,
+  vehicle: { vin: null, plate: 'ND123456', disc_number: null, make: null, model: null, colour: null, disc_expires_on: null, manual: true },
+  emergency: { kind: 'ambulance', label: 'Ambulance (EMS)', note: null } } }]);
+const ambulance = await one(`select d.person_key, d.person_name, d.vehicle_description, v.visit_type, v.exited_at from digigate.visit_details d join digigate.visits v on v.id = d.visit_id where d.visit_id = '${AMBULANCE_VISIT}'`);
+check('an emergency let in first opens a visit with no driver, named by its kind', ambulance?.person_key === null && ambulance.person_name === 'Ambulance (EMS)' && ambulance.vehicle_description === null && ambulance.visit_type === 'emergency');
+const emergencyAlert = await one(`select severity, status, visit_id from digigate.alerts where event_id = '${u(7302)}' and rule_code = 'EMERGENCY_ENTRY'`);
+check('the control room is told of every emergency', emergencyAlert?.severity === 'amber' && emergencyAlert.status === 'open' && emergencyAlert.visit_id === AMBULANCE_VISIT);
+check('handhelds get it on site with no person', (await snapshotOf(DEVICE)).openVisits.some((row) => row.id === AMBULANCE_VISIT && row.personKey === null && row.plate === 'ND123456'));
+await onDevice(DEVICE, [{ id: u(7303), type: 'vehicle_exit', occurredAt: minutesAgo(2), gateUserId: GUARD, payload: {
+  visit_id: AMBULANCE_VISIT, outcome: 'clear', hits: [], driver: null, typed_plate: 'ND123456', occupants: 1, visit_type: 'emergency', exit_checks: null,
+  vehicle: { vin: null, plate: 'ND123456', disc_number: null, make: null, model: null, colour: null, disc_expires_on: null, manual: true }, emergency: { label: 'Ambulance (EMS)' } } }]);
+check('and leaving ends it, with no second alert', (await one(`select exited_at from digigate.visits where id = '${AMBULANCE_VISIT}'`)).exited_at !== null
+  && (await count(`digigate.alerts where event_id = '${u(7303)}'`)) === 0);
+await onDevice(DEVICE, [{ id: u(7304), type: 'vehicle_entry', occurredAt: minutesAgo(1), gateUserId: GUARD, payload: {
+  visit_id: u(7305), outcome: 'clear', hits: [], driver: null, typed_plate: '', occupants: 1, visit_type: 'emergency',
+  vehicle: { vin: null, plate: '', disc_number: null, manual: true }, emergency: { kind: 'other', label: 'Other', note: 'Gas leak' } } }]);
+check('an emergency in the guard\'s own words is named by them', (await one(`select person_name from digigate.visit_details where visit_id = '${u(7305)}'`))?.person_name === 'Emergency: Gas leak');
+check('the checks list names an emergency by its kind', (await as('authenticated', ADMIN_A, 'aal2', `select person_name from digigate.check_records where id = '${u(7302)}'`)).rows[0]?.person_name === 'Ambulance (EMS)');
 check('invites are in the audit log', (await count(`digigate.audit_log where action in ('invite.created', 'invite.cancelled')`)) >= 4);
 check('a mobile number is kept in +27 form', await db.query(`update digigate.profiles set phone = '0821234567' where id = '${HOST_A}'`).then(() => false, () => true));
 check('and belongs to one login only', await db.query(`update digigate.profiles set phone = '+27821234567' where id = '${HOST_B}'`).then(() => false, () => true));

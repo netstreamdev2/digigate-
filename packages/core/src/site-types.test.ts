@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { expectedStayLabel, isSiteType, occupantReasonsFor, stayMinutesFor, visitTypesFor } from './site-types';
+import { emergencyKindsFor, expectedStayLabel, isSiteType, occupantReasonsFor, OTHER_EMERGENCY, stayMinutesFor, visitTypesFor } from './site-types';
 
 describe('visitTypesFor', () => {
   it("gives a hospital its own visit types, with no host-based ones", () => {
@@ -54,5 +54,20 @@ describe('expectedStayLabel', () => {
     expect(expectedStayLabel(90)).toBe('1.5 hours');
     expect(expectedStayLabel(240)).toBe('4 hours');
     expect(expectedStayLabel(null)).toBe('No limit');
+  });
+});
+
+describe('emergencyKindsFor', () => {
+  it('offers a patient rushed in by car only at a hospital', () => {
+    expect(emergencyKindsFor('hospital').map(({ code }) => code)).toContain('patient_by_car');
+    expect(emergencyKindsFor('estate').map(({ code }) => code)).not.toContain('patient_by_car');
+  });
+
+  it('always starts with an ambulance and ends with the guard\'s own words', () => {
+    for (const siteType of ['hospital', 'estate', 'school']) {
+      const kinds = emergencyKindsFor(siteType);
+      expect(kinds[0]?.code).toBe('ambulance');
+      expect(kinds.at(-1)?.code).toBe(OTHER_EMERGENCY);
+    }
   });
 });

@@ -161,6 +161,8 @@ function GuardedStack() {
         <Stack.Protected guard={onDuty} redirectTo={signedIn ? '/start-shift' : '/sign-in'}>
           <Stack.Screen name="index" />
           <Stack.Screen name="entry" />
+          {/* No slide-in: an ambulance at the gate waits for nothing. */}
+          <Stack.Screen name="emergency" options={{ animation: 'none' }} />
           <Stack.Screen name="exit" />
           <Stack.Screen name="walk-in" />
           <Stack.Screen name="shift" />

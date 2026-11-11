@@ -78,6 +78,7 @@ function checkDriver(personKey: PersonKey, visit: OpenVehicleVisit | undefined, 
     return hit('WALKED_IN_DRIVING_OUT', onFoot.id);
   }
 
-  // Without an entry record there's no entry driver to compare against; NO_ENTRY_RECORD already covers it.
-  return visit ? hit('UNKNOWN_DRIVER', visit.id) : undefined;
+  // Without an entry record there's no entry driver to compare against; NO_ENTRY_RECORD already covers it. Nor is there
+  // for an emergency vehicle let in before its driver was scanned: whoever drives the ambulance out is not news.
+  return visit && visit.driverKey !== null ? hit('UNKNOWN_DRIVER', visit.id) : undefined;
 }

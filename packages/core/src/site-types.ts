@@ -34,6 +34,29 @@ export function visitTypesFor(siteType: string): readonly VisitTypeOption[] {
   return isSiteType(siteType) ? VISIT_TYPES[siteType] : [];
 }
 
+/** What kind of emergency vehicle came, chosen in one tap at the gate. */
+export type EmergencyKind = { code: string; label: string };
+
+/** The kind a guard describes in their own words. */
+export const OTHER_EMERGENCY = 'other';
+
+const AMBULANCE: EmergencyKind = { code: 'ambulance', label: 'Ambulance (EMS)' };
+const POLICE: EmergencyKind = { code: 'police', label: 'Police' };
+const FIRE: EmergencyKind = { code: 'fire', label: 'Fire and rescue' };
+const ARMED_RESPONSE: EmergencyKind = { code: 'armed_response', label: 'Armed response' };
+const UTILITY: EmergencyKind = { code: 'utility', label: 'Utility emergency' };
+const OTHER: EmergencyKind = { code: OTHER_EMERGENCY, label: 'Other' };
+
+const EMERGENCY_KINDS: Readonly<Record<SiteType, readonly EmergencyKind[]>> = {
+  hospital: [AMBULANCE, POLICE, FIRE, { code: 'patient_by_car', label: 'Patient rushed in by car' }, ARMED_RESPONSE, UTILITY, OTHER],
+  estate: [AMBULANCE, POLICE, FIRE, ARMED_RESPONSE, UTILITY, OTHER],
+};
+
+/** The emergencies a site of this type lets in first and records after. An unknown type gets the shared ones. */
+export function emergencyKindsFor(siteType: string): readonly EmergencyKind[] {
+  return isSiteType(siteType) ? EMERGENCY_KINDS[siteType] : [AMBULANCE, POLICE, FIRE, OTHER];
+}
+
 const HOUR = 60;
 
 /**

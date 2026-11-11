@@ -87,6 +87,7 @@ export const RULE_TITLES: Readonly<Record<string, string>> = {
   MOBILE_DATA_OFF: 'Mobile data switched off',
   AIRPLANE_MODE_ON: 'Airplane mode switched on',
   DIGIGATE_CLOSED: 'DigiGate closed on the handheld',
+  EMERGENCY_ENTRY: 'Emergency vehicle let in',
 };
 
 const FREQUENCY_LABELS: Readonly<Record<ReportFrequency, string>> = {

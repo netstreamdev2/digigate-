@@ -14,6 +14,11 @@ import { appendEvent } from './outbox';
 import { loadHotlist, markInviteUsed } from './watch-lists';
 
 const GENERATION_KEY = 'site-visits:generation';
+/**
+ * A vehicle let in as an emergency before anyone's licence was scanned has no driver. person_key is NOT NULL in the
+ * local tables, so that's kept as an empty string, which no keyed hash can be, and read back as null.
+ */
+const NO_DRIVER = '';
 /** How long a visit this device ended stays hidden from the server's list, which can lag by a sync or two. */
 const CLOSED_KEPT_MS = 24 * 60 * 60_000;
 
@@ -21,7 +26,8 @@ const CLOSED_KEPT_MS = 24 * 60 * 60_000;
 export type SiteVisit = {
   id: string;
   kind: 'vehicle' | 'pedestrian';
-  personKey: string;
+  /** Null for an emergency vehicle let in before its driver was scanned. */
+  personKey: string | null;
   personName: string;
   visitType: string;
   enteredAt: number;
@@ -83,7 +89,7 @@ function toOpenVisit(row: VisitRow): OpenVisit {
   return {
     id: row.id,
     kind: 'vehicle',
-    driverKey: row.person_key,
+    driverKey: row.person_key === NO_DRIVER ? null : row.person_key,
     coDriverKeys: coDriverKeys(row.co_driver_keys),
     vehicle: { vin: row.vin ?? '', plate: row.plate, discNumber: row.disc_number ?? '' },
     ...(row.disc_expires_on ? { discExpiresOn: row.disc_expires_on } : {}),
@@ -193,7 +199,7 @@ export async function commitGateEvent(db: SQLiteDatabase, event: GateEvent, chan
          VALUES (?, 'vehicle', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           visit.id,
-          visit.driverKey,
+          visit.driverKey ?? NO_DRIVER,
           JSON.stringify(visit.coDriverKeys),
           vin,
           plate,
@@ -244,7 +250,7 @@ export async function saveSiteVisits(db: SQLiteDatabase, visits: readonly SiteVi
           generation,
           visit.id,
           visit.kind,
-          visit.personKey,
+          visit.personKey ?? NO_DRIVER,
           visit.vin === null ? null : normaliseIdentifier(visit.vin),
           visit.plate === null ? null : normaliseIdentifier(visit.plate),
           visit.discNumber === null ? null : normaliseIdentifier(visit.discNumber),

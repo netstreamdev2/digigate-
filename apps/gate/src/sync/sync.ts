@@ -59,7 +59,8 @@ function toSiteVisit(value: unknown): SiteVisit | null {
   if (
     typeof id !== 'string' ||
     (kind !== 'vehicle' && kind !== 'pedestrian') ||
-    typeof personKey !== 'string' ||
+    // Only an emergency vehicle let in before its driver was scanned has no person.
+    (typeof personKey !== 'string' && !(kind === 'vehicle' && personKey === null)) ||
     typeof personName !== 'string' ||
     typeof visitType !== 'string' ||
     typeof enteredAt !== 'number'
@@ -71,7 +72,7 @@ function toSiteVisit(value: unknown): SiteVisit | null {
   return {
     id,
     kind,
-    personKey,
+    personKey: typeof personKey === 'string' ? personKey : null,
     personName,
     visitType,
     enteredAt,

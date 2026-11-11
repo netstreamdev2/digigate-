@@ -64,6 +64,16 @@ describe('evaluateVehicleExit', () => {
       const hits = evaluateVehicleExit(exit({ driver: { personKey: 'person-stranger' } }), state, config);
       expect(hits).toEqual([{ code: 'UNKNOWN_DRIVER', severity: 'red', relatedVisitId: 'visit-car-a' }]);
     });
+
+    it('does not fire for an emergency vehicle let in before anyone was scanned', () => {
+      const ambulance = vehicleVisit({ driverKey: null, visitType: 'emergency' });
+      expect(evaluateVehicleExit(exit({ driver: { personKey: 'person-paramedic' } }), gateState({ openVisits: [ambulance] }), config)).toEqual([]);
+    });
+
+    it('still catches its driver arriving in another car', () => {
+      const state = gateState({ openVisits: [vehicleVisit({ driverKey: null, visitType: 'emergency' }), carBInsideWithB] });
+      expect(codes(evaluateVehicleExit(exit({ driver: { personKey: 'person-b' } }), state, config))).toEqual(['DRIVER_VEHICLE_MISMATCH']);
+    });
   });
 
   describe('ARRIVED_BEFORE_DIGIGATE', () => {

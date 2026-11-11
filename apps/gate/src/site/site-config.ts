@@ -1,11 +1,13 @@
 import {
   DEFAULT_SHIFT_PERIODS,
+  emergencyKindsFor,
   occupantReasonsFor,
   readShiftPeriods,
   shiftPeriodAt as periodAt,
   SITE_RULE_DEFAULTS,
   stayMinutesFor,
   type CarPark,
+  type EmergencyKind,
   type Fence,
   type RuleConfig,
   type ShiftPeriod,
@@ -232,6 +234,11 @@ export function expectedStayFor(visitType: string): number | null {
 /** The reasons a guard can give for a car leaving with fewer, or more, people than came in. */
 export function occupantReasons(change: 'fewer' | 'more'): readonly string[] {
   return occupantReasonsFor(currentSiteType(), change);
+}
+
+/** The emergencies this site lets in first, in the order the guard sees them. */
+export function emergencyKinds(): readonly EmergencyKind[] {
+  return emergencyKindsFor(currentSiteType());
 }
 
 /** The site's car park once it has synced; null until then, which the parking tile says plainly. */
