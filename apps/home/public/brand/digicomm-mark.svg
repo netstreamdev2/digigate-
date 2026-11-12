@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="DigiComm">
+  <title>DigiComm</title>
+  <!-- Stand-in mark, drawn 2026-11-12 until DigiComm has its own: a message going out over the air. -->
+  <path d="M17 40 H55 A9 9 0 0 1 64 49 V63 A9 9 0 0 1 55 72 H37 L24 84 V72 H17 A9 9 0 0 1 8 63 V49 A9 9 0 0 1 17 40 Z" stroke="#AAB4C4" stroke-width="5"/>
+  <path d="M23 56 H23.1 M36 56 H36.1 M49 56 H49.1" stroke="#AAB4C4" stroke-width="6.5"/>
+  <path d="M63 25 A17 17 0 0 1 78 40" stroke="#9D8CFF" stroke-width="6"/>
+  <path d="M65 11 A31 31 0 0 1 92 38" stroke="#9D8CFF" stroke-width="6"/>
+</svg>

@@ -7,10 +7,12 @@ import type { ProductId } from "@/products";
  * visit is silent. A click or key press anywhere wakes it, and a click on a card wakes it and plays at once.
  */
 
-/** Each product has its own note, so the two cards sound different. */
+/** Each product has its own note, so no two sound alike. Together the four make one chord. */
 const NOTE: Record<ProductId, number> = {
   digilog360: 523.25, // C5
   digigate: 659.25, // E5
+  digitrack: 783.99, // G5
+  digicomm: 987.77, // B5
 };
 
 // [frequency ratio, loudness, wave]: a pure tone, a twin a hair sharp so the pair beat into a soft hum,
@@ -77,13 +79,24 @@ function bell(ctx: AudioContext, frequency: number, at: number, level: number, l
   }
 }
 
-/** A soft hum when a card is hovered. Only plays once audio is awake: hovering can't wake it. */
+/** A product that isn't out yet: its note, then a step up that hangs unresolved, like a question. */
+export function soonChime(product: ProductId) {
+  void awake().then((ctx) => {
+    if (!ctx) return;
+    const note = NOTE[product];
+    const now = ctx.currentTime;
+    bell(ctx, note, now, 0.06, 1.2);
+    bell(ctx, note * 1.125, now + 0.12, 0.05, 1.9);
+  });
+}
+
+/** A soft hum when a product is hovered. Only plays once audio is awake: hovering can't wake it. */
 export function hoverChime(product: ProductId) {
   if (!context || context.state !== "running") return;
   bell(context, NOTE[product], context.currentTime, 0.045, 1.1);
 }
 
-/** A short rising chime (note, fifth, octave) when a card is picked. */
+/** A short rising chime (note, fifth, octave) when a product is picked. */
 export function selectChime(product: ProductId) {
   void awake().then((ctx) => {
     if (!ctx) return;

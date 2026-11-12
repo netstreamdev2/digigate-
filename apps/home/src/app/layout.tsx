@@ -11,12 +11,12 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://digilog360.
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "DigiLog360",
-  description: "Sign in to DigiLog360 or DigiGate, security products by Netstream Integrated Solutions.",
+  title: "Digi platform",
+  description: "Sign in to DigiLog360 or DigiGate: the Digi platform, security products by Netstream Integrated Solutions.",
   openGraph: {
-    title: "DigiLog360",
+    title: "Digi platform",
     description: "Sign in to DigiLog360 or DigiGate.",
-    siteName: "DigiLog360",
+    siteName: "Digi platform",
     type: "website",
   },
 };

@@ -9,7 +9,9 @@ const nextConfig: NextConfig = {
   // without browsers holding on to the old one.
   redirects: async () =>
     products.flatMap((product) =>
-      product.shortcuts.map((source) => ({ source, destination: product.href, permanent: false })),
+      product.status === "live"
+        ? product.shortcuts.map((source) => ({ source, destination: product.href, permanent: false }))
+        : [],
     ),
 };
 

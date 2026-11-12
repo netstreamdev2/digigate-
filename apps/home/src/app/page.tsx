@@ -1,13 +1,13 @@
 import { products } from "@/products";
 
-import { Chooser } from "./chooser";
+import { Platform } from "./platform";
 
 export default function Home() {
   const year = new Date().getFullYear();
 
   return (
     <div className="page">
-      <Chooser products={products} />
+      <Platform products={products} />
 
       <footer className="footer">
         <p>&copy; {year} Netstream Integrated Solutions</p>

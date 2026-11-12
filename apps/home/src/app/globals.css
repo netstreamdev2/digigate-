@@ -1,5 +1,6 @@
 /*
- * DigiLog360's palette (Astra, 2026-11-09) and DigiGate's navy and sky from its logo. The only colours on the page.
+ * DigiLog360's palette (Astra, 2026-11-09) and DigiGate's navy and sky from its logo. DigiTrack's mint and DigiComm's
+ * violet are stand-ins until those products have palettes of their own. The only colours on the page.
  * The page takes on the colours of whichever product is hovered, so it already feels like the place you're going.
  */
 :root {
@@ -12,15 +13,23 @@
   --gate-navy-deep: #041c44;
   --sky: #54bff4;
 
+  --mint: #45d6b5;
+  --track-top: #0c2a3a;
+  --track-deep: #061722;
+
+  --violet: #9d8cff;
+  --comm-top: #1d1947;
+  --comm-deep: #0e0b28;
+
   --ink: #f4f6fa;
   --ink-muted: #b9c1cf;
   --ink-subtle: #8791a5;
   --line: rgb(255 255 255 / 0.08);
-  --glass: rgb(255 255 255 / 0.045);
 
-  --radius-card: 24px;
   --radius-pill: 999px;
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* Overshoots a little before settling, like something arriving with weight. */
+  --spring: cubic-bezier(0.3, 1.45, 0.5, 1);
   --theme-fade: 0.7s ease;
 
   color-scheme: dark;
@@ -51,6 +60,19 @@
   initial-value: #0b0e22;
 }
 
+/* Registered so the core can count up to 360 and sweep its dial round without any script. */
+@property --count {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 360;
+}
+
+@property --sweep {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
 *,
 *::before,
 *::after {
@@ -76,6 +98,57 @@ p {
   margin: 0;
 }
 
+/* Read out by screen readers, not shown. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Several lines sharing one place, with only the current one showing. */
+.swap {
+  display: grid;
+  justify-items: center;
+}
+
+.swap > * {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.35s ease,
+    transform 0.45s var(--ease-out);
+}
+
+.swap > [data-on="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Each product's own colour, wherever it appears. */
+
+[data-product="digilog360"] {
+  --accent: var(--blue);
+}
+
+[data-product="digigate"] {
+  --accent: var(--sky);
+}
+
+[data-product="digitrack"] {
+  --accent: var(--mint);
+}
+
+[data-product="digicomm"] {
+  --accent: var(--violet);
+}
+
 /* Page frame */
 
 .page {
@@ -87,11 +160,13 @@ p {
   isolation: isolate;
 }
 
-.stage {
+.platform {
   --theme: var(--blue);
   --wash: rgb(50 139 210 / 0.32);
   --base-top: var(--navy);
   --base-bottom: var(--navy-deep);
+  /* 1 while the products launch out of the core, which staggers them; 0 the rest of the time. */
+  --launch: 0;
 
   display: flex;
   flex: 1;
@@ -103,22 +178,41 @@ p {
     --base-bottom var(--theme-fade);
 }
 
-.stage[data-active="digilog360"] {
+.platform[data-launching="true"] {
+  --launch: 1;
+}
+
+.platform[data-active="digilog360"] {
   --theme: var(--blue);
   --wash: rgb(50 139 210 / 0.5);
 }
 
-.stage[data-active="digigate"] {
+.platform[data-active="digigate"] {
   --theme: var(--sky);
   --wash: rgb(84 191 244 / 0.42);
   --base-top: var(--gate-navy-top);
   --base-bottom: var(--gate-navy-deep);
 }
 
+.platform[data-active="digitrack"] {
+  --theme: var(--mint);
+  --wash: rgb(69 214 181 / 0.3);
+  --base-top: var(--track-top);
+  --base-bottom: var(--track-deep);
+}
+
+.platform[data-active="digicomm"] {
+  --theme: var(--violet);
+  --wash: rgb(157 140 255 / 0.34);
+  --base-top: var(--comm-top);
+  --base-bottom: var(--comm-deep);
+}
+
 .backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
+  overflow: hidden;
   pointer-events: none;
   background:
     radial-gradient(ellipse 70% 55% at 50% -5%, var(--wash), transparent 70%),
@@ -127,22 +221,47 @@ p {
     linear-gradient(180deg, var(--base-top) 0%, var(--base-bottom) 100%);
 }
 
-/* A faint dot grid that fades out away from the emblem. */
+/* A slow drift of light behind everything, so the page is never quite still. */
+.backdrop::before {
+  content: "";
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  width: min(900px, 120vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 20%,
+    color-mix(in srgb, var(--theme) 16%, transparent) 38%,
+    transparent 55% 70%,
+    color-mix(in srgb, var(--theme) 10%, transparent) 86%,
+    transparent
+  );
+  filter: blur(70px);
+  translate: -50% -10%;
+  animation: turn 60s linear infinite;
+}
+
+/* A faint dot grid that fades out away from the core. */
 .backdrop::after {
   content: "";
   position: absolute;
   inset: 0;
   background-image: radial-gradient(rgb(170 180 196 / 0.13) 1px, transparent 1.2px);
   background-size: 28px 28px;
-  mask-image: radial-gradient(ellipse 60% 55% at 50% 25%, black 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 62% 60% at 50% 50%, black 20%, transparent 78%);
 }
 
 .main {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
-  max-width: 1040px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: clamp(48px, 9vh, 96px) 24px 48px;
+  padding: clamp(36px, 6.5vh, 76px) 24px 40px;
 }
 
 /* Sound on and off */
@@ -151,7 +270,6 @@ p {
   position: fixed;
   top: 20px;
   right: 20px;
-  /* Above the welcome, so sound can be turned off before entering. */
   z-index: 30;
   display: grid;
   place-items: center;
@@ -195,344 +313,632 @@ p {
   stroke-linejoin: round;
 }
 
-/* Hero */
+/* The words at the top */
 
-.hero {
+.intro {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  animation: rise 0.7s var(--ease-out) both;
 }
 
-.emblem {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 148px;
-  height: 148px;
-  margin-bottom: 28px;
-}
-
-.emblem::before {
-  content: "";
-  position: absolute;
-  inset: 18px;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--theme) 40%, transparent), transparent 70%);
-  filter: blur(18px);
-}
-
-/* Both products' marks sit on top of each other; the hovered one fades in. */
-.emblem-mark {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 92px;
-  height: 92px;
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.86) rotate(-8deg);
-  transition:
-    opacity 0.45s ease,
-    transform 0.6s var(--ease-out);
-}
-
-.stage[data-active="none"] .emblem-mark[data-product="digilog360"],
-.stage[data-active="digilog360"] .emblem-mark[data-product="digilog360"],
-.stage[data-active="digigate"] .emblem-mark[data-product="digigate"] {
-  opacity: 1;
-  transform: translate(-50%, -50%);
-}
-
-.emblem-mark[data-product="digigate"] {
-  width: 80px;
-  height: 80px;
-}
-
-.orbit {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  fill: none;
-  stroke: var(--theme);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  opacity: 0.6;
-  animation: turn 18s linear infinite;
-}
-
-.orbit-head {
-  fill: var(--theme);
-  stroke: none;
-}
-
-/* The tagline above the title changes with the hovered product. */
 .eyebrow {
-  display: grid;
-  justify-items: center;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--silver);
-}
-
-.eyebrow-text {
-  grid-area: 1 / 1;
-  opacity: 0;
-  transform: translateY(6px);
-  transition:
-    opacity 0.35s ease,
-    transform 0.45s var(--ease-out);
-}
-
-.stage[data-active="none"] .eyebrow-text[data-for="none"],
-.stage[data-active="digilog360"] .eyebrow-text[data-for="digilog360"],
-.stage[data-active="digigate"] .eyebrow-text[data-for="digigate"] {
-  opacity: 1;
-  transform: none;
+  animation: rise 0.8s var(--ease-out) both;
 }
 
 .title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 0.26em;
   margin-top: 14px;
   font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
-  font-size: clamp(32px, 5.4vw, 56px);
+  font-size: clamp(34px, 5.2vw, 62px);
+  font-weight: 680;
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+}
+
+.title-word {
+  display: inline-block;
+  padding-bottom: 0.06em;
+  background: linear-gradient(180deg, var(--ink) 35%, color-mix(in srgb, var(--theme) 45%, var(--silver)) 125%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: word-in 0.9s var(--ease-out) both;
+  animation-delay: calc(var(--i) * 110ms + 160ms);
+}
+
+/* "Digi" carries the colour of whichever product is hovered, and the two live products' colours at rest. */
+.title-word:nth-child(4) {
+  background-image: linear-gradient(90deg, var(--theme), color-mix(in srgb, var(--theme) 55%, var(--sky)));
+}
+
+.lead {
+  margin-top: 14px;
+  text-wrap: balance;
+  font-size: clamp(15.5px, 1.6vw, 18px);
+  color: var(--ink-muted);
+  animation: rise 0.8s var(--ease-out) 0.8s both;
+}
+
+/* The stage: the core in the middle, the products around it, the beams between. */
+
+.stage {
+  --cx: var(--cx-wide);
+  --cy: var(--cy-wide);
+  --core: clamp(168px, 23vh, 212px);
+  --disc: 104px;
+  --node-width: 210px;
+
+  position: relative;
+  width: 100%;
+  max-width: 980px;
+  height: clamp(440px, 55vh, 540px);
+  margin-top: clamp(18px, 3.5vh, 40px);
+}
+
+/* A soft light in the page's colour that follows the mouse. */
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: -80px;
+  background: radial-gradient(
+    /* The mouse is measured from the stage's corner; this layer starts 80px outside it. */
+    420px circle at calc(var(--light-x, calc(50% - 80px)) + 80px) calc(var(--light-y, calc(46% - 80px)) + 80px),
+    color-mix(in srgb, var(--theme) 13%, transparent),
+    transparent 65%
+  );
+  pointer-events: none;
+}
+
+/* Beams */
+
+.beams {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.beams[data-variant="tall"] {
+  display: none;
+}
+
+.beam {
+  transition: opacity 0.4s ease;
+}
+
+.beam-line {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 42%, transparent);
+  stroke-width: 1.25;
+  /* One dash as long as the whole line: sliding it along is what draws the beam out from the core. */
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  transition:
+    stroke-dashoffset 1s var(--ease-out) calc(var(--launch) * (var(--i) * 90ms + 140ms)),
+    stroke 0.35s ease,
+    stroke-width 0.35s ease;
+}
+
+.beam[data-status="soon"] .beam-line {
+  stroke: color-mix(in srgb, var(--accent) 36%, transparent);
+  stroke-dasharray: 0.8 1.9;
+  stroke-linecap: round;
+  transition:
+    opacity 0.7s ease calc(var(--launch) * (var(--i) * 90ms + 600ms)),
+    stroke 0.35s ease,
+    stroke-width 0.35s ease;
+}
+
+/* A short stroke of light travelling out along a live beam. */
+.beam-pulse {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-dasharray: 7 93;
+  opacity: 0.9;
+  animation: flow 3.2s linear infinite;
+  animation-delay: calc(var(--i) * -1.3s);
+  transition:
+    opacity 0.6s ease calc(var(--launch) * 1.1s),
+    stroke-width 0.35s ease;
+}
+
+.beam[data-current="true"] .beam-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.beam[data-current="true"] .beam-pulse {
+  stroke-width: 4;
+}
+
+.platform:not([data-active="none"]) .beam[data-current="false"] {
+  opacity: 0.3;
+}
+
+/* The core */
+
+.core {
+  position: absolute;
+  left: calc(var(--cx) * 1%);
+  top: calc(var(--cy) * 1%);
+  z-index: 1;
+  width: var(--core);
+  height: var(--core);
+  /* Drifts a little against the mouse, the products a little with it, which gives the stage depth. */
+  translate: calc(-50% + var(--drift-x, 0) * -5px) calc(-50% + var(--drift-y, 0) * -4px);
+  transition: translate 0.5s var(--ease-out);
+}
+
+.core-halo {
+  position: absolute;
+  inset: -48%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--theme) 36%, transparent), transparent 62%);
+  filter: blur(12px);
+  animation: breathe 5s ease-in-out infinite;
+}
+
+/* Rings going out from the core, like a signal. */
+.core-ripple {
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--theme) 60%, transparent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ripple 5.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+
+.core-ripple:nth-of-type(3) {
+  animation-delay: 1.8s;
+}
+
+.core-ripple:nth-of-type(4) {
+  animation-delay: 3.6s;
+}
+
+/* The dial: a tick every five degrees, all 360 of them accounted for. */
+.core-dial {
+  position: absolute;
+  inset: -18%;
+  width: 136%;
+  height: 136%;
+  animation: turn 120s linear infinite;
+}
+
+.core-tick {
+  stroke: color-mix(in srgb, var(--silver) 42%, transparent);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.core-tick[data-major="true"] {
+  stroke: color-mix(in srgb, var(--theme) 85%, transparent);
+  stroke-width: 1.6;
+}
+
+.core-arcs {
+  position: absolute;
+  inset: -7%;
+  width: 114%;
+  height: 114%;
+  fill: none;
+  stroke: var(--theme);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  opacity: 0.85;
+  animation: turn 18s linear infinite;
+}
+
+.core-arc-head {
+  fill: var(--theme);
+  stroke: none;
+}
+
+/* A line of light that goes once round the core as it counts up. */
+.core-sweep {
+  position: absolute;
+  inset: -3.5%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--ink) 0deg, var(--theme) var(--sweep), transparent var(--sweep));
+  mask-image: radial-gradient(farthest-side, transparent calc(100% - 3px), black calc(100% - 2.5px));
+  opacity: 0;
+}
+
+.platform[data-entered="true"] .core-sweep {
+  animation: sweep 1.9s var(--ease-out) 0.15s both;
+}
+
+/* One ring thrown outwards the moment the platform powers on. */
+.core-shock {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--theme);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.platform[data-entered="true"] .core-shock {
+  animation: shock 1.3s var(--ease-out) both;
+}
+
+.core-disc {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--theme) 55%, transparent);
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 20%, color-mix(in srgb, var(--theme) 34%, var(--base-top)), var(--base-bottom) 74%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    inset 0 -28px 50px -26px color-mix(in srgb, var(--theme) 55%, transparent),
+    0 0 70px -12px color-mix(in srgb, var(--theme) 70%, transparent);
+  overflow: hidden;
+  transition: box-shadow 0.4s ease;
+}
+
+/* A slow radar sweep across the face of the core. */
+.core-disc::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(from 0deg, transparent 0 74%, color-mix(in srgb, var(--theme) 30%, transparent) 99%, transparent);
+  animation: turn 6s linear infinite;
+}
+
+.core-disc:has(.core-enter:hover),
+.core-disc:has(.core-enter:focus-visible) {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 -28px 50px -22px color-mix(in srgb, var(--theme) 70%, transparent),
+    0 0 90px -6px color-mix(in srgb, var(--theme) 85%, transparent);
+}
+
+.core-readout {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+  transition:
+    opacity 0.5s ease 0.25s,
+    scale 0.8s var(--spring) 0.25s;
+}
+
+.core-brand {
+  /* Tracking adds space after the last letter too; this puts the word back in the middle. */
+  padding-left: 0.42em;
+  font-size: calc(var(--core) * 0.082);
   font-weight: 650;
-  line-height: 1.05;
-  letter-spacing: -0.025em;
-  background: linear-gradient(180deg, var(--ink) 30%, color-mix(in srgb, var(--theme) 45%, var(--silver)) 130%);
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--silver);
+}
+
+.core-count {
+  --count: 360;
+
+  position: relative;
+  margin-top: 0.04em;
+  counter-reset: count var(--count);
+  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  font-size: calc(var(--core) * 0.37);
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.platform[data-entered="true"] .core-count {
+  animation: count-up 1.7s var(--ease-out) 0.25s both;
+}
+
+.core-count::after {
+  content: counter(count);
+  display: block;
+  min-width: 1.7em;
+  text-align: center;
+  background: linear-gradient(180deg, var(--ink) 30%, color-mix(in srgb, var(--theme) 60%, var(--silver)) 120%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-.lead {
-  margin-top: 14px;
-  font-size: clamp(16px, 1.6vw, 18px);
-  color: var(--ink-muted);
+/* The degree sign. */
+.core-count::before {
+  content: "";
+  position: absolute;
+  top: 0.1em;
+  right: -0.14em;
+  width: 0.15em;
+  height: 0.15em;
+  border: 0.035em solid var(--theme);
+  border-radius: 50%;
 }
 
-/* Product cards */
+/* The way in: the core itself, until it's pressed. */
 
-.cards {
+.core-enter {
+  position: absolute;
+  inset: 0;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-  margin: clamp(40px, 6vh, 64px) 0 0;
+  place-content: center;
+  justify-items: center;
+  gap: calc(var(--core) * 0.045);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    opacity 0.45s ease,
+    scale 0.6s var(--ease-out);
+}
+
+.core-enter:focus-visible {
+  outline: 2px solid var(--sky);
+  outline-offset: -6px;
+}
+
+.core-enter:active {
+  scale: 0.96;
+}
+
+.core-enter-word {
+  padding-left: 0.22em;
+  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  font-size: calc(var(--core) * 0.15);
+  font-weight: 680;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.core-enter-icon {
+  width: calc(var(--core) * 0.19);
+  height: calc(var(--core) * 0.19);
+  padding: calc(var(--core) * 0.04);
+  border: 1px solid color-mix(in srgb, var(--theme) 70%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--theme) 22%, transparent);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: ping 2.6s ease-out 1.6s infinite;
+  transition:
+    background-color 0.3s ease,
+    transform 0.4s var(--spring);
+}
+
+.core-enter:hover .core-enter-icon {
+  background: var(--theme);
+  transform: translateX(3px);
+}
+
+.platform[data-phase="ready"] .core-enter {
+  opacity: 0;
+  scale: 1.3;
+  pointer-events: none;
+}
+
+/* Products */
+
+.nodes {
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
-@media (min-width: 760px) {
-  .cards {
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-  }
-}
+.node {
+  --x: var(--x-wide);
+  --y: var(--y-wide);
+  --launch-delay: calc(var(--launch) * (var(--i) * 90ms + 260ms));
 
-.cards-item {
-  display: flex;
-  animation: rise 0.7s var(--ease-out) both;
-  animation-delay: calc(var(--i, 0) * 90ms + 140ms);
-}
-
-.card[data-product="digilog360"] {
-  --accent: var(--blue);
-}
-
-.card[data-product="digigate"] {
-  --accent: var(--sky);
-}
-
-.card {
-  position: relative;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 22px;
-  padding: 28px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.07), var(--glass) 40%, rgb(255 255 255 / 0.02));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.07),
-    0 24px 60px -28px rgb(0 0 0 / 0.7);
-  backdrop-filter: blur(14px);
-  color: inherit;
-  text-decoration: none;
-  overflow: hidden;
-  isolation: isolate;
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  top: calc(var(--y) * 1%);
+  z-index: 2;
+  width: var(--node-width);
+  /* Placed by the middle of its disc, so its beam ends exactly underneath. */
+  translate: calc(-50% + var(--drift-x, 0) * 12px) calc(var(--disc) / -2 + var(--drift-y, 0) * 9px);
   transition:
-    transform 0.3s var(--ease-out),
-    border-color 0.3s ease,
-    box-shadow 0.3s ease,
+    left 0.95s var(--spring) var(--launch-delay),
+    top 0.95s var(--spring) var(--launch-delay),
+    scale 0.95s var(--spring) var(--launch-delay),
+    opacity 0.45s ease var(--launch-delay),
+    translate 0.5s var(--ease-out);
+}
+
+.node-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  outline: none;
+  transition:
     opacity 0.4s ease,
     filter 0.4s ease;
 }
 
-/* While one product is hovered, the other steps back. */
-.stage[data-active="digilog360"] .card[data-product="digigate"],
-.stage[data-active="digigate"] .card[data-product="digilog360"] {
-  opacity: 0.55;
-  filter: saturate(0.6);
+/* While one product is hovered, the others step back. */
+.platform:not([data-active="none"]) .node[data-current="false"] .node-hit {
+  opacity: 0.45;
+  filter: saturate(0.5);
 }
 
-/* A soft light in the product's colour that follows the pointer. */
-.card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: radial-gradient(
-    380px circle at var(--spot-x, 50%) var(--spot-y, 0%),
-    color-mix(in srgb, var(--accent) 22%, transparent),
-    transparent 65%
-  );
-  opacity: 0;
-  transition: opacity 0.35s ease;
-}
-
-/* A thin line of the product's colour along the top edge. */
-.card::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 28px;
-  right: 28px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  opacity: 0.55;
-}
-
-.card:hover,
-.card:focus-visible {
-  transform: translateY(-4px);
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+.node-disc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--disc);
+  height: var(--disc);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 22%, color-mix(in srgb, var(--accent) 26%, var(--base-top)), var(--base-bottom) 72%);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.09),
-    0 32px 70px -30px color-mix(in srgb, var(--accent) 55%, transparent);
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 0 0 7px color-mix(in srgb, var(--accent) 7%, transparent),
+    0 20px 44px -20px color-mix(in srgb, var(--accent) 65%, transparent);
+  transition:
+    transform 0.5s var(--spring),
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
 }
 
-.card:active {
-  transform: translateY(-1px) scale(0.985);
+.node-hit:hover .node-disc,
+.node-hit:focus-visible .node-disc {
+  transform: scale(1.1);
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 0 0 9px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 0 54px -6px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.node-hit:focus-visible .node-disc {
+  outline: 2px solid var(--accent);
+  outline-offset: 12px;
+}
+
+.node-hit:active .node-disc {
+  transform: scale(1.03);
   transition-duration: 0.12s;
 }
 
-.card:hover::before,
-.card:focus-visible::before {
-  opacity: 1;
+/* A small satellite going round each product. */
+.node-orbit {
+  position: absolute;
+  inset: -11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  border-radius: 50%;
+  animation: turn 14s linear infinite;
 }
 
-.card:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+.node-orbit::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
 }
 
-.card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 60px;
+.node:nth-child(even) .node-orbit {
+  animation-direction: reverse;
 }
 
-.card-logo {
-  width: auto;
-  height: 60px;
-  /* The lockup file has clear space built in; pull it back so both logos line up with the text below. */
-  margin-left: -8px;
+.node-mark {
+  width: 58%;
+  height: 58%;
+  transition:
+    opacity 0.35s ease,
+    filter 0.35s ease;
 }
 
-.card[data-product="digigate"] .card-logo {
-  height: 42px;
-  margin-left: 0;
+.node[data-product="digilog360"] .node-mark {
+  width: 66%;
+  height: 66%;
 }
 
-.badge {
-  flex-shrink: 0;
-  padding: 5px 11px;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+.node[data-product="digigate"] .node-mark {
+  width: 54%;
+  height: 54%;
+}
+
+.node-badge {
+  position: absolute;
+  top: -8px;
+  left: 62%;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  font-size: 12px;
+  background: color-mix(in srgb, var(--accent) 22%, var(--base-bottom));
+  font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
   color: var(--ink);
 }
 
-.card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.node-label {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  margin-top: 20px;
 }
 
-.card-heading {
+.node-name {
   font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
-  font-size: 22px;
-  font-weight: 620;
-  letter-spacing: -0.01em;
+  font-size: 20px;
+  font-weight: 660;
+  letter-spacing: -0.015em;
 }
 
-.card-summary {
-  max-width: 34ch;
-  font-size: 15.5px;
-  line-height: 1.55;
+.node-name b {
+  font-weight: inherit;
+  color: var(--accent);
+}
+
+.node-heading {
+  font-size: 13.5px;
   color: var(--ink-muted);
 }
 
-.card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: auto;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
-}
-
-.card-host {
+.node-chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-width: 0;
-  font-size: 13px;
-  color: var(--ink-subtle);
-  overflow-wrap: anywhere;
-}
-
-.card-host-icon {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.card-cta {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 18px;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 13px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  font-size: 15px;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  font-size: 12.5px;
   font-weight: 650;
+  color: var(--ink);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.node[data-status="live"] .node-hit:hover .node-chip,
+.node[data-status="live"] .node-hit:focus-visible .node-chip {
+  border-color: var(--accent);
+  background: var(--accent);
   color: var(--navy);
-  transition: box-shadow 0.3s ease;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
-.card:hover .card-cta,
-.card:focus-visible .card-cta {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
-}
-
-.card-cta-icon {
-  width: 16px;
-  height: 16px;
+.node-chip-icon {
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -541,181 +947,74 @@ p {
   transition: transform 0.3s var(--ease-out);
 }
 
-.card:hover .card-cta-icon,
-.card:focus-visible .card-cta-icon {
+.node-hit:hover .node-chip-icon,
+.node-hit:focus-visible .node-chip-icon {
   transform: translateX(3px);
 }
 
-/* Welcome: shown once per session, before the chooser. */
+/* Not out yet: quieter, dashed, with a slow blinking light. */
 
-/* Until the visitor enters, the chooser waits behind the welcome; its entrance plays as the welcome fades. */
-html:not([data-welcomed]) .stage[data-phase="welcome"] .hero,
-html:not([data-welcomed]) .stage[data-phase="welcome"] .cards-item {
-  opacity: 0;
-  animation: none;
+.node[data-status="soon"] .node-disc {
+  border-style: dashed;
 }
 
-/* Already welcomed this session: never flash the welcome while the page starts. */
-html[data-welcomed] .welcome {
-  display: none;
+.node[data-status="soon"] .node-orbit {
+  border-style: dashed;
+  animation-duration: 30s;
 }
 
-.welcome {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: grid;
-  place-items: center;
-  padding: 24px 16px;
-  overflow-y: auto;
-  background: radial-gradient(ellipse 80% 70% at 50% 45%, rgb(20 24 51 / 0.35), rgb(11 14 34 / 0.92));
-  backdrop-filter: blur(10px);
-  transition: opacity 0.8s ease;
+.node[data-status="soon"] .node-mark {
+  opacity: 0.72;
+  filter: saturate(0.7);
 }
 
-.welcome[data-leaving="true"] {
-  opacity: 0;
+.node[data-status="soon"] .node-hit:hover .node-mark,
+.node[data-status="soon"] .node-hit:focus-visible .node-mark {
+  opacity: 1;
+  filter: none;
+}
+
+.node[data-status="soon"] .node-chip {
+  border-style: dashed;
+  background: transparent;
+  color: var(--ink-muted);
+}
+
+.node[data-status="soon"] .node-chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: blink 1.8s ease-in-out infinite;
+}
+
+.node[data-status="soon"] .node-hit:hover .node-chip,
+.node[data-status="soon"] .node-hit:focus-visible .node-chip {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+/* Under the core: what the hovered product is */
+
+.caption {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: min(430px, 46%);
+  translate: -50% 0;
+  text-align: center;
   pointer-events: none;
 }
 
-.welcome-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 760px;
-  text-align: center;
-  transition:
-    transform 0.9s var(--ease-out),
-    filter 0.8s ease;
-}
-
-.welcome[data-leaving="true"] .welcome-inner {
-  transform: scale(1.06);
-  filter: blur(6px);
-}
-
-.welcome-marks {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  margin-bottom: 30px;
-  animation: rise 0.8s var(--ease-out) both;
-}
-
-.welcome-mark {
-  width: 84px;
-  height: 84px;
-  filter: drop-shadow(0 0 24px rgb(50 139 210 / 0.45));
-}
-
-.welcome-mark-gate {
-  width: 70px;
-  height: 70px;
-  filter: drop-shadow(0 0 24px rgb(84 191 244 / 0.4));
-}
-
-.welcome-divider {
-  width: 1px;
-  height: 56px;
-  background: linear-gradient(180deg, transparent, var(--silver), transparent);
-  opacity: 0.5;
-}
-
-.welcome-eyebrow {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--silver);
-  animation: rise 0.8s var(--ease-out) 0.1s both;
-}
-
-.welcome-title {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0 0.26em;
-  margin-top: 16px;
-  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
-  font-size: clamp(38px, 7vw, 76px);
-  font-weight: 680;
-  line-height: 1.06;
-  letter-spacing: -0.03em;
-}
-
-.welcome-word {
-  display: inline-block;
-  padding-bottom: 0.06em;
-  background: linear-gradient(180deg, var(--ink) 35%, color-mix(in srgb, var(--blue) 45%, var(--silver)) 120%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: word-in 0.9s var(--ease-out) both;
-}
-
-/* "Digi" carries both products' colours. */
-.welcome-word:nth-child(4) {
-  background-image: linear-gradient(90deg, var(--blue), var(--sky));
-}
-
-.welcome-lead {
-  margin-top: 18px;
-  font-size: clamp(16px, 1.8vw, 19px);
-  color: var(--ink-muted);
-  animation: rise 0.8s var(--ease-out) 0.85s both;
-}
-
-.welcome-enter {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 36px;
-  padding: 15px 32px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--blue), var(--sky));
-  font: inherit;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--navy);
-  cursor: pointer;
-  animation:
-    rise 0.8s var(--ease-out) 1s both,
-    ping 2.6s ease-out 2.2s infinite;
-  transition: transform 0.2s var(--ease-out);
-}
-
-.welcome-enter:hover {
-  transform: translateY(-2px);
-}
-
-.welcome-enter:active {
-  transform: scale(0.97);
-}
-
-.welcome-enter:focus-visible {
-  outline: 2px solid var(--sky);
-  outline-offset: 4px;
-}
-
-.welcome-enter-icon {
-  width: 17px;
-  height: 17px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.welcome-hint {
-  margin-top: 14px;
-  font-size: 13px;
+.caption-hint,
+.caption-rest {
+  align-self: end;
+  font-size: 14px;
   color: var(--ink-subtle);
-  animation: rise 0.8s var(--ease-out) 1.15s both;
 }
 
-.welcome-hint kbd {
+.caption-hint kbd {
   padding: 2px 7px;
   border: 1px solid var(--line);
   border-bottom-width: 2px;
@@ -726,11 +1025,198 @@ html[data-welcomed] .welcome {
   color: var(--ink-muted);
 }
 
+.caption-product {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  align-self: end;
+}
+
+.caption-heading {
+  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  font-size: 21px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+}
+
+.caption-summary {
+  text-wrap: balance;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.caption-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.caption-lock {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* Phones and tablets have no Enter key to hint at. */
 @media (hover: none) {
-  .welcome-hint {
+  .caption-hint {
     display: none;
   }
+}
+
+/*
+ * Before the visitor enters: only the core shows. The products wait inside it and the beams are undrawn, so that
+ * pressing the core is what sends them out.
+ */
+
+html:not([data-welcomed]) .platform[data-phase="welcome"] .node {
+  left: calc(var(--cx) * 1%);
+  top: calc(var(--cy) * 1%);
+  scale: 0.12;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html:not([data-welcomed]) .platform[data-phase="welcome"] .beam-line {
+  stroke-dashoffset: 100;
+}
+
+html:not([data-welcomed]) .platform[data-phase="welcome"] .beam[data-status="soon"] .beam-line,
+html:not([data-welcomed]) .platform[data-phase="welcome"] .beam-pulse {
+  opacity: 0;
+}
+
+html:not([data-welcomed]) .platform[data-phase="welcome"] .core-readout {
+  opacity: 0;
+  scale: 0.7;
+}
+
+/* Already welcomed this session: never flash the way in while the page starts. */
+html[data-welcomed] .core-enter,
+html[data-welcomed] .caption-hint {
+  display: none;
+}
+
+html[data-welcomed] .stage {
+  animation: rise 0.8s var(--ease-out) 0.2s both;
+}
+
+/* Coming soon: what a product that isn't out yet says when it's clicked. */
+
+.soon {
+  position: absolute;
+  inset: -60px -40px;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    color-mix(in srgb, var(--base-bottom) 92%, transparent) 35%,
+    color-mix(in srgb, var(--base-bottom) 60%, transparent) 75%,
+    transparent 100%
+  );
+  backdrop-filter: blur(10px);
+  /* Fades to nothing before its edges, so it reads as a glow over the stage and never as a box. */
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, black 50%, transparent 100%);
+  cursor: pointer;
+  animation: soon-life 3.2s ease both;
+}
+
+.soon-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+
+.soon-ring {
+  position: absolute;
+  top: -90px;
+  left: -90px;
+  width: 180px;
+  height: 180px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: soon-ring 1.3s var(--ease-out) both;
+}
+
+.soon-ring + .soon-ring {
+  animation-delay: 0.2s;
+}
+
+.soon-spark {
+  position: absolute;
+  top: -10px;
+  left: -1.25px;
+  width: 2.5px;
+  height: 20px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--accent), transparent);
+  opacity: 0;
+  animation: spark 1s var(--ease-out) 0.1s both;
+}
+
+.soon-spark:nth-child(odd) {
+  height: 12px;
+  animation-delay: 0.22s;
+}
+
+.soon-name {
+  position: relative;
+  padding: 6px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 650;
+  animation: rise 0.6s var(--ease-out) 0.05s both;
+}
+
+.soon-name b {
+  font-weight: inherit;
+  color: var(--accent);
+}
+
+.soon-word {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  font-family: var(--font-inter-tight), var(--font-inter), system-ui, sans-serif;
+  font-size: clamp(42px, 9.4vw, 92px);
+  font-weight: 720;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  perspective: 700px;
+}
+
+.soon-letter {
+  display: inline-block;
+  padding-bottom: 0.08em;
+  background: linear-gradient(180deg, var(--ink) 32%, var(--accent) 118%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: letter-in 0.75s var(--spring) both;
+  animation-delay: calc(var(--n) * 45ms + 140ms);
+}
+
+.soon-note {
+  position: relative;
+  font-size: clamp(14px, 1.6vw, 16.5px);
+  color: var(--ink-muted);
+  animation: rise 0.7s var(--ease-out) 0.85s both;
 }
 
 /* Footer */
@@ -741,7 +1227,7 @@ html[data-welcomed] .welcome {
   justify-content: space-between;
   gap: 8px 24px;
   width: 100%;
-  max-width: 1040px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 24px;
   border-top: 1px solid var(--line);
@@ -749,11 +1235,11 @@ html[data-welcomed] .welcome {
   color: var(--ink-subtle);
 }
 
-/* Phones */
+/* Phones held upright: the core in the middle, two products above it and two below. */
 
-@media (max-width: 520px) {
+@media (max-width: 760px) {
   .main {
-    padding: 64px 16px 32px;
+    padding: 60px 16px 28px;
   }
 
   .sound-toggle {
@@ -761,47 +1247,61 @@ html[data-welcomed] .welcome {
     right: 14px;
   }
 
-  .welcome-marks {
-    gap: 16px;
-    margin-bottom: 24px;
+  .stage {
+    --cx: var(--cx-tall);
+    --cy: var(--cy-tall);
+    --core: 124px;
+    --disc: 78px;
+    --node-width: 128px;
+
+    max-width: 420px;
+    height: 548px;
+    margin-top: 28px;
   }
 
-  .welcome-mark {
-    width: 64px;
-    height: 64px;
+  .node {
+    --x: var(--x-tall);
+    --y: var(--y-tall);
   }
 
-  .welcome-mark-gate {
-    width: 54px;
-    height: 54px;
+  .beams[data-variant="wide"] {
+    display: none;
   }
 
-  .emblem {
-    width: 120px;
-    height: 120px;
-    margin-bottom: 22px;
+  .beams[data-variant="tall"] {
+    display: block;
   }
 
-  .emblem-mark {
-    width: 74px;
-    height: 74px;
+  .node-orbit {
+    inset: -8px;
   }
 
-  .emblem-mark[data-product="digigate"] {
-    width: 64px;
-    height: 64px;
+  .node-label {
+    gap: 2px;
+    margin-top: 14px;
   }
 
-  .card {
-    padding: 22px;
+  .node-name {
+    font-size: 16.5px;
   }
 
-  .card-logo {
-    height: 50px;
+  .node-heading {
+    font-size: 12px;
   }
 
-  .card[data-product="digigate"] .card-logo {
-    height: 36px;
+  .node-chip {
+    margin-top: 6px;
+    padding: 4px 10px;
+    font-size: 11.5px;
+  }
+
+  .node-badge {
+    display: none;
+  }
+
+  /* No room under the core here, and nothing to hover: each product already says what it is. */
+  .caption {
+    display: none;
   }
 
   .footer {
@@ -837,68 +1337,184 @@ html[data-welcomed] .welcome {
   }
 }
 
+@keyframes turn {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+    scale: 0.96;
+  }
+  50% {
+    opacity: 1;
+    scale: 1.05;
+  }
+}
+
+@keyframes ripple {
+  0% {
+    opacity: 0.55;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 2.9;
+  }
+}
+
 @keyframes ping {
   0% {
-    box-shadow: 0 0 0 0 rgb(84 191 244 / 0.45);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--theme) 55%, transparent);
   }
   70%,
   100% {
-    box-shadow: 0 0 0 16px rgb(84 191 244 / 0);
+    box-shadow: 0 0 0 16px transparent;
   }
 }
 
-@keyframes turn {
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The dash sits at the core end of the line and slides out to the product. */
+@keyframes flow {
+  from {
+    stroke-dashoffset: 100;
+  }
   to {
-    transform: rotate(360deg);
+    stroke-dashoffset: 0;
   }
 }
 
+@keyframes count-up {
+  from {
+    --count: 0;
+  }
+  to {
+    --count: 360;
+  }
+}
+
+@keyframes sweep {
+  0% {
+    --sweep: 0deg;
+    opacity: 1;
+  }
+  80% {
+    --sweep: 360deg;
+    opacity: 1;
+  }
+  100% {
+    --sweep: 360deg;
+    opacity: 0;
+  }
+}
+
+@keyframes shock {
+  0% {
+    opacity: 0.9;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 5.5;
+  }
+}
+
+@keyframes soon-life {
+  0% {
+    opacity: 0;
+  }
+  7%,
+  84% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes soon-ring {
+  0% {
+    opacity: 0.9;
+    scale: 0.3;
+  }
+  100% {
+    opacity: 0;
+    scale: 3.6;
+  }
+}
+
+@keyframes spark {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-50px) scaleY(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-250px) scaleY(1.5);
+  }
+}
+
+@keyframes letter-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.55em) rotateX(-75deg) scale(0.8);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+/* For anyone who has asked their device for less motion: everything is simply in its place. */
 @media (prefers-reduced-motion: reduce) {
-  .hero,
-  .cards-item,
-  .orbit {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .core-ripple,
+  .core-shock,
+  .core-sweep,
+  .beam-pulse,
+  .soon-burst {
+    display: none;
+  }
+
+  /* These would otherwise finish their fade at once and vanish. */
+  .soon,
+  .soon-name,
+  .soon-letter,
+  .soon-note {
     animation: none;
   }
 
-  .card,
-  .card::before,
-  .card-cta,
-  .card-cta-icon,
-  .emblem-mark,
-  .eyebrow-text {
-    transition: none;
+  .core {
+    translate: -50% -50%;
   }
 
-  .welcome-marks,
-  .welcome-eyebrow,
-  .welcome-word,
-  .welcome-lead,
-  .welcome-enter,
-  .welcome-hint {
-    animation: none;
-  }
-
-  .welcome-inner,
-  .welcome[data-leaving="true"] .welcome-inner {
-    transform: none;
-    filter: none;
-    transition: none;
-  }
-
-  .card:hover,
-  .card:focus-visible,
-  .card:active,
-  .card:hover .card-cta-icon,
-  .card:focus-visible .card-cta-icon {
-    transform: none;
-  }
-
-  .emblem-mark,
-  .stage[data-active] .emblem-mark {
-    transform: translate(-50%, -50%);
-  }
-
-  .eyebrow-text {
-    transform: none;
+  .node {
+    translate: -50% calc(var(--disc) / -2);
   }
 }
