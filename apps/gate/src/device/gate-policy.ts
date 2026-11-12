@@ -1,4 +1,5 @@
 import { Handheld } from '../../modules/handheld';
+import { Scanner } from '../../modules/scanner';
 
 /*
  * A gate handheld that DigiGate owns (set up over adb on a freshly reset handheld) is held to the gate policy at every
@@ -18,10 +19,30 @@ export type GatePolicy =
 
 let current: GatePolicy = { kind: 'not-managed' };
 
+/**
+ * A factory reset puts a scanner back to typing what it reads, as if from a keyboard, and then DigiGate hears nothing.
+ * On a handheld it owns, DigiGate sets its own scanner to send scans to it, at every start. Returns a problem's name,
+ * or null.
+ */
+function scansToDigiGate(): string | null {
+  try {
+    if (!Scanner) return null;
+    if (Scanner.getScannerInfo().outputMode === 'app') return null;
+    return Scanner.switchToAppOutput() ? null : 'scanner-output';
+  } catch {
+    return 'scanner-output';
+  }
+}
+
 /** Safe to repeat. Never throws: a handheld that can't be locked down still has to work as a gate. */
 export function applyGatePolicy(): GatePolicy {
   try {
-    current = Handheld?.isDeviceOwner() ? { kind: 'managed', problems: Handheld.applyGatePolicy(ALSO_ALLOWED) } : { kind: 'not-managed' };
+    if (Handheld?.isDeviceOwner()) {
+      const scanner = scansToDigiGate();
+      current = { kind: 'managed', problems: [...Handheld.applyGatePolicy(ALSO_ALLOWED), ...(scanner ? [scanner] : [])] };
+    } else {
+      current = { kind: 'not-managed' };
+    }
   } catch (cause) {
     current = { kind: 'managed', problems: [`failed: ${cause instanceof Error ? cause.message : 'unknown error'}`] };
   }
