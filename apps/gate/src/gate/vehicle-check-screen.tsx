@@ -276,7 +276,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
           <ResultBanner
             tone="warning"
             title={emergencyName(emergency)}
-            message={`Ask them to wait a moment: scan the disc and the driver's licence, then press Check. ${words.letIn.replace(/.$/, '')} once it's done.`}
+            message={`Ask them to wait a moment: scan the disc and the driver's licence, then press Check. ${words.letIn.replace(/\.$/, '')} once it's done.`}
           />
         ) : null}
         {invite?.kind === 'refused' && !checked ? <ResultBanner tone="warning" title={invite.title} message={invite.message} /> : null}

@@ -51,8 +51,8 @@ async function createPerson(caller: Caller, body: Record<string, unknown>): Prom
   const isClientLogin = role === 'client_viewer';
   const isEmail = EMAIL.test(typed);
   // A host signs in to the invite app on their phone, with this number or their username or email.
-  const typedPhone = String(body.phone ?? '').replace(/[s()-]/g, '');
-  const phone = !typedPhone ? null : /^0d{9}$/.test(typedPhone) ? `+27${typedPhone.slice(1)}` : /^+d{8,15}$/.test(typedPhone) ? typedPhone : /^27d{9}$/.test(typedPhone) ? `+${typedPhone}` : 'bad';
+  const typedPhone = String(body.phone ?? '').replace(/[\s()-]/g, '');
+  const phone = !typedPhone ? null : /^0\d{9}$/.test(typedPhone) ? `+27${typedPhone.slice(1)}` : /^\+\d{8,15}$/.test(typedPhone) ? typedPhone : /^27\d{9}$/.test(typedPhone) ? `+${typedPhone}` : 'bad';
   // A username belongs to the company: what's typed in front of any @ is the name, and the company's code goes after.
   const name = isEmail ? typed : (typed.split('@')[0] ?? '');
 
