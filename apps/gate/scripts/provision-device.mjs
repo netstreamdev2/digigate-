@@ -45,3 +45,12 @@ if (setupDone && adb('shell', 'pm', 'list', 'packages', '-e', SETUP_WIZARD).incl
   adb('shell', 'pm', 'disable-user', '--user', '0', SETUP_WIZARD);
   console.log("Switched off Google's setup wizard, and its \"setup in progress\" notification with it.");
 }
+
+// Urovo's firmware updater keeps a "Checking for system updates" notification and installs firmware on its own. A
+// gate handheld takes firmware only when someone chooses to, since an update can change how the scanner behaves:
+// switch it off here, and on again over USB (pm enable com.ubx.update) to update deliberately.
+const UROVO_UPDATER = 'com.ubx.update';
+if (adb('shell', 'pm', 'list', 'packages', '-e', UROVO_UPDATER).includes(`package:${UROVO_UPDATER}`)) {
+  adb('shell', 'pm', 'disable-user', '--user', '0', UROVO_UPDATER);
+  console.log('Switched off Urovo\'s firmware updater: firmware comes only when someone chooses it.');
+}
