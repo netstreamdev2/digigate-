@@ -88,9 +88,11 @@ async function markDone(db: SQLiteDatabase, id: string): Promise<void> {
   await setValue(db, DONE_KEY, JSON.stringify([...ids, id].slice(-REMEMBERED)));
 }
 
-async function record(db: SQLiteDatabase, command: { id: string; kind: CommandKind }, outcome: string): Promise<void> {
+// Said as `result`, never `outcome`: the server keeps a payload's outcome as a check's result (clear, warning or
+// blocked) and would refuse the whole upload over any other word.
+async function record(db: SQLiteDatabase, command: { id: string; kind: CommandKind }, result: string): Promise<void> {
   const at = Date.now();
-  await appendEvent(db, { id: newEventId(at), type: 'device_command', occurredAt: at, gateUserId: null, payload: { command_id: command.id, kind: command.kind, outcome } });
+  await appendEvent(db, { id: newEventId(at), type: 'device_command', occurredAt: at, gateUserId: null, payload: { command_id: command.id, kind: command.kind, result } });
 }
 
 const installedVersion = (): number => Number(Application.nativeBuildVersion ?? '0');

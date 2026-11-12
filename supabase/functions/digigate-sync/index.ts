@@ -250,6 +250,11 @@ Deno.serve(async (request) => {
       select o.suspended_at is not null as suspended, o.suspended_reason as reason, d.release_requested_at is not null as release
       from digigate.devices d join digigate.organisations o on o.id = d.org_id
       where d.id = ${deviceId}`;
+    // Lock, restart or update, asked for by a super user and not yet carried out. The handheld does each once.
+    const commands = await sql`
+      select id, kind, payload from digigate.device_commands
+      where device_id = ${deviceId} and done_at is null
+      order by requested_at`;
     return json({
       accepted,
       selfie,
@@ -258,6 +263,7 @@ Deno.serve(async (request) => {
       ...snapshot,
       suspended: control?.suspended ? { reason: control.reason ?? null } : null,
       release: control?.release === true,
+      commands: commands.map((row) => ({ id: row.id, kind: row.kind, payload: row.payload })),
     });
   } catch (cause) {
     console.error('digigate-sync failed', events.length, cause instanceof Error ? cause.name : 'unknown');

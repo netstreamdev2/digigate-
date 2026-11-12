@@ -1339,6 +1339,47 @@ check('a super user can', !(await as('authenticated', SUPER, 'aal2', `select dig
 await onDevice(DEVICE, [{ id: u(7401), type: 'handheld_released', occurredAt: minutesAgo(1), gateUserId: null, payload: { released: true, problems: [], by: 'super_user' } }]);
 check('the handheld\'s own release clears the request', (await one(`select release_requested_at from digigate.devices where id = '${DEVICE}'`)).release_requested_at === null);
 
+// A forgotten PIN: a new one from the company's admin, manager or control room, or a super user. Only the PIN changes.
+const NEW_PIN = JSON.stringify({ algorithm: 'pbkdf2-sha256', iterations: 20000, salt: 'c2FsdC1mb3ItdGVzdA==', hash: 'bmV3LXBpbi1oYXNo' });
+const resetPin = (profile, aal, pin = NEW_PIN) => as('authenticated', profile, aal, `select digigate.reset_gate_user_pin('${GUARD}', $1::jsonb)`, [pin]);
+const guardBefore = await one(`select first_name, last_name, role, site_ids, is_active from digigate.gate_users where id = '${GUARD}'`);
+check('another company cannot reset a guard\'s PIN', (await resetPin(ADMIN_B, 'aal2')).error);
+check('nor can the control room without MFA', (await resetPin(ROOM_A, 'aal1')).error);
+check('a record that is not a PIN hash is refused', (await resetPin(ADMIN_A, 'aal2', JSON.stringify({ pin: '123456' }))).error
+  && (await resetPin(ADMIN_A, 'aal2', JSON.stringify({ algorithm: 'plain', iterations: 1, salt: 'x', hash: '123456' }))).error);
+check('the company\'s control room can, at night when it happens', !(await resetPin(ROOM_A, 'aal2')).error
+  && (await one(`select pin ->> 'hash' as hash from digigate.gate_users where id = '${GUARD}'`)).hash === 'bmV3LXBpbi1oYXNo');
+check('and nothing else about the guard changes', JSON.stringify(await one(`select first_name, last_name, role, site_ids, is_active from digigate.gate_users where id = '${GUARD}'`)) === JSON.stringify(guardBefore));
+check('it is in the audit log as a PIN reset, by them', (await count(`digigate.audit_log where action = 'gate_user.pin_reset' and actor_id = '${ROOM_A}' and detail is null`)) === 1);
+check('the handheld gets the new PIN at its next sync', JSON.stringify((await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s).includes('bmV3LXBpbi1oYXNo'));
+
+// Remote lock, restart and update: a super user's alone, carried out once by the handheld, which closes them.
+const command = (profile, kind, payload = '{}') => as('authenticated', profile, 'aal2', 'select digigate.request_device_command($1, $2, $3::jsonb) as id', [DEVICE, kind, payload]);
+check('a company admin cannot restart a handheld', (await command(ADMIN_A, 'restart')).error);
+check('nor can its control room lock one', (await command(ROOM_A, 'lock')).error);
+const restartId = (await command(SUPER, 'restart')).rows?.[0]?.id;
+check('a super user can, and it waits for the handheld', typeof restartId === 'string'
+  && (await count(`digigate.device_commands where device_id = '${DEVICE}' and kind = 'restart' and done_at is null`)) === 1);
+check('asking again renews it rather than queueing a second', (await command(SUPER, 'restart')).rows?.[0]?.id === restartId
+  && (await count(`digigate.device_commands where device_id = '${DEVICE}' and kind = 'restart'`)) === 1);
+check('an update must name an https download and a version', (await command(SUPER, 'update_app', JSON.stringify({ url: 'http://example.com/a.apk', version_code: 5 }))).error
+  && (await command(SUPER, 'update_app', JSON.stringify({ url: 'https://example.com/a.apk' }))).error
+  && (await command(SUPER, 'update_app', JSON.stringify({ url: 'https://example.com/a.apk', version_code: 5, sha256: 'nothex' }))).error);
+check('and keeps only what the handheld needs', !(await command(SUPER, 'update_app', JSON.stringify({ url: 'https://example.com/a.apk', version_code: 5, sha256: 'AB'.repeat(32), extra: 'x' }))).error
+  && JSON.stringify((await one(`select payload from digigate.device_commands where device_id = '${DEVICE}' and kind = 'update_app'`)).payload) === JSON.stringify({ url: 'https://example.com/a.apk', sha256: 'ab'.repeat(32), version_code: 5 }));
+check('each request is in the audit log', (await count(`digigate.audit_log where action in ('device.restart_requested', 'device.update_app_requested') and device_id = '${DEVICE}'`)) === 3);
+check('only super users can read them', (await as('authenticated', ADMIN_A, 'aal2', 'select id from digigate.device_commands')).rows.length === 0
+  && (await as('authenticated', SUPER, 'aal2', 'select id from digigate.device_commands')).rows.length === 2);
+await onDevice(DEVICE, [{ id: u(7402), type: 'device_command', occurredAt: minutesAgo(1), gateUserId: null, payload: { command_id: restartId, kind: 'restart', result: 'restarting' } }]);
+check('the handheld\'s report closes it with how it went', (await one(`select outcome from digigate.device_commands where id = '${restartId}'`)).outcome === 'restarting'
+  && (await count(`digigate.device_commands where device_id = '${DEVICE}' and done_at is null`)) === 1);
+await onDevice(DEVICE, [{ id: u(7403), type: 'device_command', occurredAt: minutesAgo(1), gateUserId: null, payload: { command_id: restartId, kind: 'restart', result: 'on-a-call' } }]);
+check('and a later word from it is the one kept', (await one(`select outcome from digigate.device_commands where id = '${restartId}'`)).outcome === 'on-a-call');
+check('a command\'s report never holds up the rest of the upload', !(await onDevice(DEVICE, [
+  { id: u(7404), type: 'device_command', occurredAt: minutesAgo(1), gateUserId: null, payload: { command_id: restartId, kind: 'restart', result: 'locked-app-only' } },
+  shiftEvent(7405, 1, { shift_id: u(7406) }),
+])).error && (await count(`digigate.events where id in ('${u(7404)}', '${u(7405)}')`)) === 2);
+
 // A company that doesn't pay: suspended by a super user, its logins see nothing, and they're told why.
 const roomSitesBefore = (await as('authenticated', ROOM_A, 'aal2', 'select digigate.visible_site_ids() as ids')).rows[0].ids.length;
 check('a company admin cannot suspend anyone, even themselves', (await as('authenticated', ADMIN_A, 'aal2', `select digigate.set_company_suspended('${ORG_A}', true, 'Unpaid')`)).error);
