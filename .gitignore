@@ -35,3 +35,6 @@ Thumbs.db
 
 # Built from packages/core for the Edge Functions: pnpm functions:bundle
 supabase/functions/_shared/core.js
+
+# Written by Next.js on every build
+next-env.d.ts
