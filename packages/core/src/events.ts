@@ -37,8 +37,10 @@ export type GateEventType =
    * the handheld when it happened and sent once it's back, so the control room knows why it went quiet.
    */
   | 'device_status'
-  /** A supervisor took the handheld out of DigiGate's control: its other apps, hotspot and settings are back. */
-  | 'handheld_released';
+  /** A super user took the handheld out of DigiGate's control: its other apps, hotspot and settings are back. */
+  | 'handheld_released'
+  /** The handheld carried out something a super user asked of it from the dashboard: lock, restart or update the app. */
+  | 'device_command';
 
 export type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 

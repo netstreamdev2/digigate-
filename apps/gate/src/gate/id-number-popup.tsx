@@ -1,13 +1,14 @@
 import { factsFromSaIdNumber } from '@digigate/core';
 import { colors, radius, space, typography } from '@digigate/design';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
 import type { IdBookDetails } from '@/components/document-preview';
 import { Icon, type IconName } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
+import { KeyboardInput, KeyboardScroll, useKeyboardHeight } from '@/components/keyboard-scroll';
 import { PillButton } from '@/components/pill-button';
 import { Text } from '@/components/text';
 import { formatDate, formatSaIdNumber, nameInput } from '@/lib/format';
@@ -64,6 +65,7 @@ function SexButton({ label, selected, onPress }: { label: string; selected: bool
  */
 export function IdNumberPopup({ idNumber, onRetry, onIdBook, onCancel }: Props) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
   const facts = useMemo(() => factsFromSaIdNumber(idNumber, Date.now()), [idNumber]);
   const [step, setStep] = useState<'choose' | 'book'>('choose');
   const [names, setNames] = useState('');
@@ -75,12 +77,13 @@ export function IdNumberPopup({ idNumber, onRetry, onIdBook, onCancel }: Props) 
   const contradictsId = facts !== null && gender !== null && gender !== facts.gender;
 
   return (
-    <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
+    // While the keyboard is up the popup ends at its top, so the fields and the buttons under them stay in sight.
+    <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: keyboardHeight > 0 ? keyboardHeight + space.sm : insets.bottom + space.md }]}>
       <View style={styles.topBar}>
         <IconButton icon="close" label="Cancel" tone="dark" onPress={onCancel} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardScroll contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heading}>
           <Text variant="overline" color={colors.inkMuted}>
             ID number read
@@ -110,7 +113,7 @@ export function IdNumberPopup({ idNumber, onRetry, onIdBook, onCancel }: Props) 
               <Text variant="overline" color={colors.inkMuted}>
                 First names
               </Text>
-              <TextInput
+              <KeyboardInput
                 value={names}
                 onChangeText={(text) => setNames(nameInput(text))}
                 placeholder="As printed in the book"
@@ -128,7 +131,7 @@ export function IdNumberPopup({ idNumber, onRetry, onIdBook, onCancel }: Props) 
               <Text variant="overline" color={colors.inkMuted}>
                 Surname
               </Text>
-              <TextInput
+              <KeyboardInput
                 value={surname}
                 onChangeText={(text) => setSurname(nameInput(text))}
                 placeholder="As printed in the book"
@@ -161,7 +164,7 @@ export function IdNumberPopup({ idNumber, onRetry, onIdBook, onCancel }: Props) 
             </View>
           </View>
         )}
-      </ScrollView>
+      </KeyboardScroll>
 
       {step === 'book' ? (
         <View style={styles.actions}>

@@ -1,6 +1,49 @@
 import { describe, expect, it } from 'vitest';
 
-import { childrenOf, describeOccupants, NO_OCCUPANTS, occupantChange, occupantsOf, occupantTotal } from './occupants';
+import {
+  canRemoveOccupant,
+  childrenOf,
+  describeOccupants,
+  NO_OCCUPANTS,
+  occupantChange,
+  occupantsOf,
+  occupantTotal,
+  possibleDriversOf,
+} from './occupants';
+
+describe('possibleDriversOf', () => {
+  it('counts the men, the women and anyone not sure, never the children', () => {
+    expect(possibleDriversOf({ male: 1, female: 2, boy: 3, girl: 1, unknown: 1 })).toBe(4);
+    expect(possibleDriversOf({ ...NO_OCCUPANTS, boy: 2, girl: 1 })).toBe(0);
+  });
+});
+
+describe('canRemoveOccupant', () => {
+  it('keeps the only adult, who is the driver', () => {
+    const driverAndKids = { ...NO_OCCUPANTS, female: 1, boy: 1, girl: 2 };
+    expect(canRemoveOccupant(driverAndKids, 'female')).toBe(false);
+    expect(canRemoveOccupant({ ...NO_OCCUPANTS, male: 1 }, 'male')).toBe(false);
+    expect(canRemoveOccupant({ ...NO_OCCUPANTS, unknown: 1, girl: 1 }, 'unknown')).toBe(false);
+  });
+
+  it('lets an adult go while another could still drive', () => {
+    const two = { ...NO_OCCUPANTS, male: 1, female: 1 };
+    expect(canRemoveOccupant(two, 'male')).toBe(true);
+    expect(canRemoveOccupant(two, 'female')).toBe(true);
+    expect(canRemoveOccupant({ ...NO_OCCUPANTS, male: 1, unknown: 1 }, 'male')).toBe(true);
+  });
+
+  it('always lets a child go, since a child is never the driver', () => {
+    const family = { ...NO_OCCUPANTS, male: 1, boy: 1, girl: 1 };
+    expect(canRemoveOccupant(family, 'boy')).toBe(true);
+    expect(canRemoveOccupant(family, 'girl')).toBe(true);
+  });
+
+  it('never goes below none', () => {
+    expect(canRemoveOccupant({ ...NO_OCCUPANTS, male: 2 }, 'girl')).toBe(false);
+    expect(canRemoveOccupant({ ...NO_OCCUPANTS, male: 2 }, 'female')).toBe(false);
+  });
+});
 
 describe('occupantsOf', () => {
   it('reads the counts a check carries', () => {

@@ -1,11 +1,12 @@
 import { normaliseIdentifier, plateDifferences } from '@digigate/core';
 import { colors, radius, space, typography } from '@digigate/design';
 import { Image } from 'expo-image';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
 import { Icon } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
+import { KeyboardInput } from '@/components/keyboard-scroll';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
@@ -58,7 +59,7 @@ export function PlateField({ entry, checked, discPlate, lookAgain }: Props) {
         ) : (
           <IconButton icon="camera" label="Photograph the plate" size={THUMB_HEIGHT} onPress={entry.openCamera} />
         )}
-        <TextInput
+        <KeyboardInput
           value={entry.plate}
           onChangeText={entry.setPlate}
           placeholder="Type the plate"

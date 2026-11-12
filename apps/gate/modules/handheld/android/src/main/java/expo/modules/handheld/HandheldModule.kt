@@ -1,12 +1,14 @@
 package expo.modules.handheld
 
 import android.Manifest
+import android.app.PendingIntent
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -17,6 +19,8 @@ import android.telecom.TelecomManager
 import android.view.inputmethod.InputMethodManager
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
+import java.security.MessageDigest
 
 /**
  * A gate handheld under DigiGate's control, once DigiGate is its device owner. Not a full kiosk: DigiGate is the home
@@ -88,7 +92,80 @@ class HandheldModule : Module() {
       if (problems.isEmpty()) runCatching { policy.clearDeviceOwnerApp(context.packageName) }.onFailure { problems.add("owner") }
       problems
     }
+
+    // Turns the screen off and locks it, as if the power button were pressed. Asked for by a super user.
+    Function("lockScreen") {
+      if (!isOwner) return@Function false
+      runCatching { policy.lockNow() }.isSuccess
+    }
+
+    // Restarts the handheld. Asked for by a super user. Android refuses during a phone call.
+    Function("restart") {
+      if (!isOwner) return@Function "not-device-owner"
+      runCatching { policy.reboot(admin) }.fold({ "restarting" }, { if (it is IllegalStateException) "on-a-call" else "refused" })
+    }
+
+    // Installs a newer DigiGate over this one with nobody touching the handheld, which a device owner may do. The file
+    // must be DigiGate, newer than what's installed, and match the checksum given; Android itself refuses one not signed
+    // with DigiGate's own key. Returns "installing" once the install is handed to Android, or why it wasn't.
+    AsyncFunction("installUpdate") { path: String, sha256: String? ->
+      if (!isOwner) return@AsyncFunction "not-device-owner"
+      val file = File(Uri.parse(path).path ?: path)
+      if (!file.isFile) return@AsyncFunction "missing-file"
+      if (sha256 != null && !sha256Of(file).equals(sha256.trim(), ignoreCase = true)) return@AsyncFunction "checksum-mismatch"
+      val packages = context.packageManager
+      val archive = packages.getPackageArchiveInfo(file.path, 0) ?: return@AsyncFunction "not-an-app"
+      if (archive.packageName != context.packageName) return@AsyncFunction "wrong-app"
+      if (versionOf(archive) <= versionOf(packages.getPackageInfo(context.packageName, 0))) return@AsyncFunction "not-newer"
+
+      context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(INSTALL_RESULT_KEY).commit()
+      val installer = packages.packageInstaller
+      val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+        setAppPackageName(context.packageName)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+      }
+      val sessionId = installer.createSession(params)
+      runCatching {
+        installer.openSession(sessionId).use { session ->
+          session.openWrite("digigate.apk", 0, file.length()).use { out ->
+            file.inputStream().use { input -> input.copyTo(out) }
+            session.fsync(out)
+          }
+          val result = Intent(context, InstallResultReceiver::class.java)
+          val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
+          session.commit(PendingIntent.getBroadcast(context, sessionId, result, flags).intentSender)
+        }
+      }.fold({ "installing" }, {
+        runCatching { installer.abandonSession(sessionId) }
+        "install-refused"
+      })
+    }
+
+    // How the last install DigiGate tried went, once: read at start, so a failed update is reported and not repeated.
+    Function("takeInstallResult") {
+      val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+      val result = prefs.getString(INSTALL_RESULT_KEY, null)
+      if (result != null) prefs.edit().remove(INSTALL_RESULT_KEY).commit()
+      result
+    }
   }
+
+  private fun sha256Of(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+      val buffer = ByteArray(DIGEST_BUFFER)
+      while (true) {
+        val read = input.read(buffer)
+        if (read < 0) break
+        digest.update(buffer, 0, read)
+      }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+  }
+
+  @Suppress("DEPRECATION")
+  private fun versionOf(info: android.content.pm.PackageInfo): Long =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
 
   private fun restrictions(): List<String> = buildList {
     add(UserManager.DISALLOW_CONFIG_TETHERING)
@@ -159,12 +236,14 @@ class HandheldModule : Module() {
   private fun isSystemApp(name: String): Boolean =
     runCatching { context.packageManager.getApplicationInfo(name, 0).flags and ApplicationInfo.FLAG_SYSTEM != 0 }.getOrDefault(false)
 
-  private companion object {
-    const val HOME_ALIAS = "expo.modules.handheld.GateHome"
+  companion object {
+    private const val HOME_ALIAS = "expo.modules.handheld.GateHome"
     const val PREFS = "digigate_handheld"
-    const val HIDDEN_KEY = "hidden_apps"
-    const val SIM_TOOLKIT = "com.android.stk"
+    const val INSTALL_RESULT_KEY = "install_result"
+    private const val HIDDEN_KEY = "hidden_apps"
+    private const val DIGEST_BUFFER = 64 * 1024
+    private const val SIM_TOOLKIT = "com.android.stk"
     // Hiding a scanner vendor's app can stop its scan service, so they're never touched, whatever the brand.
-    val SCANNER_VENDORS = listOf("com.ubx.", "com.urovo.", "com.symbol.", "com.zebra.", "com.honeywell.", "com.hsm.", "com.newland.", "com.chainway.")
+    private val SCANNER_VENDORS = listOf("com.ubx.", "com.urovo.", "com.symbol.", "com.zebra.", "com.honeywell.", "com.hsm.", "com.newland.", "com.chainway.")
   }
 }

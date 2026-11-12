@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- DigiGate as a gate handheld's device owner. It needs no device-admin policies of the old kind: everything it does
-     goes through user restrictions, hidden apps and the home screen, which a device owner sets without them. -->
+<!-- DigiGate as a gate handheld's device owner. Nearly everything it does goes through user restrictions, hidden apps
+     and the home screen, which a device owner sets without policies of the old kind. The one it declares is force-lock,
+     so a super user can turn a handheld's screen off and lock it from the dashboard. -->
 <device-admin>
-  <uses-policies />
+  <uses-policies>
+    <force-lock />
+  </uses-policies>
 </device-admin>

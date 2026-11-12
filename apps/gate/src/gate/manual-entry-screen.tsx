@@ -2,7 +2,7 @@ import { occupantTotal, type OccupantsBySex } from '@digigate/core';
 import { colors, radius, space, typography } from '@digigate/design';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCurrentUser } from '@/auth/session';
@@ -11,6 +11,7 @@ import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import type { IconName } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
+import { KeyboardInput, KeyboardScroll, useKeyboardHeight } from '@/components/keyboard-scroll';
 import { OptionTile } from '@/components/option-tile';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
@@ -93,6 +94,9 @@ function IdHint({ idNumber }: { idNumber: string }) {
 
 function ManualEntry({ guard }: { guard: GateUser }) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  // The footer is pinned over the bottom of the form, so a field scrolled into view must clear it too.
+  const [footerHeight, setFooterHeight] = useState(0);
   const { db } = useLocalDatabase();
   const { eventRecorded } = useSync();
   const post = usePost();
@@ -202,9 +206,11 @@ function ManualEntry({ guard }: { guard: GateUser }) {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <ScrollView
+      {/* While the keyboard is up, the form and its footer end at the keyboard's top. */}
+      <KeyboardScroll
+        style={{ marginBottom: keyboardHeight }}
+        coveredBelow={footerHeight}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 160 }]}
-        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <IconButton icon="close" label="Close" tone="dark" onPress={() => router.back()} />
@@ -272,7 +278,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
             <Card style={styles.card}>
               <Text variant="bodyStrong">{lane === 'vehicle' ? 'The driver' : 'The person'}</Text>
               <Field label="ID or passport number">
-                <TextInput
+                <KeyboardInput
                   value={idNumber}
                   onChangeText={(text) => setIdNumber(text.replace(/[^0-9A-Za-z ]/g, '').toUpperCase())}
                   placeholder="As printed on the document"
@@ -290,7 +296,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
               <View style={styles.pair}>
                 <View style={styles.half}>
                   <Field label="First names">
-                    <TextInput
+                    <KeyboardInput
                       value={names}
                       onChangeText={(text) => setNames(nameInput(text))}
                       autoCapitalize="characters"
@@ -304,7 +310,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
                 </View>
                 <View style={styles.half}>
                   <Field label="Surname">
-                    <TextInput
+                    <KeyboardInput
                       value={surname}
                       onChangeText={(text) => setSurname(nameInput(text))}
                       autoCapitalize="characters"
@@ -328,7 +334,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
             <View style={styles.pair}>
               <View style={styles.half}>
                 <Field label="Make and model">
-                  <TextInput
+                  <KeyboardInput
                     value={makeAndModel}
                     onChangeText={setMakeAndModel}
                     placeholder="If you can tell"
@@ -342,7 +348,7 @@ function ManualEntry({ guard }: { guard: GateUser }) {
               </View>
               <View style={styles.half}>
                 <Field label="Colour">
-                  <TextInput
+                  <KeyboardInput
                     value={colour}
                     onChangeText={setColour}
                     placeholder="If you can tell"
@@ -376,9 +382,11 @@ function ManualEntry({ guard }: { guard: GateUser }) {
           </>
         ) : null}
         {lane === 'vehicle' && !entering ? <ExitChecksCard value={exitChecks} onChange={setExitChecks} locked={locked} /> : null}
-      </ScrollView>
+      </KeyboardScroll>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
+      <View
+        onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
+        style={[styles.footer, { bottom: keyboardHeight, paddingBottom: keyboardHeight > 0 ? space.sm : insets.bottom + space.md }]}>
         {!checked ? (
           <PillButton label="Check" icon="check" disabled={!ready || busy} onPress={runCheck} />
         ) : finished ? (

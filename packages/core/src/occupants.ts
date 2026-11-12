@@ -13,6 +13,22 @@ export const occupantTotal = (people: OccupantsBySex): number => people.male + p
 
 export const childrenOf = (people: OccupantsBySex): number => people.boy + people.girl;
 
+/**
+ * Who could be driving: the men, the women and anyone the guard couldn't tell. "Not sure" counts, because a driver
+ * typed in by hand starts as not sure until the guard says.
+ */
+export const possibleDriversOf = (people: OccupantsBySex): number => people.male + people.female + people.unknown;
+
+/**
+ * Whether one person of this kind can be taken off the count. A car always has a driver, and a driver is never a
+ * boy or a girl, so the last man, woman or "not sure" stays.
+ */
+export function canRemoveOccupant(people: OccupantsBySex, kind: keyof OccupantsBySex): boolean {
+  if (people[kind] <= 0) return false;
+  if (kind === 'boy' || kind === 'girl') return true;
+  return possibleDriversOf(people) > 1;
+}
+
 const count = (value: unknown): number => (typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0);
 
 /**

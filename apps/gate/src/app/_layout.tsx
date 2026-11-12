@@ -18,6 +18,7 @@ import { countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users'
 import { appendEvent } from '@/db/outbox';
 import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
 import { loadSyncedPosts, loadSyncedSite } from '@/db/site-posts';
+import { reportFinishedUpdate, useDeviceCommands } from '@/device/commands';
 import { DeviceModeProvider, useDeviceMode } from '@/device/device-mode';
 import { applyGatePolicy } from '@/device/gate-policy';
 import { SuspendedCover } from '@/device/suspended-cover';
@@ -46,6 +47,8 @@ async function prepareDatabase(): Promise<LocalDatabase> {
   await loadSyncedPosts(local.db);
   await loadSyncedSite(local.db);
   await loadSuspension(local.db);
+  // If this start follows an update the handheld installed on itself, say how it went.
+  await reportFinishedUpdate(local.db);
   return local;
 }
 
@@ -137,9 +140,10 @@ function AppSession({ children }: { children: ReactNode }) {
 }
 
 function GuardedStack() {
-  const { state, recordActivity, signOut } = useSession();
+  const { state, recordActivity, signOut, lock } = useSession();
   const { shift } = useShift();
-  const { status: syncStatus } = useSync();
+  const { status: syncStatus, eventRecorded } = useSync();
+  const { db } = useLocalDatabase();
   const user = state.status === 'signed-out' ? null : state.user;
   // Signed in only counts once the shift is known, so the guard goes straight to the right screen after their PIN.
   const signedIn = user !== null && shift !== undefined;
@@ -160,6 +164,8 @@ function GuardedStack() {
   }, [locked, suspended]);
 
   useAppUpdates(state.status !== 'active');
+  // Lock, restart or update, asked for by a super user from the dashboard. An update waits, as above, for a quiet moment.
+  useDeviceCommands({ db, safeToRestart: state.status !== 'active', lock, recorded: eventRecorded });
 
   // The device has just cleared itself, so nobody can carry on working on it.
   useEffect(() => {

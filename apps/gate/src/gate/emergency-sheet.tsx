@@ -1,10 +1,11 @@
 import { OTHER_EMERGENCY, type EmergencyKind } from '@digigate/core';
 import { colors, radius, space, typography } from '@digigate/design';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconButton } from '@/components/icon-button';
+import { KeyboardInput, KeyboardScroll, useKeyboardHeight } from '@/components/keyboard-scroll';
 import { OptionTile, wideTiles } from '@/components/option-tile';
 import { PillButton } from '@/components/pill-button';
 import { Text } from '@/components/text';
@@ -18,6 +19,7 @@ import type { EmergencyChoice } from './emergency';
  */
 export function EmergencySheet({ onChoose, onCancel }: { onChoose: (choice: EmergencyChoice) => void; onCancel: () => void }) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
   const kinds = emergencyKinds();
   const wide = wideTiles(kinds.map(({ label }) => label));
   const [other, setOther] = useState(false);
@@ -34,11 +36,12 @@ export function EmergencySheet({ onChoose, onCancel }: { onChoose: (choice: Emer
   const otherKind = kinds.find(({ code }) => code === OTHER_EMERGENCY);
 
   return (
-    <View style={[styles.sheet, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
+    // While the keyboard is up the sheet ends at its top, so the field and its button stay in sight.
+    <View style={[styles.sheet, { paddingTop: insets.top, paddingBottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom + space.md }]}>
       <View style={styles.topBar}>
         <IconButton icon="close" label="Cancel" tone="dark" onPress={onCancel} />
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardScroll contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.heading}>
           <Text variant="overline" color={colors.blocked}>
             Emergency
@@ -65,7 +68,7 @@ export function EmergencySheet({ onChoose, onCancel }: { onChoose: (choice: Emer
 
         {other && otherKind ? (
           <View style={styles.other}>
-            <TextInput
+            <KeyboardInput
               value={note}
               onChangeText={setNote}
               placeholder="What is it? A word or two"
@@ -78,7 +81,7 @@ export function EmergencySheet({ onChoose, onCancel }: { onChoose: (choice: Emer
             <PillButton label="Use this" icon="check" disabled={note.trim() === ''} onPress={() => onChoose({ kind: otherKind, note: note.trim() })} />
           </View>
         ) : null}
-      </ScrollView>
+      </KeyboardScroll>
     </View>
   );
 }

@@ -1,4 +1,4 @@
-import { NO_OCCUPANTS, occupantTotal, type OccupantsBySex } from '@digigate/core';
+import { canRemoveOccupant, NO_OCCUPANTS, occupantTotal, type OccupantsBySex } from '@digigate/core';
 import { colors, space } from '@digigate/design';
 import { StyleSheet, View } from 'react-native';
 
@@ -28,7 +28,10 @@ const ROWS: readonly { key: keyof OccupantsBySex; label: string; one: string }[]
   { key: 'unknown', label: 'Not sure', one: 'person not sure' },
 ];
 
-/** The people in a car, counted as men, women, boys, girls and anyone the guard can't tell. Counts only: there's always at least the driver. */
+/**
+ * The people in a car, counted as men, women, boys, girls and anyone the guard can't tell. Counts only. There's
+ * always a driver, and a driver is never a boy or a girl, so the last man, woman or "not sure" can't be taken off.
+ */
 export function OccupantCounter({ title, value, onChange, locked }: Props) {
   const total = occupantTotal(value);
   const change = (key: keyof OccupantsBySex, by: number) => onChange({ ...value, [key]: Math.max(0, value[key] + by) });
@@ -55,7 +58,7 @@ export function OccupantCounter({ title, value, onChange, locked }: Props) {
             <IconButton
               icon="remove"
               label={`One ${row.one} fewer`}
-              onPress={!locked && value[row.key] > 0 && total > 1 ? () => change(row.key, -1) : undefined}
+              onPress={!locked && canRemoveOccupant(value, row.key) ? () => change(row.key, -1) : undefined}
             />
             <Text variant="title" style={styles.count}>
               {value[row.key]}

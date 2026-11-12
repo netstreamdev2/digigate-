@@ -15,6 +15,7 @@ import { saveBookings, saveHotlist, type SyncedBooking, type SyncedHotlistEntry 
 import { wipeRevokedDevice } from '@/db/wipe';
 import { isSyncedPost, syncedSiteOf, type SyncedPost } from '@/site/site-config';
 import { recordDeviceLog } from '@/device/device-log';
+import { receiveCommands } from '@/device/commands';
 import { applySuspension, releaseOnRequest } from '@/device/suspension';
 
 import { callFunction, deviceToken } from './device-api';
@@ -241,9 +242,11 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
     await endMovedShift(db, moved, (id) => gateUserFirstName(db, id));
   }
 
-  // Only a super user decides these: a suspended company, and releasing this handheld from DigiGate.
+  // Only a super user decides these: a suspended company, releasing this handheld from DigiGate, and locking,
+  // restarting or updating it. The commands are carried out by the app itself (src/device/commands.ts).
   await applySuspension(db, body.suspended);
   await releaseOnRequest(db, body.release);
+  receiveCommands(body.commands);
 
   return { status: 'synced', at: Date.now(), uploaded, users: users.length };
 }

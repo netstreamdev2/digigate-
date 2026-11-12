@@ -2,7 +2,7 @@ import { normaliseIdentifier, occupantTotal, type OccupantsBySex } from '@digiga
 import { colors, radius, space } from '@digigate/design';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCurrentUser } from '@/auth/session';
@@ -14,6 +14,7 @@ import { DiscPopup } from '@/components/disc-popup';
 import { DocumentSheet } from '@/components/document-sheet';
 import { Icon, type IconName } from '@/components/icon';
 import { IconButton } from '@/components/icon-button';
+import { KeyboardScroll, useKeyboardHeight } from '@/components/keyboard-scroll';
 import { PersonCard } from '@/components/person-card';
 import { PillButton } from '@/components/pill-button';
 import { ResultBanner } from '@/components/result-banner';
@@ -66,6 +67,9 @@ export function VehicleCheckScreen({ direction }: { direction: Direction }) {
 
 function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateUser }) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  // The footer is pinned over the bottom of the screen, so a field scrolled into view must clear it too.
+  const [footerHeight, setFooterHeight] = useState(0);
   const { db } = useLocalDatabase();
   const { eventRecorded } = useSync();
   const post = usePost();
@@ -226,9 +230,11 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <ScrollView
+      {/* While the keyboard is up, the screen and its footer end at the keyboard's top. */}
+      <KeyboardScroll
+        style={{ marginBottom: keyboardHeight }}
+        coveredBelow={footerHeight}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + FOOTER_HEIGHT }]}
-        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <IconButton icon="close" label="Close" tone="dark" onPress={() => router.back()} />
@@ -339,9 +345,11 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         ) : (
           <ExitChecksCard value={exitChecks} onChange={setExitChecks} locked={checked !== null} />
         )}
-      </ScrollView>
+      </KeyboardScroll>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
+      <View
+        onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
+        style={[styles.footer, { bottom: keyboardHeight, paddingBottom: keyboardHeight > 0 ? space.sm : insets.bottom + space.md }]}>
         {!checked ? (
           <PillButton label={lookAgain ? "It's right · Check" : "Check"} icon="check" disabled={!ready || busy} onPress={check} />
         ) : finished ? (

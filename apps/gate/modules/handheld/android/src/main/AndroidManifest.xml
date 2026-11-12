@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+  <!-- So DigiGate can install a newer version of itself on a handheld it owns, with nobody touching it. -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
   <!-- To find the apps to hide, and the phone, camera, gallery, keyboard and home apps to keep. -->
   <queries>
     <intent>
@@ -40,6 +43,14 @@
       <meta-data android:name="android.app.device_admin" android:resource="@xml/gate_device_admin" />
       <intent-filter>
         <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+      </intent-filter>
+    </receiver>
+
+    <!-- How an update DigiGate installed on itself went, and opening the new version once it's in. -->
+    <receiver android:name="expo.modules.handheld.InstallResultReceiver" android:exported="false" />
+    <receiver android:name="expo.modules.handheld.UpdatedReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
       </intent-filter>
     </receiver>
 
