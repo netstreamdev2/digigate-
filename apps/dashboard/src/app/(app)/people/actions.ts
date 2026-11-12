@@ -21,6 +21,8 @@ const PROBLEMS: Record<string, string> = {
   "email-taken": "That email address already has a DigiGate login. Give them a username instead.",
   "needs-mfa": "Sign in again, then try this.",
   "not-allowed": "Your account can't do that.",
+  phone: "That mobile number doesn't look right. Type it like 082 123 4567.",
+  "phone-taken": "That mobile number already has a DigiGate login.",
 };
 
 const SOMETHING_FAILED = "That didn't work. Try again.";
@@ -65,6 +67,7 @@ export async function createPerson(_previous: CreateState, form: FormData): Prom
     orgId: form.get("orgId"),
     clientId: form.get("clientId"),
     siteIds,
+    phone: role === "host" ? form.get("phone") : null,
   });
   if (!data.login || !data.password) return { problem: takenProblem(data) ?? PROBLEMS[data.error ?? ""] ?? SOMETHING_FAILED, created: null };
 

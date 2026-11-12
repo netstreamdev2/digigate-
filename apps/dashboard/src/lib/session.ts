@@ -17,6 +17,7 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Administrator",
   manager: "Manager",
   control_room: "Control room",
+  host: "Host (invites visitors)",
   supervisor: "Supervisor",
   client_viewer: "Site viewer",
 };

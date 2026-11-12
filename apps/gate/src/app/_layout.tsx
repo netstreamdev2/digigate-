@@ -18,7 +18,9 @@ import { countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users'
 import { appendEvent } from '@/db/outbox';
 import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
 import { loadSyncedPosts, loadSyncedSite } from '@/db/site-posts';
+import { DeviceModeProvider, useDeviceMode } from '@/device/device-mode';
 import { applyGatePolicy } from '@/device/gate-policy';
+import { HostSessionProvider, useHostSession } from '@/host/host-session';
 import { useAppUpdates } from '@/lib/app-updates';
 import { siteConfig } from '@/site/site-config';
 import { seedUsers } from '@/demo/seed-users';
@@ -90,14 +92,18 @@ export default function RootLayout() {
 
   return (
     <LocalDatabaseProvider database={database}>
-      <SyncProvider>
-        <AppSession>
-          <ShiftProvider>
-            <StatusBar style="dark" />
-            <GuardedStack />
-          </ShiftProvider>
-        </AppSession>
-      </SyncProvider>
+      <DeviceModeProvider>
+        <HostSessionProvider>
+          <SyncProvider>
+            <AppSession>
+              <ShiftProvider>
+                <StatusBar style="dark" />
+                <GuardedStack />
+              </ShiftProvider>
+            </AppSession>
+          </SyncProvider>
+        </HostSessionProvider>
+      </DeviceModeProvider>
     </LocalDatabaseProvider>
   );
 }
@@ -136,6 +142,12 @@ function GuardedStack() {
   const signedIn = user !== null && shift !== undefined;
   const onDuty = user !== null && shift?.gateUserId === user.id;
   const locked = state.status === 'locked';
+  // On a phone that isn't a gate device, the app is the visitor-invite app for hosts (src/device/device-mode.tsx).
+  const { mode } = useDeviceMode();
+  const host = useHostSession().state;
+  const hostMode = mode === 'host';
+  const hostIn = host.status === 'signed-in';
+  const hostHome = !hostIn ? '/host/sign-in' : host.mustChangePassword ? '/host/password' : '/host';
 
   useEffect(() => {
     setScansPaused(locked);
@@ -154,11 +166,14 @@ function GuardedStack() {
     return () => subscription?.remove();
   }, [recordActivity]);
 
+  // Nothing until the app knows which job it's doing, so neither app flashes up on the other's device.
+  if (mode === null || (hostMode && host.status === 'checking')) return <View style={styles.root} />;
+
   return (
     <View style={styles.root} onTouchStart={recordActivity}>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         {/* Explicit redirects: without them the router falls back to the first open route by name, which was pair. */}
-        <Stack.Protected guard={onDuty} redirectTo={signedIn ? '/start-shift' : '/sign-in'}>
+        <Stack.Protected guard={!hostMode && onDuty} redirectTo={hostMode ? hostHome : signedIn ? '/start-shift' : '/sign-in'}>
           <Stack.Screen name="index" />
           <Stack.Screen name="entry" />
           <Stack.Screen name="exit" />
@@ -169,15 +184,26 @@ function GuardedStack() {
           <Stack.Screen name="set-location" />
           <Stack.Screen name="manual" />
         </Stack.Protected>
-        <Stack.Protected guard={signedIn && !onDuty} redirectTo={signedIn ? '/' : '/sign-in'}>
+        <Stack.Protected guard={!hostMode && signedIn && !onDuty} redirectTo={hostMode ? hostHome : signedIn ? '/' : '/sign-in'}>
           <Stack.Screen name="start-shift" />
         </Stack.Protected>
-        <Stack.Protected guard={!signedIn} redirectTo={onDuty ? '/' : '/start-shift'}>
+        <Stack.Protected guard={!hostMode && !signedIn} redirectTo={hostMode ? hostHome : onDuty ? '/' : '/start-shift'}>
           <Stack.Screen name="sign-in" />
+        </Stack.Protected>
+        <Stack.Protected guard={hostMode && hostIn && !host.mustChangePassword} redirectTo={hostMode ? hostHome : '/'}>
+          <Stack.Screen name="host/index" />
+          <Stack.Screen name="host/new" />
+          <Stack.Screen name="host/[id]" />
+        </Stack.Protected>
+        <Stack.Protected guard={hostMode && hostIn && host.mustChangePassword} redirectTo={hostMode ? hostHome : '/'}>
+          <Stack.Screen name="host/password" />
+        </Stack.Protected>
+        <Stack.Protected guard={hostMode && !hostIn} redirectTo={hostMode ? hostHome : '/'}>
+          <Stack.Screen name="host/sign-in" />
         </Stack.Protected>
         <Stack.Screen name="pair" />
       </Stack>
-      {locked ? <LockCover /> : null}
+      {locked && !hostMode ? <LockCover /> : null}
       <PostWarning shift={onDuty && shift ? shift : null} locked={locked} />
     </View>
   );

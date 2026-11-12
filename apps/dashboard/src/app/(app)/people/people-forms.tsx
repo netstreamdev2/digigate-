@@ -20,10 +20,20 @@ const ROLES = [
   { value: "manager", label: "Manager" },
   { value: "admin", label: "Administrator" },
   { value: "client_viewer", label: "Site, view only" },
+  { value: "host", label: "Host: invites visitors from the phone app" },
 ];
 
-/** A message ready to send them, so nobody has to retype a password. */
-function sharableMessage(login: string, password: string): string {
+/** A message ready to send them, so nobody has to retype a password. A host gets the phone app's steps instead. */
+function sharableMessage(login: string, password: string, host = false): string {
+  if (host) {
+    return [
+      "Your DigiGate visitor invites login",
+      "Open the DigiGate app on your phone and sign in with your mobile number or username:",
+      `Username: ${login}`,
+      `Temporary password: ${password}`,
+      "You'll choose your own password the first time.",
+    ].join("\n");
+  }
   return [
     "Your DigiGate login",
     `Sign in at ${window.location.origin}`,
@@ -34,12 +44,12 @@ function sharableMessage(login: string, password: string): string {
 }
 
 /** The temporary password and what the person does with it. It's only ever on screen once. */
-function PasswordHandOver({ name, login, password }: { name: string; login: string; password: string }) {
+function PasswordHandOver({ name, login, password, host = false }: { name: string; login: string; password: string; host?: boolean }) {
   const [copied, setCopied] = useState(false);
   const firstName = name.split(" ")[0] ?? name;
 
   const copy = async () => {
-    await navigator.clipboard.writeText(sharableMessage(login, password));
+    await navigator.clipboard.writeText(sharableMessage(login, password, host));
     setCopied(true);
   };
 
@@ -111,7 +121,7 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
       <>
         <DialogHeading icon="check" tone="neutral" title="Login created" />
         <div className="mt-5">
-          <PasswordHandOver name={state.created.name} login={state.created.login} password={state.created.password} />
+          <PasswordHandOver name={state.created.name} login={state.created.login} password={state.created.password} host={role === "host"} />
         </div>
         <div className="mt-6 flex justify-end">
           <CancelButton onClick={onClose} label="Done" />
@@ -176,6 +186,13 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
         ) : null}
 
         {role === "admin" ? <p className="text-sm text-ink-muted">Administrators cover every site of their company.</p> : null}
+
+        {role === "host" ? (
+          <>
+            <Field label="Mobile number (optional)" name="phone" inputMode="tel" placeholder="082 123 4567" autoComplete="off" />
+            <p className="text-sm text-ink-muted">A host only invites visitors, from the DigiGate app on their phone, with no authenticator. They sign in with this number or their username. At a hospital, who invited a visitor is never shown at the gate.</p>
+          </>
+        ) : null}
 
         {role !== "admin" && role !== "client_viewer" ? (
           <fieldset className="flex flex-col gap-1.5 text-sm font-medium">

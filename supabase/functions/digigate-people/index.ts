@@ -8,7 +8,7 @@ import { json, randomHex, sql } from '../_shared/device.ts';
 import { readGuardRecord, revealGuardIdNumber, saveGuardPhoto, saveGuardRecord } from '../_shared/guard-records.ts';
 
 const USERNAME_DOMAIN = 'digigate.local';
-const ROLES = ['admin', 'manager', 'control_room', 'supervisor', 'client_viewer'];
+const ROLES = ['admin', 'manager', 'control_room', 'supervisor', 'client_viewer', 'host'];
 const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -50,11 +50,19 @@ async function createPerson(caller: Caller, body: Record<string, unknown>): Prom
   const siteIds = Array.isArray(body.siteIds) ? body.siteIds.map(String) : [];
   const isClientLogin = role === 'client_viewer';
   const isEmail = EMAIL.test(typed);
+  // A host signs in to the invite app on their phone, with this number or their username or email.
+  const typedPhone = String(body.phone ?? '').replace(/[s()-]/g, '');
+  const phone = !typedPhone ? null : /^0d{9}$/.test(typedPhone) ? `+27${typedPhone.slice(1)}` : /^+d{8,15}$/.test(typedPhone) ? typedPhone : /^27d{9}$/.test(typedPhone) ? `+${typedPhone}` : 'bad';
   // A username belongs to the company: what's typed in front of any @ is the name, and the company's code goes after.
   const name = isEmail ? typed : (typed.split('@')[0] ?? '');
 
   if (!fullName) return json({ error: 'name' }, 400);
   if (!ROLES.includes(role)) return json({ error: 'role' }, 400);
+  if (phone === 'bad') return json({ error: 'phone' }, 400);
+  if (phone) {
+    const [holder] = await sql`select 1 from digigate.profiles where phone = ${phone}`;
+    if (holder) return json({ error: 'phone-taken' }, 409);
+  }
   if (!isEmail && !USERNAME.test(name)) return json({ error: 'login' }, 400);
   if (!siteIds.every((id) => UUID.test(id))) return json({ error: 'sites' }, 400);
 
@@ -98,8 +106,8 @@ async function createPerson(caller: Caller, body: Record<string, unknown>): Prom
 
   try {
     await sql`
-      insert into digigate.profiles (id, org_id, client_id, full_name, login, roles, site_ids)
-      values (${data.user.id}, ${orgId}, ${clientId}, ${fullName}, ${login}, ${`{${role}}`}::digigate.dashboard_role[], ${sql.array(siteIds)}::uuid[])`;
+      insert into digigate.profiles (id, org_id, client_id, full_name, login, roles, site_ids, phone)
+      values (${data.user.id}, ${orgId}, ${clientId}, ${fullName}, ${login}, ${`{${role}}`}::digigate.dashboard_role[], ${sql.array(siteIds)}::uuid[], ${phone})`;
   } catch (cause) {
     await admin.auth.admin.deleteUser(data.user.id);
     throw cause;

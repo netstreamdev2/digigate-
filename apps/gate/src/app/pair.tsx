@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useDeviceMode } from '@/device/device-mode';
 import { IconButton } from '@/components/icon-button';
 import { Keypad } from '@/components/keypad';
 import { PillButton } from '@/components/pill-button';
@@ -34,6 +35,7 @@ export default function PairScreen() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [paired, setPaired] = useState(false);
+  const { recheck: recheckMode } = useDeviceMode();
   const unavailable = status.state === 'local-only';
 
   const submit = async (fullCode: string) => {
@@ -108,7 +110,15 @@ export default function PairScreen() {
 
       <View style={styles.controls}>
         {paired ? (
-          <PillButton label="Done" icon="check" onPress={() => router.back()} />
+          <PillButton
+            label="Done"
+            icon="check"
+            onPress={() => {
+              // A phone paired here is a gate device from now on: the guard app takes over from the invite app.
+              recheckMode();
+              router.back();
+            }}
+          />
         ) : (
           <Keypad onDigit={onDigit} onDelete={() => setCode(code.slice(0, -1))} disabled={busy || unavailable} />
         )}
