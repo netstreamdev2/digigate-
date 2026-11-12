@@ -244,7 +244,21 @@ Deno.serve(async (request) => {
     if (body.pull !== true) return json({ accepted, selfie, licencePhoto, platePhoto });
 
     const [{ snapshot }] = await sql`select digigate.device_snapshot(${deviceId}) as snapshot`;
-    return json({ accepted, selfie, licencePhoto, platePhoto, ...snapshot });
+    // A company that doesn't pay is suspended, and a super user may have asked for this handheld's release. Uploads
+    // above still went through either way: what a suspended handheld recorded is never lost.
+    const [control] = await sql`
+      select o.suspended_at is not null as suspended, o.suspended_reason as reason, d.release_requested_at is not null as release
+      from digigate.devices d join digigate.organisations o on o.id = d.org_id
+      where d.id = ${deviceId}`;
+    return json({
+      accepted,
+      selfie,
+      licencePhoto,
+      platePhoto,
+      ...snapshot,
+      suspended: control?.suspended ? { reason: control.reason ?? null } : null,
+      release: control?.release === true,
+    });
   } catch (cause) {
     console.error('digigate-sync failed', events.length, cause instanceof Error ? cause.name : 'unknown');
     return json({ error: 'Server error' }, 500);

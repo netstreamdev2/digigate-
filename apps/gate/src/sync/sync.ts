@@ -15,6 +15,7 @@ import { saveBookings, saveHotlist, type SyncedBooking, type SyncedHotlistEntry 
 import { wipeRevokedDevice } from '@/db/wipe';
 import { isSyncedPost, syncedSiteOf, type SyncedPost } from '@/site/site-config';
 import { recordDeviceLog } from '@/device/device-log';
+import { applySuspension, releaseOnRequest } from '@/device/suspension';
 
 import { callFunction, deviceToken } from './device-api';
 import { readDeviceHealth } from './device-health';
@@ -239,6 +240,10 @@ export async function syncOnce(db: SQLiteDatabase): Promise<SyncOutcome> {
     const moved = body.movedShifts.filter((id): id is string => typeof id === 'string');
     await endMovedShift(db, moved, (id) => gateUserFirstName(db, id));
   }
+
+  // Only a super user decides these: a suspended company, and releasing this handheld from DigiGate.
+  await applySuspension(db, body.suspended);
+  await releaseOnRequest(db, body.release);
 
   return { status: 'synced', at: Date.now(), uploaded, users: users.length };
 }

@@ -73,6 +73,9 @@ async function hostOf(request: Request): Promise<{ id: string; name: string; org
   if (error || !data.user) return json({ error: 'not-signed-in' }, 401);
   const [profile] = await sql`select full_name, org_id, roles::text[] as roles from digigate.profiles where id = ${data.user.id} and is_active`;
   if (!profile || !profile.roles.some((role: string) => INVITERS.includes(role))) return json({ error: 'not-a-host' }, 403);
+  // A company suspended for not paying invites nobody.
+  const [company] = await sql`select suspended_at is not null as suspended from digigate.organisations where id = ${profile.org_id}`;
+  if (company?.suspended) return json({ error: 'suspended' }, 403);
   return {
     id: data.user.id,
     name: profile.full_name,

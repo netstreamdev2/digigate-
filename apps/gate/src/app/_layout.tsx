@@ -20,6 +20,8 @@ import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
 import { loadSyncedPosts, loadSyncedSite } from '@/db/site-posts';
 import { DeviceModeProvider, useDeviceMode } from '@/device/device-mode';
 import { applyGatePolicy } from '@/device/gate-policy';
+import { SuspendedCover } from '@/device/suspended-cover';
+import { loadSuspension, useSuspension } from '@/device/suspension';
 import { HostSessionProvider, useHostSession } from '@/host/host-session';
 import { useAppUpdates } from '@/lib/app-updates';
 import { siteConfig } from '@/site/site-config';
@@ -43,6 +45,7 @@ async function prepareDatabase(): Promise<LocalDatabase> {
   }
   await loadSyncedPosts(local.db);
   await loadSyncedSite(local.db);
+  await loadSuspension(local.db);
   return local;
 }
 
@@ -148,10 +151,13 @@ function GuardedStack() {
   const hostMode = mode === 'host';
   const hostIn = host.status === 'signed-in';
   const hostHome = !hostIn ? '/host/sign-in' : host.mustChangePassword ? '/host/password' : '/host';
+  // A company suspended for not paying: the handheld stops at its next sync, though it keeps sending what it recorded.
+  const suspension = useSuspension();
+  const suspended = suspension !== null && !hostMode;
 
   useEffect(() => {
-    setScansPaused(locked);
-  }, [locked]);
+    setScansPaused(locked || suspended);
+  }, [locked, suspended]);
 
   useAppUpdates(state.status !== 'active');
 
@@ -203,7 +209,8 @@ function GuardedStack() {
         </Stack.Protected>
         <Stack.Screen name="pair" />
       </Stack>
-      {locked && !hostMode ? <LockCover /> : null}
+      {locked && !hostMode && !suspended ? <LockCover /> : null}
+      {suspended ? <SuspendedCover reason={suspension?.reason ?? null} /> : null}
       <PostWarning shift={onDuty && shift ? shift : null} locked={locked} />
     </View>
   );

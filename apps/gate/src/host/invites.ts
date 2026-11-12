@@ -113,6 +113,8 @@ export function problemWords(cause: unknown): string {
       return cause.problem ? `Check the details: ${cause.problem}.` : 'Check the details.';
     case 'not-signed-in':
       return 'Sign in again.';
+    case 'suspended':
+      return 'Visitor invites are paused for your organisation. Ask your administrator.';
     default:
       return 'Something went wrong. Try again.';
   }
