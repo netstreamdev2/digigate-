@@ -35,3 +35,13 @@ if (missing.length > 0) {
   process.exit(1);
 }
 console.log(`DigiGate has camera, location and notifications on ${devices[0].split(/\s+/)[0]}.`);
+
+// A gate handheld is set up with no Google account, so Google's setup wizard keeps a "setup in progress" notification
+// that can't be swiped away. Once setup is finished it has nothing left to do: switch it off. A factory reset brings it
+// back.
+const SETUP_WIZARD = 'com.google.android.setupwizard';
+const setupDone = adb('shell', 'settings', 'get', 'secure', 'user_setup_complete').trim() === '1';
+if (setupDone && adb('shell', 'pm', 'list', 'packages', '-e', SETUP_WIZARD).includes(`package:${SETUP_WIZARD}`)) {
+  adb('shell', 'pm', 'disable-user', '--user', '0', SETUP_WIZARD);
+  console.log("Switched off Google's setup wizard, and its \"setup in progress\" notification with it.");
+}
