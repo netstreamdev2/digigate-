@@ -49,6 +49,47 @@ export async function saveDevicePlan(_previous: FormState, form: FormData): Prom
   return { problem: null, saved: Date.now() };
 }
 
+const commandProblem = (code: string | undefined) => (code === "42501" ? "Only a super user can do that to a handheld." : SOMETHING_FAILED);
+
+/** A super user locks a handheld, or restarts it. It does so itself at its next sync, within a minute when it's online. */
+export async function requestLock(form: FormData): Promise<void> {
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("request_device_command", { _device: text(form, "id"), _kind: "lock" });
+  if (error) throw new Error(commandProblem(error.code));
+  revalidatePath("/devices", "layout");
+}
+
+export async function requestRestart(form: FormData): Promise<void> {
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("request_device_command", { _device: text(form, "id"), _kind: "restart" });
+  if (error) throw new Error(commandProblem(error.code));
+  revalidatePath("/devices", "layout");
+}
+
+/**
+ * A super user sends a handheld a newer DigiGate: the APK's download link (an EAS build's), its version code, and
+ * optionally its SHA-256. The handheld installs it itself when nobody is mid-check, and refuses anything that isn't a
+ * newer DigiGate signed by us.
+ */
+export async function requestAppUpdate(_previous: FormState, form: FormData): Promise<FormState> {
+  const url = text(form, "url");
+  if (!/^https:\/\/\S+\.\S+$/.test(url)) return { problem: "Paste the APK's download link. It starts with https://.", saved: 0 };
+  const versionCode = Number(text(form, "versionCode"));
+  if (!Number.isInteger(versionCode) || versionCode < 1) return { problem: "The version code is a whole number, shown on the build's page.", saved: 0 };
+  const sha256 = text(form, "sha256").toLowerCase();
+  if (sha256 && !/^[0-9a-f]{64}$/.test(sha256)) return { problem: "The SHA-256 is 64 letters and numbers. Leave it blank if you don't have it.", saved: 0 };
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("request_device_command", {
+    _device: text(form, "id"),
+    _kind: "update_app",
+    _payload: { url, version_code: versionCode, ...(sha256 ? { sha256 } : {}) },
+  });
+  if (error) return { problem: commandProblem(error.code), saved: 0 };
+  revalidatePath("/devices", "layout");
+  return { problem: null, saved: Date.now() };
+}
+
 /** A super user hands a handheld back as an ordinary Android device; it does so itself at its next sync. */
 export async function requestRelease(form: FormData): Promise<void> {
   const supabase = await supabaseServer();

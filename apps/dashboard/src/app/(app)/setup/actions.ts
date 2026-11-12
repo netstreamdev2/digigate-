@@ -1,6 +1,6 @@
 "use server";
 
-import { createHash, pbkdf2Sync, randomBytes, randomInt } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -9,6 +9,7 @@ import QRCode from "qrcode";
 import { accessPointColumns, accessPointProblem, parseLocation, readAccessPoint, type AccessPointDraft } from "@/lib/access-points";
 import type { FormState } from "@/lib/form-state";
 import { anyColumnLike, likePattern } from "@/lib/paging";
+import { hashPin } from "@/lib/pin-record";
 import { findPlaces, type PlaceChoice } from "@/lib/places";
 import { currentUser } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -23,9 +24,6 @@ export type SiteReadiness = { posts: number; staff: number };
 export type GateStaffState = FormState & { added: string | null };
 export type SiteChoice = { id: string; orgId: string; name: string; detail: string; siteType: string };
 
-// Same record the gate app verifies: see apps/gate/src/auth/pin.ts and scripts/hash-pin.mjs.
-const PIN_ITERATIONS = 20_000;
-const PIN_KEY_BYTES = 32;
 const PAIRING_CODE_DIGITS = 10;
 const PAIRING_LIFETIME_MS = 10 * 60_000;
 const PAIRING_CHOICES_SHOWN = 6;
@@ -50,16 +48,6 @@ function saved(): FormState {
   revalidatePath("/setup", "layout");
   revalidatePath("/admin", "layout");
   return { problem: null, saved: Date.now() };
-}
-
-function hashPin(pin: string) {
-  const salt = randomBytes(16);
-  return {
-    algorithm: "pbkdf2-sha256",
-    iterations: PIN_ITERATIONS,
-    salt: salt.toString("base64"),
-    hash: pbkdf2Sync(pin, salt, PIN_ITERATIONS, PIN_KEY_BYTES, "sha256").toString("base64"),
-  };
 }
 
 // Adding a company or site goes straight into it, so the next step is right there. Row security doesn't let an

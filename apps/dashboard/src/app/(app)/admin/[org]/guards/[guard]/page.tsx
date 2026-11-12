@@ -13,6 +13,7 @@ import { maybe, must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
+import { ResetPinButton } from "../../../../reset-pin";
 import { GuardRecordEditor, type GuardRecordView } from "../../../guard-record-editor";
 
 const initialsOf = (name: string) =>
@@ -73,6 +74,13 @@ async function Guard({ params }: { params: Promise<{ org: string; guard: string 
       company={await companyBrand(org)}
       eyebrow={<Breadcrumbs items={crumbs} />}
       title={name}
+      actions={
+        guard.is_active ? (
+          <ResetPinButton
+            guard={{ id: guard.id, name, employeeNumber: guard.employee_number, role: guard.role === "supervisor" ? "supervisor" : "guard", company: company.name }}
+          />
+        ) : null
+      }
       chips={
         <div className="flex flex-wrap items-center gap-2 text-sm text-ink-muted">
           <span>{`${guard.employee_number} · ${guard.role === "supervisor" ? "Supervisor" : "Guard"} · ${sites.map((site) => site.name).join(", ") || "No site yet"}`}</span>

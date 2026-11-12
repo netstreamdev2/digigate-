@@ -34,9 +34,11 @@ import { checkRowOf } from "@/lib/check-rows";
 import { siteCompanyBrand } from "@/lib/company-brand";
 import { duration, labelFor, plural, shortDate, timeOfDay, timeWithSeconds } from "@/lib/format";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
+import { canWatchGates } from "@/lib/nav";
 import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
 
+import { ResetPinButton } from "../../reset-pin";
 import { CheckActivity } from "../check-activity";
 import { LiveAlerts } from "../live-alerts";
 import { SelfieButton } from "../selfie-button";
@@ -157,13 +159,17 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
       eyebrow={<Breadcrumbs items={[{ label: "Control room", href: "/control-room" }, { label: heading.name }]} />}
       title="Live at the gates"
       actions={
-        <Link
-          href={`/control-room/${siteId}/evacuation`}
-          className="inline-flex h-11 items-center gap-2 rounded-pill bg-blocked px-5 text-sm font-semibold text-ink-inverse shadow-floating transition hover:bg-ink"
-        >
-          <Icon name="evacuation" className="size-5" />
-          Evacuation list
-        </Link>
+        <>
+          {/* A guard who forgot their PIN calls the control room, usually at night. */}
+          {canWatchGates(user) ? <ResetPinButton /> : null}
+          <Link
+            href={`/control-room/${siteId}/evacuation`}
+            className="inline-flex h-11 items-center gap-2 rounded-pill bg-blocked px-5 text-sm font-semibold text-ink-inverse shadow-floating transition hover:bg-ink"
+          >
+            <Icon name="evacuation" className="size-5" />
+            Evacuation list
+          </Link>
+        </>
       }
       chips={<LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />}
     >

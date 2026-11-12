@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -266,6 +266,57 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_commands: {
+        Row: {
+          device_id: string
+          done_at: string | null
+          id: string
+          kind: string
+          org_id: string
+          outcome: string | null
+          payload: Json
+          requested_at: string
+          requested_by: string
+        }
+        Insert: {
+          device_id: string
+          done_at?: string | null
+          id?: string
+          kind: string
+          org_id: string
+          outcome?: string | null
+          payload?: Json
+          requested_at?: string
+          requested_by: string
+        }
+        Update: {
+          device_id?: string
+          done_at?: string | null
+          id?: string
+          kind?: string
+          org_id?: string
+          outcome?: string | null
+          payload?: Json
+          requested_at?: string
+          requested_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_commands_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_commands_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
           },
         ]
@@ -1946,6 +1997,17 @@ export type Database = {
         Returns: undefined
       }
       erasure_token_ok: { Args: { _token: string }; Returns: boolean }
+      find_gate_staff: {
+        Args: { _search: string }
+        Returns: {
+          company: string
+          employee_number: string
+          first_name: string
+          id: string
+          last_name: string
+          role: string
+        }[]
+      }
       fleet: {
         Args: { _org: string; _search: string }
         Returns: {
@@ -2230,7 +2292,15 @@ export type Database = {
         }
         Returns: Json
       }
+      request_device_command: {
+        Args: { _device: string; _kind: string; _payload?: Json }
+        Returns: string
+      }
       request_device_release: { Args: { _device: string }; Returns: undefined }
+      reset_gate_user_pin: {
+        Args: { _gate_user: string; _pin: Json }
+        Returns: undefined
+      }
       scope_logins: { Args: never; Returns: number }
       set_company_brand: {
         Args: { _color: string; _logo_path: string; _org: string }

@@ -12,9 +12,12 @@ import { StatusChip } from "@/components/status-chip";
 import { companyBrand } from "@/lib/company-brand";
 import { siteBoard } from "@/lib/control-room";
 import { plural, timeWithSeconds } from "@/lib/format";
+import { canWatchGates } from "@/lib/nav";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+
+import { ResetPinButton } from "../reset-pin";
 
 async function Board({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
@@ -37,6 +40,7 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
       company={brand}
       eyebrow="Every site you look after, trouble first"
       title="Control room"
+      actions={canWatchGates(user) ? <ResetPinButton /> : null}
       chips={
         <>
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />

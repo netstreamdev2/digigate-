@@ -10,16 +10,44 @@ import { NoAccess } from "@/components/no-access";
 import { PageSkeleton } from "@/components/skeleton";
 import { deviceData, devicePage, deviceStory } from "@/lib/devices";
 import { timeWithSeconds } from "@/lib/format";
-import { readClock } from "@/lib/reads";
+import { must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { supabaseServer } from "@/lib/supabase/server";
 
 import { revokeDevice } from "../../setup/actions";
 import { requestRelease } from "../actions";
 import { DeviceView, StatusOf } from "./device-view";
+import { RemoteControl, type DeviceCommandRow } from "./remote-control";
 
 // A bundle period can run 31 days, so a little more than the chart is read for what was used since it renewed.
 const DATA_DAYS = 35;
 const STORY_LINES = 40;
+const COMMANDS_SHOWN = 6;
+
+/** What super users last asked of this handheld, newest first. Row security shows them to super users only. */
+async function recentCommands(deviceId: string): Promise<DeviceCommandRow[]> {
+  const supabase = await supabaseServer();
+  const rows = must(
+    await supabase
+      .from("device_commands")
+      .select("id, kind, requested_at, done_at, outcome, payload")
+      .eq("device_id", deviceId)
+      .order("requested_at", { ascending: false })
+      .limit(COMMANDS_SHOWN),
+  );
+  return rows.map((row) => {
+    const payload = typeof row.payload === "object" && row.payload !== null && !Array.isArray(row.payload) ? row.payload : {};
+    const version = payload.version_code;
+    return {
+      id: row.id,
+      kind: row.kind,
+      requestedAt: row.requested_at,
+      doneAt: row.done_at,
+      outcome: row.outcome,
+      versionCode: typeof version === "number" ? version : null,
+    };
+  });
+}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function Device({ params }: { params: Promise<{ id: string }> }) {
@@ -33,7 +61,7 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
   const device = await devicePage(id);
   if (!device) notFound();
   const now = readClock();
-  const [data, story] = await Promise.all([deviceData(id, DATA_DAYS), deviceStory(id, STORY_LINES)]);
+  const [data, story, commands] = await Promise.all([deviceData(id, DATA_DAYS), deviceStory(id, STORY_LINES), isSuperUser ? recentCommands(id) : []]);
 
   return (
     <AppShell
@@ -85,6 +113,7 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
         </>
       }
     >
+      {isSuperUser && device.status !== "revoked" ? <RemoteControl deviceId={device.id} name={device.name} commands={commands} now={now} /> : null}
       <DeviceView device={device} data={data} story={story} now={now} full={isSuperUser} />
     </AppShell>
   );

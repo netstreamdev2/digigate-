@@ -1351,7 +1351,14 @@ check('the company\'s control room can, at night when it happens', !(await reset
   && (await one(`select pin ->> 'hash' as hash from digigate.gate_users where id = '${GUARD}'`)).hash === 'bmV3LXBpbi1oYXNo');
 check('and nothing else about the guard changes', JSON.stringify(await one(`select first_name, last_name, role, site_ids, is_active from digigate.gate_users where id = '${GUARD}'`)) === JSON.stringify(guardBefore));
 check('it is in the audit log as a PIN reset, by them', (await count(`digigate.audit_log where action = 'gate_user.pin_reset' and actor_id = '${ROOM_A}' and detail is null`)) === 1);
-check('the handheld gets the new PIN at its next sync', JSON.stringify((await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s).includes('bmV3LXBpbi1oYXNo'));
+const guardNumber = (await one(`select employee_number from digigate.gate_users where id = '${GUARD}'`)).employee_number;
+const found = (await as('authenticated', ROOM_A, 'aal2', 'select * from digigate.find_gate_staff($1)', [guardNumber])).rows;
+check('the control room finds the guard by employee number, with nothing private', found.some((row) => row.id === GUARD)
+  && found.every((row) => Object.keys(row).sort().join() === 'company,employee_number,first_name,id,last_name,role'));
+check('and by name', (await as('authenticated', ROOM_A, 'aal2', 'select id from digigate.find_gate_staff($1)', [guardBefore.first_name])).rows.some((row) => row.id === GUARD));
+check('another company finds nobody of theirs', !(await as('authenticated', ADMIN_B, 'aal2', 'select id from digigate.find_gate_staff($1)', [guardNumber])).rows.some((row) => row.id === GUARD));
+check('a search of one character finds nobody', (await as('authenticated', ROOM_A, 'aal2', 'select id from digigate.find_gate_staff($1)', [guardNumber.slice(0, 1)])).rows.length === 0);
+check('the handheld gets the new PIN at its next sync',JSON.stringify((await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s).includes('bmV3LXBpbi1oYXNo'));
 
 // Remote lock, restart and update: a super user's alone, carried out once by the handheld, which closes them.
 const command = (profile, kind, payload = '{}') => as('authenticated', profile, 'aal2', 'select digigate.request_device_command($1, $2, $3::jsonb) as id', [DEVICE, kind, payload]);
