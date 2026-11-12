@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 // How often a running handheld asks for a newer version of the app's code. Only code updates arrive this way; anything
 // native still needs a new build, and the fingerprint runtime keeps an update from landing on a build it doesn't fit.
 const CHECK_EVERY_MS = 30 * 60_000;
+// A handheld starts DigiGate the moment it boots, before its Wi-Fi or mobile data is up, so the first check often fails.
+// A failed check tries again soon rather than leaving the handheld on old code for half an hour.
+const RETRY_AFTER_MS = 60_000;
 
 let lastProblem: string | null = null;
 
@@ -21,17 +24,26 @@ export function useAppUpdates(safeToRestart: boolean): void {
 
   useEffect(() => {
     if (!Updates.isEnabled) return;
+    let retry: ReturnType<typeof setTimeout> | null = null;
     const check = () => {
+      if (retry) clearTimeout(retry);
+      retry = null;
       Updates.checkForUpdateAsync()
         .then((result) => (result.isAvailable ? Updates.fetchUpdateAsync() : null))
         .then(() => {
           lastProblem = null;
         })
-        .catch(noteProblem);
+        .catch((cause: unknown) => {
+          noteProblem(cause);
+          retry = setTimeout(check, RETRY_AFTER_MS);
+        });
     };
     check();
     const timer = setInterval(check, CHECK_EVERY_MS);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      if (retry) clearTimeout(retry);
+    };
   }, []);
 
   useEffect(() => {
