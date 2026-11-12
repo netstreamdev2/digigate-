@@ -37,14 +37,22 @@ export async function saveDevicePlan(_previous: FormState, form: FormData): Prom
   if (renewsDay !== null && (!Number.isInteger(renewsDay) || renewsDay < 1 || renewsDay > 31)) return { problem: "The renewal day is a day of the month, 1 to 31.", saved: 0 };
 
   const supabase = await supabaseServer();
-  const { data, error } = await supabase
-    .from("devices")
-    .update({ sim_number: simNumber, data_bundle_mb: bundleMb, data_renews_day: renewsDay })
-    .eq("id", id)
-    .select("id");
-  if (error) return { problem: SOMETHING_FAILED, saved: 0 };
-  // Row security turns a device this account can't change into no rows at all, rather than an error.
-  if (data.length === 0) return { problem: "Your account can't do that.", saved: 0 };
+  // Anything left blank is cleared: the function treats a missing value as none.
+  const { error } = await supabase.rpc("set_device_plan", {
+    _device: id,
+    _sim_number: simNumber ?? undefined,
+    _bundle_mb: bundleMb ?? undefined,
+    _renews_day: renewsDay ?? undefined,
+  });
+  if (error) return { problem: error.code === "42501" ? "Only a super user can set a SIM and bundle." : SOMETHING_FAILED, saved: 0 };
   revalidatePath("/devices", "layout");
   return { problem: null, saved: Date.now() };
+}
+
+/** A super user hands a handheld back as an ordinary Android device; it does so itself at its next sync. */
+export async function requestRelease(form: FormData): Promise<void> {
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("request_device_release", { _device: text(form, "id") });
+  if (error) throw new Error(error.code === "42501" ? "Only a super user can release a handheld." : SOMETHING_FAILED);
+  revalidatePath("/devices", "layout");
 }

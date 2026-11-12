@@ -32,7 +32,8 @@ function networkWords(device: FleetDevice): string {
 }
 
 /** One handheld as a card: its status, its battery, signal and data at a glance, what needs attention, and who's on it. */
-export function DeviceCard({ device, now, index, narrow = false }: { device: FleetDevice; now: number; index: number; narrow?: boolean }) {
+/** `full` is for super users: the data ring and lock state. Everyone else sees battery, network and location. */
+export function DeviceCard({ device, now, index, narrow = false, full = false }: { device: FleetDevice; now: number; index: number; narrow?: boolean; full?: boolean }) {
   const look = LOOK[device.status];
   const health = device.health;
   const attention = attentionOf(device);
@@ -86,10 +87,22 @@ export function DeviceCard({ device, now, index, narrow = false }: { device: Fle
             <span className="block truncate text-ink-muted">{health?.simState === "absent" ? "No SIM" : (health?.simOperator ?? "Signal")}</span>
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          {device.data ? <DataRing usedBytes={device.data.usedBytes} bundleBytes={bundleBytes} /> : <span className="grid size-16 place-items-center text-xs text-ink-subtle">—</span>}
-          <span className="sr-only">{device.data ? `${dataSize(device.data.usedBytes)} used` : "No data yet"}</span>
-        </div>
+        {full ? (
+          <div className="flex items-center gap-2">
+            {device.data ? <DataRing usedBytes={device.data.usedBytes} bundleBytes={bundleBytes} /> : <span className="grid size-16 place-items-center text-xs text-ink-subtle">—</span>}
+            <span className="sr-only">{device.data ? `${dataSize(device.data.usedBytes)} used` : "No data yet"}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className={`grid size-9 shrink-0 place-items-center rounded-pill ${health?.locationAllowed === false ? "bg-warning-soft text-warning" : "bg-tile-sky text-brand"}`}>
+              <Icon name="pin" className="size-4" />
+            </span>
+            <span className="min-w-0 text-xs leading-tight">
+              <span className="block font-semibold text-ink">Location</span>
+              <span className="block text-ink-muted">{health?.locationAllowed === false ? "Off" : health?.latitude !== null && health?.latitude !== undefined ? "Shared" : "—"}</span>
+            </span>
+          </div>
+        )}
       </div>
 
       {attention.length > 0 ? (

@@ -319,6 +319,8 @@ export type Database = {
           name: string
           org_id: string
           paired_at: string
+          release_requested_at: string | null
+          release_requested_by: string | null
           revoked_at: string | null
           revoked_by: string | null
           sim_number: string | null
@@ -335,6 +337,8 @@ export type Database = {
           name: string
           org_id: string
           paired_at?: string
+          release_requested_at?: string | null
+          release_requested_by?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
           sim_number?: string | null
@@ -351,6 +355,8 @@ export type Database = {
           name?: string
           org_id?: string
           paired_at?: string
+          release_requested_at?: string | null
+          release_requested_by?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
           sim_number?: string | null
@@ -926,6 +932,9 @@ export type Database = {
           logo_path: string | null
           name: string
           slug: string
+          suspended_at: string | null
+          suspended_by: string | null
+          suspended_reason: string | null
         }
         Insert: {
           brand_color?: string | null
@@ -936,6 +945,9 @@ export type Database = {
           logo_path?: string | null
           name: string
           slug: string
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspended_reason?: string | null
         }
         Update: {
           brand_color?: string | null
@@ -946,6 +958,9 @@ export type Database = {
           logo_path?: string | null
           name?: string
           slug?: string
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspended_reason?: string | null
         }
         Relationships: []
       }
@@ -1450,7 +1465,7 @@ export type Database = {
           erase_after: string | null
           occupant_reason: string | null
           org_id: string
-          person_key: string
+          person_key: string | null
           person_name: string
           plate: string | null
           site_id: string
@@ -1465,7 +1480,7 @@ export type Database = {
           erase_after?: string | null
           occupant_reason?: string | null
           org_id: string
-          person_key: string
+          person_key?: string | null
           person_name: string
           plate?: string | null
           site_id: string
@@ -1480,7 +1495,7 @@ export type Database = {
           erase_after?: string | null
           occupant_reason?: string | null
           org_id?: string
-          person_key?: string
+          person_key?: string | null
           person_name?: string
           plate?: string | null
           site_id?: string
@@ -2028,6 +2043,7 @@ export type Database = {
           total: number
         }[]
       }
+      health_for_viewer: { Args: { _health: Json }; Returns: Json }
       hmac_sha256: { Args: { _key: string; _message: string }; Returns: string }
       hotlist_in_force: {
         Args: { _org: string; _site: string }
@@ -2073,6 +2089,14 @@ export type Database = {
       logo_company: { Args: { _name: string }; Returns: string }
       mask: { Args: { _value: string }; Returns: string }
       mfa_passed: { Args: never; Returns: boolean }
+      my_company_status: {
+        Args: never
+        Returns: {
+          company: string
+          reason: string
+          suspended: boolean
+        }[]
+      }
       my_invites: {
         Args: never
         Returns: {
@@ -2098,6 +2122,7 @@ export type Database = {
       note_sign_in: { Args: never; Returns: undefined }
       occupants_by_sex: { Args: { _value: Json }; Returns: Json }
       org_person_key: { Args: { _org: string }; Returns: string }
+      org_suspended: { Args: { _org: string }; Returns: boolean }
       people_board: {
         Args: {
           _limit: number
@@ -2205,9 +2230,23 @@ export type Database = {
         }
         Returns: Json
       }
+      request_device_release: { Args: { _device: string }; Returns: undefined }
       scope_logins: { Args: never; Returns: number }
       set_company_brand: {
         Args: { _color: string; _logo_path: string; _org: string }
+        Returns: undefined
+      }
+      set_company_suspended: {
+        Args: { _org: string; _reason: string; _suspended: boolean }
+        Returns: undefined
+      }
+      set_device_plan: {
+        Args: {
+          _bundle_mb?: number
+          _device: string
+          _renews_day?: number
+          _sim_number?: string
+        }
         Returns: undefined
       }
       site_board: {

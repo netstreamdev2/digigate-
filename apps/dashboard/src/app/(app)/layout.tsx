@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { CompanyTheme } from "@/components/company-theme";
 import { CompanyThemeSync } from "@/components/company-theme-sync";
 import { AlertToasts } from "@/components/alert-toasts";
+import { CompanyGate } from "@/components/company-gate";
 import { Motion } from "@/components/motion";
 import { QuickSearch } from "@/components/quick-search";
 import { Sidebar } from "@/components/sidebar";
@@ -45,7 +46,11 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
       <Suspense fallback={null}>
         <Motion />
       </Suspense>
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-10 lg:py-8">{children}</main>
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-10 lg:py-8">
+        <Suspense fallback={null}>
+          <CompanyGate>{children}</CompanyGate>
+        </Suspense>
+      </main>
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { currentUser } from "@/lib/session";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { AddGateStaffButton } from "../../setup/gate-staff-form";
+import { SuspensionPanel } from "./suspension-panel";
 
 type Tab = "guards" | "sites";
 const asTab = (value: string): Tab => (value === "sites" ? "sites" : "guards");
@@ -127,7 +128,7 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
   const query = await searchParams;
   const tab = asTab(textParam(query, "tab"));
   const supabase = await supabaseServer();
-  const company = maybe(await supabase.from("organisations").select("name").eq("id", org).maybeSingle());
+  const company = maybe(await supabase.from("organisations").select("name, suspended_at, suspended_reason").eq("id", org).maybeSingle());
   if (!company) notFound();
 
   const path = `/admin/${org}`;
@@ -154,6 +155,8 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
         </div>
       }
     >
+      {isSuper ? <SuspensionPanel orgId={org} company={company.name} suspendedAt={company.suspended_at} reason={company.suspended_reason} /> : null}
+
       <FilterBar label={tab === "guards" ? "Filter the guards" : "Filter the sites"}>
         <SearchBox key={tab} placeholder={tab === "guards" ? "Search name or employee number" : "Search a site name or code"} />
       </FilterBar>

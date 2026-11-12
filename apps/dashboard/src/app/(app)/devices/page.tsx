@@ -45,7 +45,7 @@ const STATUS_WORDS: Record<DeviceStatus, string> = { online: "Online", quiet: "N
 const STATUS_TONE = { online: "clear", quiet: "blocked", offline: "neutral", revoked: "neutral" } as const;
 
 /** The same handhelds as a dense table, for anyone scanning a long page by eye. */
-function DeviceTable({ devices, now }: { devices: readonly FleetDevice[]; now: number }) {
+function DeviceTable({ devices, now, full }: { devices: readonly FleetDevice[]; now: number; full: boolean }) {
   return (
     <DataTable
       columns={[
@@ -53,7 +53,7 @@ function DeviceTable({ devices, now }: { devices: readonly FleetDevice[]; now: n
         { key: "where", label: "Where" },
         { key: "duty", label: "On duty" },
         { key: "seen", label: "Seen" },
-        { key: "data", label: "Data this period" },
+        full ? { key: "data", label: "Data this period" } : { key: "battery", label: "Battery" },
       ]}
       rows={devices.map((device) => ({
         id: device.id,
@@ -80,6 +80,7 @@ function DeviceTable({ devices, now }: { devices: readonly FleetDevice[]; now: n
           ) : (
             <span className="text-ink-muted">Nothing yet</span>
           ),
+          battery: <TwoLine main={device.health?.battery === null || device.health?.battery === undefined ? NO_VALUE : `${device.health.battery}%`} sub={device.health?.charging ? "Charging" : "Not charging"} />,
         },
       }))}
     />
@@ -90,7 +91,8 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
   const isSuperUser = user.roles.includes("super_user");
-  if (!isSuperUser && !user.roles.includes("admin")) redirect("/control-room");
+  // A company's admins, managers and control room see their handhelds' battery, network and location; the rest is a super user's.
+  if (!isSuperUser && !["admin", "manager", "control_room"].some((role) => user.roles.includes(role))) redirect("/control-room");
 
   const query = await searchParams;
   const search = textParam(query, "q");
@@ -119,9 +121,11 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
       chips={
         <>
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />
-          <div className="sm:ml-auto">
-            <PairDeviceButton company={companies.find((row) => row.id === company)} />
-          </div>
+          {isSuperUser || user.roles.includes("admin") ? (
+            <div className="sm:ml-auto">
+              <PairDeviceButton company={companies.find((row) => row.id === company)} />
+            </div>
+          ) : null}
         </>
       }
     >
@@ -147,7 +151,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
           </div>
           <Rail label="Handhelds that need attention">
             {needAttention.map((device, index) => (
-              <DeviceCard key={device.id} device={device} now={now} index={index} narrow />
+              <DeviceCard key={device.id} device={device} now={now} index={index} narrow full={isSuperUser} />
             ))}
           </Rail>
         </section>
@@ -183,13 +187,13 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
         </Card>
       ) : asTable ? (
         <Card className="mt-6" title={active?.label ?? "All"} subtitle="A device that stops answering keeps working offline. Its scans arrive when it reconnects.">
-          <DeviceTable devices={devices} now={now} />
+          <DeviceTable devices={devices} now={now} full={isSuperUser} />
         </Card>
       ) : (
         <ul className="dg-ripple mt-6 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {devices.map((device, index) => (
             <li key={device.id} className="flex">
-              <DeviceCard device={device} now={now} index={index} />
+              <DeviceCard device={device} now={now} index={index} full={isSuperUser} />
             </li>
           ))}
         </ul>

@@ -82,3 +82,22 @@ export async function saveShiftPeriods(_previous: FormState, form: FormData): Pr
   revalidatePath("/admin", "layout");
   return { problem: null, saved: Date.now() };
 }
+
+/** A super user suspends a company that hasn't paid: its dashboard, handhelds and invites stop. The database checks who. */
+export async function suspendCompany(_previous: FormState, form: FormData): Promise<FormState> {
+  const reason = text(form, "reason");
+  if (!reason) return { problem: "Give a reason. The company's people will see it.", saved: 0 };
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("set_company_suspended", { _org: text(form, "orgId"), _suspended: true, _reason: reason });
+  if (error) return { problem: error.code === "42501" ? "Only a super user can suspend a company." : SOMETHING_FAILED, saved: 0 };
+  revalidatePath("/", "layout");
+  return { problem: null, saved: Date.now() };
+}
+
+/** Reinstating a suspended company: everything comes back at once, and its handhelds at their next sync. */
+export async function reinstateCompany(form: FormData): Promise<void> {
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("set_company_suspended", { _org: text(form, "orgId"), _suspended: false, _reason: "" });
+  if (error) throw new Error(error.code === "42501" ? "Only a super user can reinstate a company." : SOMETHING_FAILED);
+  revalidatePath("/", "layout");
+}

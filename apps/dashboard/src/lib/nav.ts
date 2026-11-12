@@ -14,11 +14,15 @@ export function appNav(user: CurrentUser): readonly NavItem[] {
     { label: "Checks", icon: "visits", href: "/checks" },
   ];
   if (canWatchGates(user)) {
-    items.push({ label: "Hotlist", icon: "watchlist", href: "/hotlist" }, { label: "Expected visitors", icon: "invite", href: "/expected" });
+    // The control room sees its handhelds' battery, network and location; everything else about them is a super user's.
+    items.push(
+      { label: "Hotlist", icon: "watchlist", href: "/hotlist" },
+      { label: "Expected visitors", icon: "invite", href: "/expected" },
+      { label: "Devices", icon: "device", href: "/devices" },
+    );
   }
   if (isAdministrator(user)) {
     items.push(
-      { label: "Devices", icon: "device", href: "/devices" },
       { label: "Reports", icon: "reports", href: "/reports" },
       { label: "Audit log", icon: "audit-log", href: "/audit" },
       { label: "Companies", icon: "sites", href: "/setup" },

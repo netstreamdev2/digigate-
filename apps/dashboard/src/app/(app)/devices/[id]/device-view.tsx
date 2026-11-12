@@ -96,7 +96,8 @@ function chartDays(rows: readonly DataDay[], today: string): DataColumn[] {
 }
 
 /** A handheld's page under its title: its signs as the app's tiles, its data by day, what happened to it, and its SIM. */
-export function DeviceView({ device, data, story, now }: { device: DevicePage; data: readonly DataDay[]; story: readonly StoryEntry[]; now: number }) {
+/** `full` is for super users. A company's own people see the handheld's battery, network, location and whereabouts only. */
+export function DeviceView({ device, data, story, now, full }: { device: DevicePage; data: readonly DataDay[]; story: readonly StoryEntry[]; now: number; full: boolean }) {
   const health = device.health;
   const inPeriod = data.filter((row) => row.day >= device.periodStart);
   const usedBytes = inPeriod.reduce((sum, row) => sum + (row.deviceBytes ?? row.appBytes ?? 0), 0);
@@ -151,20 +152,43 @@ export function DeviceView({ device, data, story, now }: { device: DevicePage; d
           </div>
         </div>
 
-        <div className="rounded-[28px] bg-tile-lilac p-5 xl:row-span-1">
-          <div className="flex items-center gap-4">
-            <DataRing usedBytes={usedBytes} bundleBytes={bundleBytes} size="medium" />
-            <div className="min-w-0">
-              <p className="font-display text-4xl font-semibold tracking-tight text-ink">
-                <CountUp value={leftBytes ?? usedBytes} format="data" />
-              </p>
-              <p className="mt-1 font-semibold text-ink">{leftBytes === null ? "Data used" : "Data left"}</p>
-              <p className="truncate text-sm text-ink-muted">
-                {leftBytes === null ? `Since ${since}${onlyDigiGate ? ", DigiGate's own" : ""}` : `${dataSize(usedBytes)} used of ${dataSize(bundleBytes ?? 0)} since ${since}`}
-              </p>
+        {full ? (
+          <div className="rounded-[28px] bg-tile-lilac p-5 xl:row-span-1">
+            <div className="flex items-center gap-4">
+              <DataRing usedBytes={usedBytes} bundleBytes={bundleBytes} size="medium" />
+              <div className="min-w-0">
+                <p className="font-display text-4xl font-semibold tracking-tight text-ink">
+                  <CountUp value={leftBytes ?? usedBytes} format="data" />
+                </p>
+                <p className="mt-1 font-semibold text-ink">{leftBytes === null ? "Data used" : "Data left"}</p>
+                <p className="truncate text-sm text-ink-muted">
+                  {leftBytes === null ? `Since ${since}${onlyDigiGate ? ", DigiGate's own" : ""}` : `${dataSize(usedBytes)} used of ${dataSize(bundleBytes ?? 0)} since ${since}`}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className={`rounded-[28px] p-5 ${health?.locationAllowed === false ? "bg-warning-soft" : "bg-tile-lilac"}`}>
+            <div className="flex items-center gap-5">
+              <span className="grid size-16 shrink-0 place-items-center rounded-pill bg-surface/85 text-brand">
+                <Icon name="pin" className="size-8" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-display text-4xl font-semibold tracking-tight text-ink">
+                  {health?.locationAllowed === false ? "Off" : health?.latitude !== null && health?.latitude !== undefined ? "Shared" : NO_VALUE}
+                </p>
+                <p className="mt-1 font-semibold text-ink">Location</p>
+                {health?.latitude !== null && health?.latitude !== undefined && health.longitude !== null && health?.locationAllowed !== false ? (
+                  <a href={`https://www.google.com/maps?q=${health.latitude},${health.longitude}`} target="_blank" rel="noreferrer" className="text-sm font-semibold text-brand hover:text-ink">
+                    Open the map
+                  </a>
+                ) : (
+                  <p className="text-sm text-ink-muted">{health?.locationAllowed === false ? "Switched off or not allowed" : "Not reported yet"}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <TintTile
           tint={status.tint}
@@ -181,15 +205,18 @@ export function DeviceView({ device, data, story, now }: { device: DevicePage; d
         />
       </section>
 
-      <Card className="mt-6" title="Mobile data" subtitle="By the handheld's own day: DigiGate at the base, everything else (hotspot and other apps) on top. Wi-Fi isn't counted.">
-        {data.length === 0 ? (
-          <p className="py-8 text-center text-sm text-ink-muted">Nothing reported yet. Handhelds on the build of 11 November or later send it with every sync.</p>
-        ) : (
-          <DataPanel days={chartDays(data, siteToday(now))} caption={`Mobile data by day on ${device.name}`} />
-        )}
-      </Card>
+      {full ? (
+        <Card className="mt-6" title="Mobile data" subtitle="By the handheld's own day: DigiGate at the base, everything else (hotspot and other apps) on top. Wi-Fi isn't counted.">
+          {data.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-muted">Nothing reported yet. Handhelds on the build of 11 November or later send it with every sync.</p>
+          ) : (
+            <DataPanel days={chartDays(data, siteToday(now))} caption={`Mobile data by day on ${device.name}`} />
+          )}
+        </Card>
+      ) : null}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <div className={`mt-6 grid gap-6 ${full ? "xl:grid-cols-2" : ""}`}>
+        {full ? (
         <Card title="What happened" subtitle="Written down on the handheld as it happened, and sent when it was back.">
           {lines.length === 0 ? (
             <p className="py-8 text-center text-sm text-ink-muted">Nothing yet. It notes when it&apos;s switched off, loses signal, or its SIM or mobile data changes.</p>
@@ -218,8 +245,10 @@ export function DeviceView({ device, data, story, now }: { device: DevicePage; d
             </ol>
           )}
         </Card>
+        ) : null}
 
         <div className="flex flex-col gap-6">
+          {full ? (
           <Card
             title="SIM and bundle"
             subtitle="What's left is the bundle less what the handheld counted since it renewed. Your network's own figure is the final word."
@@ -238,10 +267,11 @@ export function DeviceView({ device, data, story, now }: { device: DevicePage; d
               <Row label="This period">{`Since ${since}: ${dataSize(usedBytes)} used${leftBytes === null ? "" : `, ${dataSize(leftBytes)} left`}`}</Row>
             </dl>
           </Card>
+          ) : null}
 
           <Card title="Handheld">
             <dl>
-              <Row label="Locked to DigiGate">{lockWords(health)}</Row>
+              {full ? <Row label="Locked to DigiGate">{lockWords(health)}</Row> : null}
               <Row label="Where">
                 <Link href={`/control-room/${device.siteId}`} className="transition-colors hover:text-brand">
                   {device.site}

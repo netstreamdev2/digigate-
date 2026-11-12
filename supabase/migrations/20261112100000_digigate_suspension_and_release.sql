@@ -164,7 +164,8 @@ $$;
 -- A SIM's number and bundle are a super user's to set, through this only.
 revoke update (sim_number, data_bundle_mb, data_renews_day) on digigate.devices from authenticated;
 
-create function digigate.set_device_plan(_device uuid, _sim_number text, _bundle_mb integer, _renews_day smallint) returns void
+-- Anything left out is cleared.
+create function digigate.set_device_plan(_device uuid, _sim_number text default null, _bundle_mb integer default null, _renews_day smallint default null) returns void
 language plpgsql security definer set search_path = ''
 as $$
 begin

@@ -14,6 +14,7 @@ import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
 
 import { revokeDevice } from "../../setup/actions";
+import { requestRelease } from "../actions";
 import { DeviceView, StatusOf } from "./device-view";
 
 // A bundle period can run 31 days, so a little more than the chart is read for what was used since it renewed.
@@ -24,7 +25,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function Device({ params }: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  if (!user.roles.includes("super_user") && !user.roles.includes("admin")) redirect("/control-room");
+  const isSuperUser = user.roles.includes("super_user");
+  if (!isSuperUser && !["admin", "manager", "control_room"].some((role) => user.roles.includes(role))) redirect("/control-room");
 
   const { id } = await params;
   if (!UUID.test(id)) notFound();
@@ -47,6 +49,20 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
       title={device.name}
       actions={
         device.canManage ? (
+          <>
+          <ConfirmAction
+            label="Release from DigiGate"
+            title={`Release ${device.name}?`}
+            confirmLabel="Yes, release it"
+            pendingLabel="Releasing…"
+            tone="danger"
+            icon="unlock"
+            action={requestRelease}
+            fields={{ id: device.id }}
+          >
+            At its next sync it stops being locked to DigiGate: its other apps, hotspot and settings come back, and DigiGate becomes an ordinary app on it.
+            It stays paired. Only super users can do this, and it&apos;s in the audit log.
+          </ConfirmAction>
           <ConfirmAction
             label="Revoke"
             title={`Revoke ${device.name}?`}
@@ -59,6 +75,7 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
           >
             It stops working with DigiGate, signs out whoever is on it, and wipes its guards and data the next time it connects. To use it again you&apos;d pair it with a new code.
           </ConfirmAction>
+          </>
         ) : null
       }
       chips={
@@ -68,7 +85,7 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
         </>
       }
     >
-      <DeviceView device={device} data={data} story={story} now={now} />
+      <DeviceView device={device} data={data} story={story} now={now} full={isSuperUser} />
     </AppShell>
   );
 }
