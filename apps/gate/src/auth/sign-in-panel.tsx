@@ -1,7 +1,7 @@
 import { colors, space } from '@digigate/design';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PIN_LENGTH } from '@/auth/pin';
@@ -66,6 +66,8 @@ export function SignInPanel() {
   const [pin, setPin] = useState('');
   const [checking, setChecking] = useState(false);
   const [problem, setProblem] = useState<PinProblem | null>(null);
+  // The guard asked what to do about a PIN they've forgotten.
+  const [forgot, setForgot] = useState(false);
   // Development builds show how long the PIN check took, to tune hash iterations on real devices.
   const [lastCheckMs, setLastCheckMs] = useState<number | null>(null);
   const pinStep = lockedUser !== null || enteringPin;
@@ -88,6 +90,7 @@ export function SignInPanel() {
   const onDigit = (digit: string) => {
     setProblem(null);
     setMoved(null);
+    setForgot(false);
     if (!pinStep) {
       if (employeeNumber.length < EMPLOYEE_NUMBER_MAX_LENGTH) setEmployeeNumber(employeeNumber + digit);
       return;
@@ -108,6 +111,7 @@ export function SignInPanel() {
     setEnteringPin(false);
     setEmployeeNumber('');
     setProblem(null);
+    setForgot(false);
     if (lockedUser) signOut();
   };
 
@@ -158,7 +162,13 @@ export function SignInPanel() {
             title: 'Shift moved',
             message: `A supervisor moved ${moved.firstName}'s shift to another handheld at ${new Date(moved.at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}, so they were signed out here.`,
           }
-        : null;
+        : forgot
+          ? {
+              tone: 'warning' as const,
+              title: 'Forgot your PIN?',
+              message: 'Ask your supervisor or the control room to reset it in the DigiGate dashboard. The new PIN works here within a minute.',
+            }
+          : null;
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
@@ -181,11 +191,19 @@ export function SignInPanel() {
             {employeeNumber}
           </Text>
         )}
-        <Text variant="label" color={colors.inkMuted}>
-          {checking ? 'Checking…' : __DEV__ && lastCheckMs !== null ? `Last PIN check took ${lastCheckMs} ms` : ' '}
-        </Text>
+        {pinStep && !checking && !forgot ? (
+          // In the line under the dots, which is empty at this step, so the keypad below never moves.
+          <Pressable onPress={() => setForgot(true)} accessibilityRole="button" hitSlop={space.sm}>
+            <Text variant="label" color={colors.brand}>
+              Forgot your PIN?
+            </Text>
+          </Pressable>
+        ) : (
+          <Text variant="label" color={colors.inkMuted}>
+            {checking ? 'Checking…' : __DEV__ && lastCheckMs !== null ? `Last PIN check took ${lastCheckMs} ms` : ' '}
+          </Text>
+        )}
       </View>
-
 
       <View style={styles.controls}>
         <Keypad onDigit={onDigit} onDelete={onDelete} disabled={checking} />
