@@ -119,15 +119,52 @@ export function SignInPanel() {
       ? `Employee ${employeeNumber}`
       : 'Type your employee number';
 
+  const topBar = (
+    <View style={styles.topBar}>
+      <Logo height={26} />
+      <Chip label={siteName()} />
+    </View>
+  );
+
+  // A handheld with nobody on its guard list can't sign anyone in: it gets its own screen, not a keypad to nowhere.
+  if (guardCount === 0 && !lockedUser) {
+    const unpaired = sync.status.state === 'not-paired' || sync.status.state === 'revoked';
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
+        {topBar}
+        <View style={styles.setup}>
+          <Text variant="display">{unpaired ? 'Set up this handheld' : 'Almost ready'}</Text>
+          <Text variant="body" color={colors.inkMuted}>
+            {noGuardsMessage(sync.status)}
+          </Text>
+        </View>
+        {unpaired ? (
+          <PillButton label="Pair this device" icon="scan" onPress={() => router.push('/pair')} />
+        ) : (
+          <PillButton label="Sync now" icon="syncing" variant="secondary" onPress={() => void sync.syncNow()} />
+        )}
+      </View>
+    );
+  }
+
+  // At most one notice, compact and in the heading's place, so the keypad and the button under it always fit.
+  const notice = problem
+    ? { tone: problem.tone, title: problem.title, message: problem.message }
+    : storageProblem
+      ? { tone: 'warning' as const, title: 'Record not saved', message: "A lock or sign-out couldn't be saved on this device. Tell your supervisor." }
+      : moved
+        ? {
+            tone: 'warning' as const,
+            title: 'Shift moved',
+            message: `A supervisor moved ${moved.firstName}'s shift to another handheld at ${new Date(moved.at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}, so they were signed out here.`,
+          }
+        : null;
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom + space.md }]}>
-      <View style={styles.topBar}>
-        <Logo height={26} />
-        <Chip label={siteName()} />
-      </View>
+      {topBar}
 
-      {/* The banner takes the heading's place, so the keypad and the button under it stay on screen. */}
-      {problem ? null : (
+      {notice ? <ResultBanner compact tone={notice.tone} title={notice.title} message={notice.message} /> : (
         <View style={styles.heading}>
           <Text variant="display">{title}</Text>
           <Text variant="label" color={colors.inkMuted}>
@@ -149,27 +186,6 @@ export function SignInPanel() {
         </Text>
       </View>
 
-      {problem ? <ResultBanner tone={problem.tone} title={problem.title} message={problem.message} /> : null}
-      {storageProblem ? (
-        <ResultBanner
-          tone="warning"
-          title="Record not saved"
-          message="A lock or sign-out couldn't be saved on this device. Tell your supervisor."
-        />
-      ) : null}
-      {moved && !problem ? (
-        <ResultBanner
-          tone="warning"
-          title="Shift moved"
-          message={`A supervisor moved ${moved.firstName}'s shift to another handheld at ${new Date(moved.at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}, so they were signed out here.`}
-        />
-      ) : null}
-      {guardCount === 0 && !lockedUser ? (
-        <ResultBanner tone="warning" title="No guards on this device yet" message={noGuardsMessage(sync.status)} />
-      ) : null}
-      {(sync.status.state === 'not-paired' || sync.status.state === 'revoked') && !pinStep ? (
-        <PillButton label="Pair this device" variant="secondary" onPress={() => router.push('/pair')} />
-      ) : null}
 
       <View style={styles.controls}>
         <Keypad onDigit={onDigit} onDelete={onDelete} disabled={checking} />
@@ -206,6 +222,11 @@ const styles = StyleSheet.create({
   },
   heading: {
     gap: space.xs,
+  },
+  setup: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: space.sm,
   },
   entry: {
     flex: 1,
