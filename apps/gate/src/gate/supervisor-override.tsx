@@ -36,7 +36,7 @@ type Props = {
   notSupervisorMessage?: string;
 };
 
-/** A supervisor approves something at the gate: a reason, then their own employee number and PIN. */
+/** A supervisor approves something at the gate: a reason, then their own PIN. */
 export function SupervisorOverride({
   onConfirmed,
   onCancel,
@@ -45,10 +45,13 @@ export function SupervisorOverride({
   notSupervisorMessage = 'Only a supervisor can override a block. Call one to the gate.',
 }: Props) {
   const insets = useSafeAreaInsets();
-  const { confirmSupervisor } = useSession();
+  const { confirmSupervisor, confirmSupervisorByPin } = useSession();
   const [reason, setReason] = useState<string | null>(fixedReason ?? null);
   const [employeeNumber, setEmployeeNumber] = useState('');
-  const [enteringPin, setEnteringPin] = useState(false);
+  // The supervisor's PIN alone. Their employee number is asked for only if two supervisors share a PIN.
+  const [askNumber, setAskNumber] = useState(false);
+  const [numberGiven, setNumberGiven] = useState(false);
+  const enteringPin = !askNumber || numberGiven;
   const [pin, setPin] = useState('');
   const [checking, setChecking] = useState(false);
   const [problem, setProblem] = useState<PinProblem | null>(null);
@@ -57,15 +60,22 @@ export function SupervisorOverride({
     if (!reason) return;
     setChecking(true);
     try {
-      const result = await confirmSupervisor(employeeNumber, fullPin);
+      const pinOnly = !askNumber;
+      const result = pinOnly ? await confirmSupervisorByPin(fullPin) : await confirmSupervisor(employeeNumber, fullPin);
       if (result.ok) {
         onConfirmed(result.supervisor, reason);
         return;
       }
+      if (result.reason === 'shared-pin') {
+        setAskNumber(true);
+        setNumberGiven(false);
+      }
       setProblem(
         result.reason === 'not-a-supervisor'
           ? { tone: 'blocked', title: 'Not a supervisor', message: notSupervisorMessage }
-          : pinProblem(result),
+          : result.reason === 'wrong-details' && pinOnly
+            ? { tone: 'warning', title: 'Not a supervisor PIN', message: `That PIN isn't a supervisor's here. ${notSupervisorMessage}` }
+            : pinProblem(result, pinOnly),
       );
     } catch {
       setProblem({ tone: 'warning', title: 'Try again', message: "Couldn't check the PIN. Enter it again." });
@@ -113,6 +123,11 @@ export function SupervisorOverride({
         <>
           <View style={styles.heading}>
             <Text variant="title">{enteringPin ? 'Supervisor PIN' : 'Supervisor employee number'}</Text>
+            {askNumber && numberGiven ? (
+              <Text variant="label" color={colors.inkMuted}>
+                {`Employee ${employeeNumber}`}
+              </Text>
+            ) : null}
             <Text variant="label" color={colors.inkMuted}>
               {reason}
             </Text>
@@ -132,17 +147,17 @@ export function SupervisorOverride({
           {problem ? <ResultBanner tone={problem.tone} title={problem.title} message={problem.message} /> : null}
           <View style={styles.controls}>
             <Keypad onDigit={onDigit} onDelete={onDelete} disabled={checking} />
-            {enteringPin ? (
+            {!askNumber ? null : enteringPin ? (
               <PillButton
                 label="Change employee number"
                 variant="secondary"
                 onPress={() => {
-                  setEnteringPin(false);
+                  setNumberGiven(false);
                   setPin('');
                 }}
               />
             ) : (
-              <PillButton label="Continue" disabled={employeeNumber.length === 0} onPress={() => setEnteringPin(true)} />
+              <PillButton label="Continue" disabled={employeeNumber.length === 0} onPress={() => setNumberGiven(true)} />
             )}
           </View>
         </>
