@@ -52,13 +52,13 @@ export type Passage = { direction: 'entry' } | { direction: 'exit'; ignitionRest
 
 export type CheckInput = Passage & {
   subject: CheckSubject;
-  /** The plate the guard read off the car. */
+  /** The car's plate: the disc's own on a scanned car, the one typed on a typed-in car. */
   typedPlate: string;
-  /** How the guard gave the plate: off a photo or typed, and whether they were told it didn't match the disc. */
+  /** Where the plate came from: the disc, or typed by the guard. */
   plateEntry: GateEventPayload;
   occupants: number;
-  /** The same people, as men, women and anyone the guard couldn't tell. */
-  occupantsBySex: OccupantsBySex;
+  /** The same people, as men, women and anyone the guard couldn't tell. Null: the gate counts heads only. */
+  occupantsBySex: OccupantsBySex | null;
   /** Entry only: exits keep the visit's own type. */
   visitType: string;
   /** Entry only: how long the visit should last, in minutes; null for no limit. */

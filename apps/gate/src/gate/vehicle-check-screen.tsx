@@ -1,7 +1,7 @@
-import { normaliseIdentifier, occupantTotal, type OccupantsBySex } from '@digigate/core';
+import { normaliseIdentifier } from '@digigate/core';
 import { colors, radius, space } from '@digigate/design';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,7 +21,7 @@ import { ResultBanner } from '@/components/result-banner';
 import { ScanSteps } from '@/components/scan-steps';
 import { Text } from '@/components/text';
 import { VehicleCard } from '@/components/vehicle-card';
-import { driverOnly, OccupantCounter } from '@/components/occupant-counter';
+import { PeopleCounter } from '@/components/people-counter';
 import { StayPicker } from '@/components/stay-picker';
 import { VisitTypePicker } from '@/components/visit-type-picker';
 import { useLocalDatabase } from '@/db/database-context';
@@ -33,13 +33,9 @@ import { expectedStayFor, launchGraceEndsAt, siteConfig, visitTypeOf } from '@/s
 import { usePost } from '@/shift/shift-context';
 import { useSync } from '@/sync/sync-context';
 
-import { PlateCamera } from './plate-camera';
-import { PlateField } from './plate-field';
 import { SupervisorOverride } from './supervisor-override';
 import { useCarPark } from './use-car-park';
 import { useKeepLicencePhoto } from './use-keep-licence-photo';
-import { useKeepPlatePhoto } from './use-keep-plate-photo';
-import { usePlateEntry } from './use-plate-entry';
 import { useVehicleDocuments } from './use-vehicle-documents';
 import { recordDecision, recordOccupantReason, type Decision, type Direction } from './decision';
 import { OccupantReasonCard } from './occupant-reason-card';
@@ -52,7 +48,6 @@ import { useInvite } from './use-invite';
 import { checkVehicle, scannedSubject, type CheckedVehicle, type Passage } from './vehicle-check';
 
 const FOOTER_HEIGHT = 160;
-const MIN_PLATE_LENGTH = 2;
 
 const COPY = {
   entry: { overline: 'Vehicle entry', title: "Who's coming in?", chip: 'Entry', icon: 'entry', people: 'People in the car' },
@@ -80,9 +75,8 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   const [details, setDetails] = useState<'licence' | 'disc' | 'disc-drawing' | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const plate = usePlateEntry();
-  const [people, setPeople] = useState<OccupantsBySex>(driverOnly(null));
-  const peopleCounted = useRef(false);
+  // How many people are in the car, the driver included.
+  const [occupants, setOccupants] = useState(1);
   const [visitType, setVisitType] = useState<string>(siteConfig.defaultVisitType);
   const [stay, setStay] = useState<number | null>(expectedStayFor(siteConfig.defaultVisitType));
   const [exitChecks, setExitChecks] = useState<ExitChecks>(NO_EXIT_CHECKS);
@@ -93,23 +87,10 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
   const invite = useInvite(db, documents.inviteCode, direction);
   const invitedBooking = invite?.kind === 'expected' ? invite.booking : null;
   const photoProblem = useKeepLicencePhoto(db, checked?.event ?? null, photo);
-  const platePhotoProblem = useKeepPlatePhoto(db, checked?.event ?? null, plate.photo);
   const copy = COPY[direction];
   const words = vehicleGateWords(post.hasBoom);
   // Read once per screen: the note only says when the grace ends, the rule itself checks the time of each scan.
   const [graceEnds] = useState(() => launchGraceEndsAt(Date.now()));
-  const occupants = occupantTotal(people);
-
-  // The driver counts as the licence says, until the guard counts the car themselves.
-  const driverGender = licence?.gender ?? null;
-  useEffect(() => {
-    if (!peopleCounted.current) setPeople(driverOnly(driverGender));
-  }, [driverGender]);
-
-  const countPeople = (next: OccupantsBySex) => {
-    peopleCounted.current = true;
-    setPeople(next);
-  };
 
   const chooseVisitType = (code: string) => {
     // An emergency asks what kind first; the check still needs the disc and the licence.
@@ -139,10 +120,9 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
 
   const completedChecks = completedExitChecks(exitChecks);
   const passage: Passage | null = direction === 'entry' ? { direction } : completedChecks && { direction, ...completedChecks };
-  const ready = disc !== null && licence !== null && passage !== null && plate.normalised.length >= MIN_PLATE_LENGTH;
-  // Checked before the rules run, without showing the disc's plate: a slip is fixed at the gate, not left as an alert.
-  const plateDiffers = disc !== null && plate.normalised !== normaliseIdentifier(disc.plate);
-  const lookAgain = !checked && plateDiffers && plate.warnedPlate !== null;
+  // The disc and the licence are all a scanned car needs: the disc carries the plate (13 November: typing or
+  // photographing it held up the queue).
+  const ready = disc !== null && licence !== null && passage !== null;
 
   const runCheck = async () => {
     if (!disc || !licence || !passage) return;
@@ -152,10 +132,10 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
       const result = await checkVehicle(db, {
         ...passage,
         subject: scannedSubject({ disc, licence }),
-        typedPlate: plate.plate,
-        plateEntry: plate.payload(),
+        typedPlate: disc.plate,
+        plateEntry: { source: 'disc' },
         occupants,
-        occupantsBySex: people,
+        occupantsBySex: null,
         visitType,
         expectedStayMinutes: stay,
         guardId: guard.id,
@@ -185,14 +165,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
     }
   };
 
-  // The first Check with a plate that isn't the disc's asks the guard to look again; the second goes ahead.
-  const check = () => {
-    if (plateDiffers && plate.warnedPlate === null) {
-      plate.warn();
-      return;
-    }
-    void runCheck();
-  };
+  const check = () => void runCheck();
 
   const decide = async (decision: Decision) => {
     if (!checked) return;
@@ -217,9 +190,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
     setSettled(null);
     setDetails(null);
     setProblem(null);
-    plate.reset();
-    peopleCounted.current = false;
-    setPeople(driverOnly(null));
+    setOccupants(1);
     setVisitType(siteConfig.defaultVisitType);
     setStay(expectedStayFor(siteConfig.defaultVisitType));
     setExitChecks(NO_EXIT_CHECKS);
@@ -276,7 +247,6 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
 
         {problem ? <ResultBanner tone="warning" title="Not saved" message={problem} /> : null}
         {photoProblem ? <ResultBanner tone="warning" title="Photo not kept" message={photoProblem} /> : null}
-        {platePhotoProblem ? <ResultBanner tone="warning" title="Plate photo not kept" message={platePhotoProblem} /> : null}
         {notice && !checked ? <ResultBanner tone="warning" title={notice.title} message={notice.message} /> : null}
         {emergency && !checked ? (
           <ResultBanner
@@ -305,7 +275,6 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
 
         {licence ? <PersonCard document={{ kind: 'driver-licence', licence, photo }} onOpen={() => setDetails('licence')} /> : null}
 
-        {/* The disc's plate stays back until the check, in its details and its drawing alike (see the plate input below). */}
         {disc ? <VehicleCard disc={disc} onOpen={() => setDetails('disc')} onShowDisc={() => setDetails('disc-drawing')} /> : null}
 
         <ScanSteps
@@ -331,11 +300,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
           ]}
         />
 
-        <Card style={styles.plate}>
-          <PlateField entry={plate} checked={checked !== null} discPlate={checked && disc ? disc.plate : null} lookAgain={lookAgain} />
-        </Card>
-
-        <OccupantCounter title={copy.people} value={people} onChange={countPeople} locked={checked !== null} />
+        <PeopleCounter title={copy.people} value={occupants} onChange={setOccupants} locked={checked !== null} />
 
         {direction === 'entry' ? (
           <>
@@ -351,7 +316,7 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
         onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
         style={[styles.footer, { bottom: keyboardHeight, paddingBottom: keyboardHeight > 0 ? space.sm : insets.bottom + space.md }]}>
         {!checked ? (
-          <PillButton label={lookAgain ? "It's right · Check" : "Check"} icon="check" disabled={!ready || busy} onPress={check} />
+          <PillButton label="Check" icon="check" disabled={!ready || busy} onPress={check} />
         ) : finished ? (
           <PillButton label="Next car" icon={copy.icon} onPress={nextCar} />
         ) : checked.outcome === 'warning' ? (
@@ -381,7 +346,6 @@ function VehicleCheck({ direction, guard }: { direction: Direction; guard: GateU
 
       {details === 'disc-drawing' && disc ? <DiscPopup disc={disc} plateShown={checked !== null} onClose={() => setDetails(null)} /> : null}
 
-      {plate.cameraOpen ? <PlateCamera onUse={plate.acceptPhoto} onType={plate.typeIt} onCancel={plate.closeCamera} /> : null}
 
       {choosingEmergency ? <EmergencySheet onChoose={chooseEmergency} onCancel={() => setChoosingEmergency(false)} /> : null}
 
@@ -422,9 +386,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heading: {
-    gap: space.xs,
-  },
-  plate: {
     gap: space.xs,
   },
   footer: {
