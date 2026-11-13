@@ -60,6 +60,12 @@ export async function dutyElsewhereFor(db: SQLiteDatabase, gateUserId: string, n
   return current[0] ?? null;
 }
 
+/** Everyone on duty on another handheld right now, for greying their number out at sign-in. */
+export async function onDutyElsewhereIds(db: SQLiteDatabase, now: number, maxShiftMs: number): Promise<Set<string>> {
+  const list = await readDutyElsewhere(db);
+  return new Set(list.filter((duty) => now - duty.since < maxShiftMs).map((duty) => duty.gateUserId));
+}
+
 /** Once a shift has moved here, it no longer blocks this guard, even before the next sync. */
 export async function forgetDutyElsewhere(db: SQLiteDatabase, shiftId: string): Promise<void> {
   const list = await readDutyElsewhere(db);

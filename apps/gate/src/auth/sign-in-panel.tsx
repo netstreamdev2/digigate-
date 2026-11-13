@@ -15,12 +15,17 @@ import { PinDots } from '@/components/pin-dots';
 import { ResultBanner } from '@/components/result-banner';
 import { Text } from '@/components/text';
 import { useLocalDatabase } from '@/db/database-context';
-import { takeMovedNotice, type MovedNotice } from '@/db/duty-elsewhere';
-import { countGateUsers } from '@/db/gate-users';
-import { siteName } from '@/site/site-config';
+import { onDutyElsewhereIds, takeMovedNotice, type MovedNotice } from '@/db/duty-elsewhere';
+import { countGateUsers, signInTiles, type NumberTile } from '@/db/gate-users';
+import { siteConfig, siteName } from '@/site/site-config';
+
+import { NumberTiles } from './number-tiles';
 import { useSync, type SyncStatus } from '@/sync/sync-context';
 
 const EMPLOYEE_NUMBER_MIN_LENGTH = 3;
+// More numbers than this on one handheld are typed: tiles are for a short list.
+const MOST_TILES = 30;
+const HOUR_MS = 60 * 60_000;
 const EMPLOYEE_NUMBER_MAX_LENGTH = 8;
 
 function noGuardsMessage(status: SyncStatus): string {
@@ -61,6 +66,14 @@ export function SignInPanel() {
       },
     );
   }, [db, sync.status]);
+  // The employee numbers as tiles to tap, and which are on duty on another handheld. Null tiles: too many to show.
+  const [tiles, setTiles] = useState<NumberTile[] | null>(null);
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    signInTiles(db, MOST_TILES).then(setTiles, () => setTiles(null));
+    onDutyElsewhereIds(db, Date.now(), siteConfig.maxShiftHours * HOUR_MS).then(setBusy, () => setBusy(new Set()));
+  }, [db, sync.status]);
   const [employeeNumber, setEmployeeNumber] = useState('');
   const [enteringPin, setEnteringPin] = useState(false);
   const [pin, setPin] = useState('');
@@ -71,6 +84,15 @@ export function SignInPanel() {
   // Development builds show how long the PIN check took, to tune hash iterations on real devices.
   const [lastCheckMs, setLastCheckMs] = useState<number | null>(null);
   const pinStep = lockedUser !== null || enteringPin;
+  const showTiles = !pinStep && !typing && tiles !== null && tiles.length > 0;
+
+  const pick = (number: string) => {
+    setProblem(null);
+    setMoved(null);
+    setForgot(false);
+    setEmployeeNumber(number);
+    setEnteringPin(true);
+  };
 
   const submit = async (fullPin: string) => {
     setChecking(true);
@@ -109,6 +131,7 @@ export function SignInPanel() {
   const startOver = () => {
     setPin('');
     setEnteringPin(false);
+    setTyping(false);
     setEmployeeNumber('');
     setProblem(null);
     setForgot(false);
@@ -121,6 +144,8 @@ export function SignInPanel() {
       ? LOCK_MESSAGES[state.reason]
       : pinStep
       ? `Employee ${employeeNumber}`
+      : showTiles
+      ? 'Tap your employee number'
       : 'Type your employee number';
 
   const topBar = (
@@ -183,44 +208,47 @@ export function SignInPanel() {
         </View>
       )}
 
-      <View style={styles.entry}>
-        {pinStep ? (
-          <PinDots filled={pin.length} />
-        ) : (
-          <Text variant="display" style={styles.employeeNumber}>
-            {employeeNumber}
-          </Text>
-        )}
-        {pinStep && !checking && !forgot ? (
-          // In the line under the dots, which is empty at this step, so the keypad below never moves.
-          <Pressable onPress={() => setForgot(true)} accessibilityRole="button" hitSlop={space.sm}>
-            <Text variant="label" color={colors.brand}>
-              Forgot your PIN?
-            </Text>
-          </Pressable>
-        ) : (
-          <Text variant="label" color={colors.inkMuted}>
-            {checking ? 'Checking…' : __DEV__ && lastCheckMs !== null ? `Last PIN check took ${lastCheckMs} ms` : ' '}
-          </Text>
-        )}
-      </View>
+      {showTiles && tiles ? (
+        <>
+          <View style={styles.tiles}>
+            <NumberTiles tiles={tiles} busy={busy} onPick={pick} />
+          </View>
+          <PillButton label="Type a number instead" variant="secondary" onPress={() => setTyping(true)} />
+        </>
+      ) : (
+        <>
+          <View style={styles.entry}>
+            {pinStep ? (
+              <PinDots filled={pin.length} />
+            ) : (
+              <Text variant="display" style={styles.employeeNumber}>
+                {employeeNumber}
+              </Text>
+            )}
+            {pinStep && !checking && !forgot ? (
+              // In the line under the dots, which is empty at this step, so the keypad below never moves.
+              <Pressable onPress={() => setForgot(true)} accessibilityRole="button" hitSlop={space.sm}>
+                <Text variant="label" color={colors.brand}>
+                  Forgot your PIN?
+                </Text>
+              </Pressable>
+            ) : (
+              <Text variant="label" color={colors.inkMuted}>
+                {checking ? 'Checking…' : __DEV__ && lastCheckMs !== null ? `Last PIN check took ${lastCheckMs} ms` : ' '}
+              </Text>
+            )}
+          </View>
 
-      <View style={styles.controls}>
-        <Keypad onDigit={onDigit} onDelete={onDelete} disabled={checking} />
-        {pinStep ? (
-          <PillButton
-            label={lockedUser ? 'Switch guard' : 'Change employee number'}
-            variant="secondary"
-            onPress={startOver}
-          />
-        ) : (
-          <PillButton
-            label="Continue"
-            disabled={employeeNumber.length < EMPLOYEE_NUMBER_MIN_LENGTH}
-            onPress={() => setEnteringPin(true)}
-          />
-        )}
-      </View>
+          <View style={styles.controls}>
+            <Keypad onDigit={onDigit} onDelete={onDelete} disabled={checking} />
+            {pinStep ? (
+              <PillButton label={lockedUser ? 'Switch guard' : 'Change employee number'} variant="secondary" onPress={startOver} />
+            ) : (
+              <PillButton label="Continue" disabled={employeeNumber.length < EMPLOYEE_NUMBER_MIN_LENGTH} onPress={() => setEnteringPin(true)} />
+            )}
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -231,6 +259,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     backgroundColor: colors.background,
     gap: space.lg,
+  },
+  tiles: {
+    flex: 1,
   },
   topBar: {
     height: 56,
