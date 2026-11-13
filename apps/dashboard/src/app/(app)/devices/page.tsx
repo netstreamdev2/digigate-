@@ -1,25 +1,19 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/card";
 import { CountUp } from "@/components/count-up";
-import { DataTable, TwoLine } from "@/components/data-table";
-import { DataRing, LiveDot } from "@/components/device-signs";
 import { FilterBar } from "@/components/filter-bar";
 import { Pagination, Tabs } from "@/components/list";
 import { LiveStatus } from "@/components/live-status";
 import { NoAccess } from "@/components/no-access";
-import { Rail } from "@/components/rail";
 import { FilterSelect, SearchBox } from "@/components/search-box";
-import { Segmented } from "@/components/segmented";
 import { PageSkeleton } from "@/components/skeleton";
 import { TintTile } from "@/components/tint-tile";
 import { companyBrand } from "@/lib/company-brand";
-import { attentionOf } from "@/lib/device-attention";
-import { asDeviceStatus, deviceBoard, deviceSummary, type DeviceStatus, type FleetDevice } from "@/lib/devices";
-import { ago, dataSize, MB, plural, shortDate, timeWithSeconds } from "@/lib/format";
+import { asDeviceStatus, deviceBoard, deviceSummary, type DeviceStatus } from "@/lib/devices";
+import { plural, timeWithSeconds } from "@/lib/format";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
@@ -30,64 +24,18 @@ import { PairDeviceButton } from "../setup/pair-device";
 import { DeviceCard } from "./device-card";
 
 const MOST_COMPANIES = 500;
-const NO_VALUE = "—";
-/** The rail is a short list: the worst on this page, never the whole fleet. */
-const MOST_IN_RAIL = 12;
 
+// The first tab, with no status in the address, is every handheld in service: revoked ones only on their own tab.
 const TABS: readonly { status: DeviceStatus | null; label: string }[] = [
-  { status: null, label: "All" },
+  { status: null, label: "In service" },
   { status: "quiet", label: "Not responding" },
   { status: "offline", label: "Offline" },
   { status: "online", label: "Online" },
   { status: "revoked", label: "Revoked" },
 ];
 
-const STATUS_WORDS: Record<DeviceStatus, string> = { online: "Online", quiet: "Not responding", offline: "Offline", revoked: "Revoked" };
-const STATUS_TONE = { online: "clear", quiet: "blocked", offline: "neutral", revoked: "neutral" } as const;
-
-/** The same handhelds as a dense table, for anyone scanning a long page by eye. */
-function DeviceTable({ devices, now, full }: { devices: readonly FleetDevice[]; now: number; full: boolean }) {
-  return (
-    <DataTable
-      columns={[
-        { key: "device", label: "Device" },
-        { key: "where", label: "Where" },
-        { key: "duty", label: "On duty" },
-        { key: "seen", label: "Seen" },
-        full ? { key: "data", label: "Data this period" } : { key: "battery", label: "Battery" },
-      ]}
-      rows={devices.map((device) => ({
-        id: device.id,
-        cells: {
-          device: (
-            <TwoLine
-              main={
-                <Link href={`/devices/${device.id}`} className="flex items-center gap-2 font-semibold transition-colors hover:text-brand">
-                  <LiveDot tone={STATUS_TONE[device.status]} live={device.status === "online" || device.status === "quiet"} />
-                  <span className="block max-w-44 truncate">{device.name}</span>
-                </Link>
-              }
-              sub={`${STATUS_WORDS[device.status]} · paired ${shortDate(device.pairedAt)}`}
-            />
-          ),
-          where: <TwoLine main={device.site} sub={device.company} />,
-          duty: device.guard ? <TwoLine main={device.guard} sub={device.post ?? NO_VALUE} /> : <span className="text-ink-muted">Nobody</span>,
-          seen: <TwoLine main={device.lastSeenAt ? ago(device.lastSeenAt, now) : "Never"} sub={device.checksToday ? `${plural(device.checksToday, "scan")} today` : "No scans today"} />,
-          data: device.data ? (
-            <span className="flex items-center gap-3">
-              <DataRing usedBytes={device.data.usedBytes} bundleBytes={device.data.bundleMb ? device.data.bundleMb * MB : null} />
-              <TwoLine main={`${dataSize(device.data.usedBytes)} used`} sub={device.data.bundleMb ? `of ${dataSize(device.data.bundleMb * MB)}` : "No bundle set"} />
-            </span>
-          ) : (
-            <span className="text-ink-muted">Nothing yet</span>
-          ),
-          battery: <TwoLine main={device.health?.battery === null || device.health?.battery === undefined ? NO_VALUE : `${device.health.battery}%`} sub={device.health?.charging ? "Charging" : "Not charging"} />,
-        },
-      }))}
-    />
-  );
-}
-
+// Each handheld appears once, as a card (13 November): a separate "needs attention" row showed the same handhelds
+// twice and a table view was one more thing to explain.
 async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
@@ -99,7 +47,6 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
   const search = textParam(query, "q");
   const status = asDeviceStatus(textParam(query, "status"));
   const page = pageParam(query);
-  const asTable = textParam(query, "view") === "table";
 
   const supabase = await supabaseServer();
   const companies = acrossCompanies ? must(await supabase.from("organisations").select("id, name").order("name").limit(MOST_COMPANIES)) : [];
@@ -112,7 +59,6 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
   const inService = summary.quiet + summary.offline + summary.online;
   const everyDevice = inService + summary.revoked;
   const active = TABS.find((tab) => tab.status === status);
-  const needAttention = page === 1 ? devices.filter((device) => attentionOf(device).length > 0).slice(0, MOST_IN_RAIL) : [];
 
   return (
     <AppShell
@@ -144,36 +90,14 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
         <TintTile tint="butter" icon="offline" label="Offline" value={<CountUp value={summary.offline} />} detail="Nobody on duty on these" />
       </section>
 
-      {needAttention.length > 0 ? (
-        <section aria-label="Needs attention" className="mt-8">
-          <div className="mb-1 flex items-baseline justify-between gap-4">
-            <h2 className="font-display text-lg font-semibold tracking-tight">Needs attention</h2>
-            <p className="text-sm text-ink-muted">{plural(needAttention.length, "handheld")} on this page</p>
-          </div>
-          <Rail label="Handhelds that need attention">
-            {needAttention.map((device, index) => (
-              <DeviceCard key={device.id} device={device} now={now} index={index} narrow full={acrossCompanies} />
-            ))}
-          </Rail>
-        </section>
-      ) : null}
-
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
+      <div className="mt-8">
         <Tabs
           items={TABS.map((tab) => ({
             label: tab.label,
             href: pageHref("/devices", { ...query, status: tab.status ?? undefined }, 1),
             active: tab.status === status,
-            count: tab.status ? summary[tab.status] : everyDevice,
+            count: tab.status ? summary[tab.status] : inService,
           }))}
-        />
-        <Segmented
-          label="Show the devices as"
-          value={asTable ? "table" : "cards"}
-          options={[
-            { value: "cards", label: "Cards", href: pageHref("/devices", { ...query, view: undefined }, page) },
-            { value: "table", label: "Table", href: pageHref("/devices", { ...query, view: "table" }, page) },
-          ]}
         />
       </div>
 
@@ -185,10 +109,6 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
       {devices.length === 0 ? (
         <Card className="mt-6" title={active?.label ?? "All"}>
           <p className="py-8 text-center text-sm text-ink-muted">{everyDevice === 0 && !search ? "No devices yet. Use Pair a device to add the first one." : "Nothing here right now."}</p>
-        </Card>
-      ) : asTable ? (
-        <Card className="mt-6" title={active?.label ?? "All"} subtitle="A device that stops answering keeps working offline. Its scans arrive when it reconnects.">
-          <DeviceTable devices={devices} now={now} full={acrossCompanies} />
         </Card>
       ) : (
         <ul className="dg-ripple mt-6 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">

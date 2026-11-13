@@ -344,6 +344,11 @@ check('searched by device', (await fleet(ADMIN_A, '%second%')).rows.length === 1
 check('searched by client', (await fleet(ADMIN_A, '%hospital a%')).rows.length === 2);
 check('and narrowed to a company', (await fleet(SUPER, '', '', ORG_B)).rows.length === 0 && (await fleet(SUPER, '', '', ORG_A)).rows.length === 2);
 check('the total is on every row', Number((await fleet(ADMIN_A)).rows[0].total) === 2);
+await db.exec(`update digigate.devices set revoked_at = now() where id = '${SECOND_DEVICE}'`);
+check('in service leaves a revoked handheld out', (await fleet(ADMIN_A, '', 'in_service')).rows.map((row) => row.id).join() === DEVICE);
+check('the revoked tab still has it', (await fleet(ADMIN_A, '', 'revoked')).rows.map((row) => row.id).join() === SECOND_DEVICE);
+check('and every state together still has both', (await fleet(ADMIN_A)).rows.length === 2);
+await db.exec(`update digigate.devices set revoked_at = null where id = '${SECOND_DEVICE}'`);
 const summary = Object.fromEntries((await as('authenticated', ADMIN_A, 'aal2', `select * from digigate.device_summary('')`)).rows.map((row) => [row.status, Number(row.devices)]));
 check('the summary counts each state', summary.quiet === 1 && summary.offline === 1);
 check('the token hash never comes out', !('token_hash' in online));

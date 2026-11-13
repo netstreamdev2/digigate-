@@ -94,12 +94,12 @@ function dataFrom(bundleMb: number | null, usedBytes: number | null, whole: bool
   return { bundleMb, usedBytes: usedBytes ?? 0, whole: whole ?? false };
 }
 
-/** One page of the fleet, trouble first. The database decides whose devices come back. */
+/** One page of the fleet, trouble first; with no status, the handhelds in service. The database decides whose devices come back. */
 export async function deviceBoard({ search, company }: Filter, status: DeviceStatus | null, page: number): Promise<{ devices: FleetDevice[]; total: number }> {
   const supabase = await supabaseServer();
   const [from] = rangeOf(page);
   const rows = must(
-    await supabase.rpc("device_board", { _search: pattern(search), _status: status ?? "", _limit: PAGE_SIZE, _offset: from, ...(company ? { _org: company } : {}) }),
+    await supabase.rpc("device_board", { _search: pattern(search), _status: status ?? "in_service", _limit: PAGE_SIZE, _offset: from, ...(company ? { _org: company } : {}) }),
   );
   return {
     total: rows[0]?.total ?? 0,

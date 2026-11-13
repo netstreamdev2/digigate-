@@ -33,7 +33,7 @@ function networkWords(device: FleetDevice): string {
 
 /** One handheld as a card: its status, its battery, signal and data at a glance, what needs attention, and who's on it. */
 /** `full` is for super users: the data ring and lock state. Everyone else sees battery, network and location. */
-export function DeviceCard({ device, now, index, narrow = false, full = false }: { device: FleetDevice; now: number; index: number; narrow?: boolean; full?: boolean }) {
+export function DeviceCard({ device, now, index, full = false }: { device: FleetDevice; now: number; index: number; full?: boolean }) {
   const look = LOOK[device.status];
   const health = device.health;
   const attention = attentionOf(device);
@@ -45,7 +45,7 @@ export function DeviceCard({ device, now, index, narrow = false, full = false }:
     <Link
       href={`/devices/${device.id}`}
       style={{ "--dg-i": index } as CSSProperties}
-      className={`dg-glass dg-company-card group flex shrink-0 flex-col overflow-hidden ${narrow ? "w-[19rem]" : "w-full"} ${red ? "dg-trouble" : ""}`}
+      className={`dg-glass dg-company-card group flex w-full shrink-0 flex-col overflow-hidden ${red ? "dg-trouble" : ""}`}
     >
       <div className={`bg-linear-to-b ${look.tint} to-transparent px-5 pb-3 pt-4`}>
         <div className="flex items-center justify-between gap-2">
