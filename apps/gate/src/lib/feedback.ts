@@ -17,9 +17,15 @@ const TONES: Record<Outcome, number> = {
   blocked: require('../../assets/sounds/result-blocked.wav'),
 };
 
+// The beep the moment DigiGate receives a scan, like a scanner's own good-read beep. DigiGate makes it, not the
+// scanner, so it only sounds when the scan actually reached the app, and no scanner setting can switch it off.
+const READ_TONE = require('../../assets/sounds/scan-read.wav');
+const READ_BUZZ_MS = 25;
+
 type Player = ReturnType<NonNullable<typeof audioLibrary>['createAudioPlayer']>;
 
 let players: Record<Outcome, Player> | null = null;
+let readPlayer: Player | null = null;
 
 /** Loads the tones ahead of the first scan, so a sound never has to load while a result is showing. */
 export async function prepareTones(): Promise<void> {
@@ -30,6 +36,16 @@ export async function prepareTones(): Promise<void> {
     warning: audioLibrary.createAudioPlayer(TONES.warning),
     blocked: audioLibrary.createAudioPlayer(TONES.blocked),
   };
+  readPlayer = audioLibrary.createAudioPlayer(READ_TONE);
+}
+
+/** A scan arrived: one short beep and the faintest tap, so the guard knows it read without looking. */
+export function signalRead(): void {
+  Vibration.vibrate(READ_BUZZ_MS);
+  const player = readPlayer;
+  if (!player) return;
+  // A beep that fails changes nothing: the scan is already in.
+  void player.seekTo(0).then(() => player.play(), () => undefined);
 }
 
 function playTone(outcome: Outcome): void {

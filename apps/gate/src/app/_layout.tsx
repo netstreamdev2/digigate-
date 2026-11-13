@@ -27,7 +27,7 @@ import { HostSessionProvider, useHostSession } from '@/host/host-session';
 import { useAppUpdates } from '@/lib/app-updates';
 import { siteConfig } from '@/site/site-config';
 import { seedUsers } from '@/demo/seed-users';
-import { prepareTones } from '@/lib/feedback';
+import { prepareTones, signalRead } from '@/lib/feedback';
 import { newEventId } from '@/lib/ids';
 import { PostWarning } from '@/shift/post-warning';
 import { ShiftProvider, useShift } from '@/shift/shift-context';
@@ -172,9 +172,13 @@ function GuardedStack() {
     if (syncStatus.state === 'revoked') signOut();
   }, [signOut, syncStatus.state]);
 
-  // A guard working through cars with the scanner is busy, even without touching the screen.
+  // Every scan DigiGate receives beeps, wherever the guard is in the app. And a guard working through cars with the
+  // scanner is busy, even without touching the screen. A locked screen hears no scans, so it doesn't beep either.
   useEffect(() => {
-    const subscription = subscribeToScans(recordActivity);
+    const subscription = subscribeToScans(() => {
+      signalRead();
+      recordActivity();
+    });
     return () => subscription?.remove();
   }, [recordActivity]);
 
