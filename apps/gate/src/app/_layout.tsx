@@ -6,7 +6,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { BackHandler, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LockCover } from '@/auth/lock-cover';
@@ -37,6 +37,17 @@ import { SyncProvider, useSync } from '@/sync/sync-context';
 import { setScansPaused, subscribeToScans } from '../../modules/scanner';
 
 SplashScreen.preventAutoHideAsync();
+
+/*
+ * The Back key never closes DigiGate. With nothing to go back to (home, sign-in), Android's default is to close the
+ * app, and on a handheld where DigiGate is the home screen Android reopens it at once as a fresh screen: the guard is
+ * signed out, and the old screen's teardown, which runs after the new one has started, leaves the router unbound, so
+ * the next tap that navigates crashes the app to a white screen (13 November, go-live morning).
+ *
+ * Registered here, before anything else, on purpose: handlers run newest first, so every screen, popup and the
+ * navigator's own "go back one screen" still get the key before this does. This only catches what nobody else wanted.
+ */
+BackHandler.addEventListener('hardwareBackPress', () => true);
 
 async function prepareDatabase(): Promise<LocalDatabase> {
   const local = await openLocalDatabase();
