@@ -40,15 +40,6 @@ export async function findGateUser(db: SQLiteDatabase, employeeNumber: string): 
   return row ? toGateUser(row) : null;
 }
 
-/** Every active guard and supervisor on this device. */
-export async function activeGateUsers(db: SQLiteDatabase): Promise<GateUser[]> {
-  const rows = await db.getAllAsync<GateUserRow>('SELECT * FROM gate_users WHERE active = 1');
-  return rows.flatMap((row) => {
-    const user = toGateUser(row);
-    return user ? [user] : [];
-  });
-}
-
 /** A guard's first name, for a notice about them; null when they're no longer on this device's list. */
 export async function gateUserFirstName(db: SQLiteDatabase, id: string): Promise<string | null> {
   const row = await db.getFirstAsync<{ first_name: string }>('SELECT first_name FROM gate_users WHERE id = ?', id);

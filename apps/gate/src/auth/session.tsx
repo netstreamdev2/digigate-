@@ -11,9 +11,6 @@ import type { GateUser } from './users';
 // well over a year.
 const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_MS = 5 * 60_000;
-// Where wrong PINs are counted when nobody gave an employee number: the handheld as a whole.
-const PIN_ONLY_KEY = '*pin-only*';
-const SUPERVISOR_PIN_KEY = '*supervisor-pin*';
 const IDLE_CHECK_MS = 10_000;
 // Android reports DigiGate as gone to the background for any pause: a permission screen, or the camera taking over the
 // display for a moment. A pause shorter than this isn't leaving, so it doesn't lock.
@@ -29,9 +26,7 @@ export type SessionState =
 export type SignInResult =
   | { ok: true }
   | { ok: false; reason: 'wrong-details'; attemptsLeft: number }
-  | { ok: false; reason: 'locked-out'; retryAt: number }
-  /** Signing in by PIN alone, and more than one guard here has this PIN: they give their employee number too. */
-  | { ok: false; reason: 'shared-pin' };
+  | { ok: false; reason: 'locked-out'; retryAt: number };
 
 export type SupervisorResult =
   | { ok: true; supervisor: GateUser }
@@ -41,8 +36,6 @@ export type SupervisorResult =
 /** Where sign-in reads guards and keeps its records. On the device: the encrypted local database. */
 export type SessionStore = {
   findUser(employeeNumber: string): Promise<GateUser | null>;
-  /** Every active guard on this device, for signing in by PIN alone. */
-  activeUsers(): Promise<GateUser[]>;
   getFailure(employeeNumber: string): Promise<FailureRecord | null>;
   setFailure(employeeNumber: string, record: FailureRecord): Promise<void>;
   clearFailure(employeeNumber: string): Promise<void>;
@@ -52,13 +45,9 @@ export type SessionStore = {
 type SessionApi = {
   state: SessionState;
   signIn(employeeNumber: string, pin: string): Promise<SignInResult>;
-  /** Signs in by PIN alone: the guard whose PIN it is. */
-  signInWithPin(pin: string): Promise<SignInResult>;
   unlock(pin: string): Promise<SignInResult>;
   /** Checks a supervisor's employee number and PIN for an override, with the same lockout and records as sign-in. */
   confirmSupervisor(employeeNumber: string, pin: string): Promise<SupervisorResult>;
-  /** The same, by the supervisor's PIN alone. */
-  confirmSupervisorByPin(pin: string): Promise<SupervisorResult>;
   lock(): void;
   signOut(): void;
   /** Called on every touch, so the idle lock measures real inactivity. */
@@ -135,63 +124,6 @@ export function SessionProvider({ store, idleLockMinutes, children }: Props) {
       return result;
     },
     [attempt, store],
-  );
-
-  // Whose PIN this is, among `candidates`, with no employee number (13 November: typing one first held up the gate).
-  // Every candidate is checked, not just until the first match, so a PIN two people share never picks the wrong one:
-  // they're asked for their employee number instead. Wrong PINs count against this handheld under `key`, with the
-  // same lockout as before.
-  const matchPin = useCallback(
-    async (pin: string, key: string, candidates: readonly GateUser[]): Promise<{ ok: true; user: GateUser } | Exclude<SignInResult, { ok: true }>> => {
-      const now = Date.now();
-      const record = await store.getFailure(key);
-      if (record && record.lockedUntil > now) return { ok: false, reason: 'locked-out', retryAt: record.lockedUntil };
-
-      const matches: GateUser[] = [];
-      for (const user of candidates) {
-        if (await verifyPin(pin, user.pin)) matches.push(user);
-      }
-      if (matches.length > 1) return { ok: false, reason: 'shared-pin' };
-      const user = matches[0];
-      if (user) {
-        await store.clearFailure(key);
-        return { ok: true, user };
-      }
-
-      const count = (record && record.lockedUntil === 0 ? record.count : 0) + 1;
-      if (count >= MAX_FAILED_ATTEMPTS) {
-        const lockedUntil = now + LOCKOUT_MS;
-        await store.setFailure(key, { count, lockedUntil });
-        await store.record('locked_out', null, { by: key, locked_until: lockedUntil });
-        return { ok: false, reason: 'locked-out', retryAt: lockedUntil };
-      }
-      await store.setFailure(key, { count, lockedUntil: 0 });
-      await store.record('sign_in_failed', null, { by: key, attempt: count });
-      return { ok: false, reason: 'wrong-details', attemptsLeft: MAX_FAILED_ATTEMPTS - count };
-    },
-    [store],
-  );
-
-  const signInWithPin = useCallback(
-    async (pin: string): Promise<SignInResult> => {
-      const result = await matchPin(pin, PIN_ONLY_KEY, await store.activeUsers());
-      if (!result.ok) return result;
-      await store.record('sign_in', result.user.id, { by: 'pin' });
-      lastActivity.current = Date.now();
-      setState({ status: 'active', user: result.user, startedAt: Date.now() });
-      return { ok: true };
-    },
-    [matchPin, store],
-  );
-
-  // A supervisor approving something at the gate, by PIN alone. Only supervisors' PINs are checked.
-  const confirmSupervisorByPin = useCallback(
-    async (pin: string): Promise<SupervisorResult> => {
-      const supervisors = (await store.activeUsers()).filter((user) => user.role === 'supervisor');
-      const result = await matchPin(pin, SUPERVISOR_PIN_KEY, supervisors);
-      return result.ok ? { ok: true, supervisor: result.user } : result;
-    },
-    [matchPin, store],
   );
 
   const unlock = useCallback(
@@ -277,8 +209,8 @@ export function SessionProvider({ store, idleLockMinutes, children }: Props) {
   }, [lockWith, state.status]);
 
   const api = useMemo<SessionApi>(
-    () => ({ state, signIn, signInWithPin, unlock, confirmSupervisor, confirmSupervisorByPin, lock, signOut, recordActivity, storageProblem }),
-    [confirmSupervisor, confirmSupervisorByPin, lock, recordActivity, signIn, signInWithPin, signOut, state, storageProblem, unlock],
+    () => ({ state, signIn, unlock, confirmSupervisor, lock, signOut, recordActivity, storageProblem }),
+    [confirmSupervisor, lock, recordActivity, signIn, signOut, state, storageProblem, unlock],
   );
 
   return <SessionContext.Provider value={api}>{children}</SessionContext.Provider>;

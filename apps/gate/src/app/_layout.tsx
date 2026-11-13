@@ -14,7 +14,7 @@ import { SessionProvider, useSession, type SessionStore } from '@/auth/session';
 import { ResultBanner } from '@/components/result-banner';
 import { openLocalDatabase, type LocalDatabase } from '@/db/database';
 import { LocalDatabaseProvider, useLocalDatabase } from '@/db/database-context';
-import { activeGateUsers, countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users';
+import { countGateUsers, findGateUser, replaceGateUsers } from '@/db/gate-users';
 import { appendEvent } from '@/db/outbox';
 import { clearFailure, getFailure, setFailure } from '@/db/sign-in-failures';
 import { loadSyncedPosts, loadSyncedSite } from '@/db/site-posts';
@@ -132,7 +132,6 @@ function AppSession({ children }: { children: ReactNode }) {
   const store = useMemo<SessionStore>(
     () => ({
       findUser: (employeeNumber) => findGateUser(db, employeeNumber),
-      activeUsers: () => activeGateUsers(db),
       getFailure: (employeeNumber) => getFailure(db, employeeNumber),
       setFailure: (employeeNumber, record) => setFailure(db, employeeNumber, record),
       clearFailure: (employeeNumber) => clearFailure(db, employeeNumber),
