@@ -94,7 +94,8 @@ function vehiclePayload(disc: ParsedLicenceDisc): GateEventPayload {
   };
 }
 
-// Until the lawyer settles how ID numbers and photos are kept, events carry the keyed hash and the printed name only.
+// The keyed hash finds the driver again; the printed name is for people. The ID number is added when the check is
+// written (see checkVehicle), and digigate-sync encrypts it before the server stores anything.
 function driverPayload(licence: DriverLicence, personKey: string, at: number): GateEventPayload {
   return {
     person_key: personKey,
@@ -195,7 +196,8 @@ export async function checkVehicle(db: SQLiteDatabase, input: CheckInput): Promi
       vehicle: subject.vehiclePayload,
       typed_plate: input.typedPlate,
       plate_entry: input.plateEntry,
-      driver: subject.driverPayload(personKey, at),
+      // The ID number travels for the client's daily Security Checks report (13 November); the server keeps it encrypted.
+      driver: { ...subject.driverPayload(personKey, at), id_number: subject.idNumber },
       occupants: input.occupants,
       occupants_by_sex: input.occupantsBySex,
       expected_stay_minutes: direction === 'entry' ? input.expectedStayMinutes : null,

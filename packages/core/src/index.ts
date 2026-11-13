@@ -30,6 +30,7 @@ export { sameVehicle, sameVin, vehicleVisits } from './rules/vehicles';
 export { missedHits, recheck, reportedCodes, SITE_RULE_DEFAULTS, type UploadedCheck } from './rules/recheck';
 export { uuidv7 } from './ids';
 export * from './reports';
+export * from './check-sheet';
 export { RULE_SEVERITY, type RuleCode, type Severity } from './rules/codes';
 export { outcomeOf } from './rules/hits';
 export { findOverstays, isOverstay, stayLimitMinutes } from './rules/overstay';

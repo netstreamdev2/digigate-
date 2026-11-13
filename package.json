@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test:db": "node supabase/tests/database.test.mjs",
     "test:reports": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./supabase/tests/gate-simulator/resolve-ts.mjs supabase/tests/report-files.test.ts",
+    "test:check-sheet": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./supabase/tests/gate-simulator/resolve-ts.mjs supabase/tests/check-sheet-files.test.ts",
     "simulate": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./supabase/tests/gate-simulator/resolve-ts.mjs supabase/tests/gate-simulator/simulate.ts",
     "simulate:erase": "pnpm simulate --erase",
     "functions:bundle": "node supabase/setup/bundle-core.mjs"

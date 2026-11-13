@@ -8,6 +8,7 @@
 import { admin } from '../_shared/caller.ts';
 import { missedHits, normaliseIdentifier, recheck, reportedCodes, SITE_RULE_DEFAULTS } from '../_shared/core.js';
 import { json, sha256Hex, sql } from '../_shared/device.ts';
+import { canSeal, seal } from '../_shared/sealed.ts';
 
 const MAX_BATCH = 100;
 const SELFIE_BUCKET = 'shift-selfies';
@@ -29,6 +30,28 @@ const isUploaded = (value: unknown): value is Uploaded => {
   const event = value as Partial<Uploaded> | null;
   return typeof event === 'object' && event !== null && typeof event.id === 'string' && UUID.test(event.id) && typeof event.type === 'string' && typeof event.occurredAt === 'number';
 };
+
+const ID_NUMBER = /^[A-Za-z0-9]{4,20}$/;
+
+/**
+ * A check's ID number arrives over TLS and is sealed here, bound to its check, before anything is stored or checked
+ * again (see _shared/sealed.ts). Without the key it's dropped, never kept plain; the database strips any that get past.
+ */
+async function sealIdNumbers(events: readonly unknown[]): Promise<void> {
+  const sealing = canSeal();
+  for (const event of events.filter(isUploaded)) {
+    const payload = event.payload;
+    if (typeof payload !== 'object' || payload === null) continue;
+    for (const part of ['driver', 'person']) {
+      const holder = (payload as Record<string, unknown>)[part];
+      if (typeof holder !== 'object' || holder === null || !('id_number' in holder)) continue;
+      const fields = holder as Record<string, unknown>;
+      const number = fields.id_number;
+      delete fields.id_number;
+      if (sealing && typeof number === 'string' && ID_NUMBER.test(number)) fields.id_number_sealed = await seal('check id number', event.id, number);
+    }
+  }
+}
 
 /** Everything the rules read, as the server knows it: every gate's open visits at the site, and past plate and VIN pairs. */
 async function siteState(orgId: string, siteId: string, payload: unknown) {
@@ -219,6 +242,7 @@ Deno.serve(async (request) => {
     let accepted: string[] = [];
     if (events.length > 0) {
       const [device] = await sql`select org_id, site_id from digigate.devices where id = ${deviceId}`;
+      await sealIdNumbers(events);
       const findings = await serverFindings(device.org_id, device.site_id, events);
       const [{ ids }] = await sql`select digigate.ingest_events(${deviceId}, ${sql.json(events)}) as ids`;
       accepted = ids;

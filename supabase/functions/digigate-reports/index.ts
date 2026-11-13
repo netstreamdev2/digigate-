@@ -1,11 +1,17 @@
 // Builds report PDFs and emails them, on request from the dashboard or on a schedule. Deployed with --no-verify-jwt: a
-// person proves themselves with their session, and the scheduler with its own secret. Reports hold counts only, so an
-// email never carries a name, ID number or plate. Logs carry error names only: requests hold email addresses.
+// person proves themselves with their session, and the scheduler with its own secret. The report holds counts only.
+// A daily report can also carry the Security Checks report, with names, photos and ID numbers: that one goes to each
+// person in an email of their own, locked with their own PDF password, and only to addresses that have one (see
+// _shared/security-checks.ts). Logs carry error names only: requests hold email addresses.
 import { audit, callerOf, canManage, isStaff, type Caller } from '../_shared/caller.ts';
 import { json, sha256Hex, sql } from '../_shared/device.ts';
-import { renderReportEmail } from '../_shared/report-email.ts';
+import { lockedPdf } from '../_shared/pdf-lock.ts';
+import { renderReportEmail, type ChecksAttachment } from '../_shared/report-email.ts';
 import { renderReportPdf } from '../_shared/report-pdf.ts';
-import { isReportFrequency, reportFileName, reportSubject, type ReportData, type ReportFrequency } from '../../../packages/core/src/reports.ts';
+import { canSeal } from '../_shared/sealed.ts';
+import { loadSheet, passwordsFor, removePassword, renderCheckSheet, setPassword } from '../_shared/security-checks.ts';
+import { sheetFileName } from '../../../packages/core/src/check-sheet.ts';
+import { isReportFrequency, reportFileName, reportScope, reportSubject, type ReportData, type ReportFrequency } from '../../../packages/core/src/reports.ts';
 
 const RESEND_URL = 'https://api.resend.com/emails';
 // Resend's own test address, which can only reach the account owner. Sending to anyone else needs a verified domain.
@@ -67,11 +73,16 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(text);
 }
 
-async function deliver(data: ReportData, letter: Letter): Promise<Delivered> {
+/** The locked Security Checks file for one person, or why it was left off. */
+type ChecksFile = { note: ChecksAttachment; bytes?: Uint8Array };
+
+async function deliver(data: ReportData, letter: Letter, checks?: ChecksFile): Promise<Delivered> {
   const key = Deno.env.get('RESEND_API_KEY');
   if (!key) return { id: null, problem: 'email-not-set-up' };
 
   const fileName = reportFileName(data);
+  const attachments = [{ filename: fileName, content: toBase64(await renderReportPdf(data, generatedAt())) }];
+  if (checks?.bytes && checks.note.state === 'attached') attachments.push({ filename: checks.note.fileName, content: toBase64(checks.bytes) });
   const response = await fetch(RESEND_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -81,8 +92,8 @@ async function deliver(data: ReportData, letter: Letter): Promise<Delivered> {
       ...(letter.cc.length ? { cc: letter.cc } : {}),
       ...(letter.bcc.length ? { bcc: letter.bcc } : {}),
       subject: letter.subject,
-      html: renderReportEmail(data, letter.message, fileName),
-      attachments: [{ filename: fileName, content: toBase64(await renderReportPdf(data, generatedAt())) }],
+      html: renderReportEmail(data, letter.message, fileName, checks?.note),
+      attachments,
     }),
   });
   if (!response.ok) {
@@ -109,6 +120,29 @@ const peopleCount = ({ to, cc, bcc }: Recipients) => {
   return `${total} ${total === 1 ? 'recipient' : 'recipients'}`;
 };
 
+/**
+ * A daily report with the Security Checks report: one email per person, so each copy is locked with that person's own
+ * password. The report is drawn once, and only when someone has a password; anyone without one gets the summary and a
+ * note saying how to get one. Returns each send.
+ */
+async function sendWithChecks(scope: Scope, data: ReportData, letter: Letter, scheduleId: string | null, sentBy: string | null): Promise<Delivered[]> {
+  const everyone = [...new Set([...letter.to, ...letter.cc, ...letter.bcc])];
+  const passwords = canSeal() ? await passwordsFor(scope.org, everyone) : new Map<string, string>();
+  const doc = passwords.size ? await renderCheckSheet(await loadSheet(scope.org, scope.client, scope.day, reportScope(data), generatedAt())) : null;
+  const fileName = sheetFileName(scope.day);
+
+  const results: Delivered[] = [];
+  for (const address of everyone) {
+    const password = passwords.get(address);
+    const checks: ChecksFile = doc && password ? { note: { state: 'attached', fileName }, bytes: await lockedPdf(doc, password) } : { note: { state: 'no-password' } };
+    const own: Letter = { to: [address], cc: [], bcc: [], subject: letter.subject, message: letter.message };
+    const delivered = await deliver(data, own, checks);
+    await recordSend(scope, data, own, delivered, scheduleId, sentBy);
+    results.push(delivered);
+  }
+  return results;
+}
+
 async function sendReport(caller: Caller, scope: Scope, body: Record<string, unknown>): Promise<Response> {
   const recipients = readRecipients(body);
   if (!recipients) return json({ error: 'recipients' }, 400);
@@ -119,10 +153,32 @@ async function sendReport(caller: Caller, scope: Scope, body: Record<string, unk
     subject: oneLine(body.subject, LONGEST_SUBJECT) || reportSubject(data),
     message: String(body.message ?? '').slice(0, LONGEST_MESSAGE),
   };
+  if (body.securityChecks === true && scope.frequency === 'daily') {
+    const results = await sendWithChecks(scope, data, letter, null, caller.id);
+    const failed = results.find((result) => result.problem);
+    await audit(caller, scope.org, 'reports', failed ? 'report.failed' : 'report.sent', `${letter.subject}, with Security Checks`, peopleCount(letter));
+    return failed?.problem ? json({ error: failed.problem }, 502) : json({ ok: true });
+  }
   const delivered = await deliver(data, letter);
   await recordSend(scope, data, letter, delivered, null, caller.id);
   await audit(caller, scope.org, 'reports', delivered.problem ? 'report.failed' : 'report.sent', letter.subject, peopleCount(letter));
   return delivered.problem ? json({ error: delivered.problem }, 502) : json({ ok: true });
+}
+
+/** A new PDF password for one address at the company, shown once to the admin who set it, or that address's removed. */
+async function changePdfPassword(caller: Caller, body: Record<string, unknown>): Promise<Response> {
+  const { org } = body;
+  const email = String(body.email ?? '').trim().toLowerCase();
+  if (typeof org !== 'string' || !UUID.test(org) || !EMAIL.test(email) || email.length > 254) return json({ error: 'invalid' }, 400);
+  if (!canManage(caller, org)) return json({ error: 'not-allowed' }, 403);
+  if (body.action === 'pdf-password-remove') {
+    if (await removePassword(org, email)) await audit(caller, org, 'reports', 'report.pdf_password_removed', email);
+    return json({ ok: true });
+  }
+  if (!canSeal()) return json({ error: 'sealing-not-set-up' }, 503);
+  const password = await setPassword(org, email, caller.id);
+  await audit(caller, org, 'reports', 'report.pdf_password_set', email);
+  return json({ password });
 }
 
 async function previewEmail(scope: Scope, body: Record<string, unknown>): Promise<Response> {
@@ -153,7 +209,7 @@ async function fromScheduler(request: Request): Promise<boolean> {
  */
 async function runDue(): Promise<Response> {
   const due = await sql`
-    select id, org_id, client_id, name, frequency, recipients, cc, bcc, message
+    select id, org_id, client_id, name, frequency, recipients, cc, bcc, message, security_checks
     from digigate.report_schedules
     where is_active and next_run_at <= now()
     order by next_run_at
@@ -173,11 +229,15 @@ async function runDue(): Promise<Response> {
     const scope: Scope = { org: schedule.org_id, client: schedule.client_id, frequency: schedule.frequency, day: yesterday };
     const data = await reportFor(scope);
     const letter: Letter = { to: schedule.recipients, cc: schedule.cc, bcc: schedule.bcc, subject: reportSubject(data), message: schedule.message };
-    const delivered = await deliver(data, letter);
-    await recordSend(scope, data, letter, delivered, schedule.id, null);
+    const withChecks = schedule.security_checks && schedule.frequency === 'daily';
+    const results = withChecks ? await sendWithChecks(scope, data, letter, schedule.id, null) : [await deliver(data, letter)];
+    if (!withChecks) await recordSend(scope, data, letter, results[0], schedule.id, null);
+    const failed = results.some((result) => result.problem);
     await sql`
-      select digigate.write_audit(${schedule.org_id}::uuid, null, null, 'reports', ${delivered.problem ? 'report.failed' : 'report.sent'}, null, ${`Schedule: ${schedule.name}`}, ${letter.subject}, ${peopleCount(letter)})`;
-    if (!delivered.problem) sent += 1;
+      select digigate.write_audit(${schedule.org_id}::uuid, null, null, 'reports', ${failed ? 'report.failed' : 'report.sent'}, null, ${`Schedule: ${schedule.name}`}, ${withChecks ? `${letter.subject}, with Security Checks` : letter.subject}, ${peopleCount(letter)})`;
+    if (!failed) sent += 1;
+    // A Security Checks report is the heavy one: one per run, and the rest wait the five minutes to the next.
+    if (withChecks) break;
   }
   return json({ due: due.length, sent });
 }
@@ -204,6 +264,7 @@ Deno.serve(async (request) => {
     const caller = await callerOf(request);
     if (caller instanceof Response) return caller;
     if (!isStaff(caller) && !caller.roles.includes('admin')) return json({ error: 'not-allowed' }, 403);
+    if (body.action === 'pdf-password' || body.action === 'pdf-password-remove') return await changePdfPassword(caller, body);
 
     const scope = readScope(body);
     if (!scope) return json({ error: 'invalid' }, 400);

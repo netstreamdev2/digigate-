@@ -27,7 +27,8 @@ export type CheckedPerson = GateCheck & {
   related: ReadonlyMap<string, VisitDetails>;
 };
 
-// Until the lawyer settles how ID numbers are kept, events carry the keyed hash and the printed name only.
+// The keyed hash finds the person again; the printed name is for people. The ID number is added when the check is
+// written (see checkPerson), and digigate-sync encrypts it before the server stores anything.
 // The document type travels with the record, so the dashboard knows how much to expect: an ID book carries only
 // the ID number, and its name and sex were typed in by the guard (`manual`).
 function personPayload(person: PersonDocument, personKey: string, at: number): GateEventPayload {
@@ -113,7 +114,8 @@ export async function checkPerson(
       visit_id: visitId,
       outcome,
       hits: hitsPayload(hits),
-      person: personPayload(input.person, personKey, at),
+      // The ID number travels for the client's daily Security Checks report (13 November); the server keeps it encrypted.
+      person: { ...personPayload(input.person, personKey, at), id_number: identity.idNumber },
       visit_type: direction === 'entry' ? input.visitType : (openVisit?.visitType ?? null),
       expected_stay_minutes: direction === 'entry' ? input.expectedStayMinutes : null,
       expected_visitor_id: expected?.id ?? null,

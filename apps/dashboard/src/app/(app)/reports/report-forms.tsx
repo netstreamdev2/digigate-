@@ -115,6 +115,24 @@ function ScopeFields({ letter }: { letter: Letter }) {
 
 const BUTTON = "inline-flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-semibold transition";
 
+/**
+ * Adds the daily Security Checks report: every check with photos and ID numbers, sent to each person on their own and
+ * locked with their own PDF password. Someone without a password gets the summary and a note saying how to get one.
+ */
+function SecurityChecksChoice({ defaultChecked = false }: { defaultChecked?: boolean }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-2.5 text-sm has-checked:border-ink has-checked:bg-tile-sky">
+      <input type="checkbox" name="securityChecks" defaultChecked={defaultChecked} className="mt-0.5 size-4 shrink-0 accent-ink" />
+      <span className="flex flex-col gap-0.5">
+        <span className="font-semibold">Attach the Security Checks report</span>
+        <span className="text-xs font-normal text-ink-muted">
+          Every check of the day with photos and ID numbers. Each person gets their own copy, locked with their PDF password. Set passwords under Security Checks passwords on this page.
+        </span>
+      </span>
+    </label>
+  );
+}
+
 /** Writes and sends a report, showing the email exactly as it will arrive. */
 export function EmailReportButton({ letter }: { letter: Letter }) {
   const dialog = useDialog();
@@ -173,6 +191,7 @@ export function EmailReportButton({ letter }: { letter: Letter }) {
               <Icon name="reports" className="size-4 shrink-0" />
               The full report is attached as a PDF. It holds counts only: no names, ID numbers or plates.
             </p>
+            {letter.frequency === "daily" ? <SecurityChecksChoice /> : null}
             <div className="mt-1 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <CancelButton onClick={dialog.close} />
               <ConfirmButton label="Send report" pendingLabel="Sending…" tone="neutral" />
@@ -248,6 +267,7 @@ export function AutomateButton({ letter }: { letter: Letter }) {
           <p className="rounded-md bg-tile-sky px-3 py-2.5 text-sm font-medium text-brand">{`${WHEN[frequency]} at ${time}, it sends ${WHAT[frequency]}.`}</p>
           <Recipients />
           <TextAreaField label="Message" name="message" rows={3} maxLength={4000} placeholder="Optional. It goes in every email." />
+          {frequency === "daily" ? <SecurityChecksChoice defaultChecked /> : null}
 
           <div className="mt-1 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <CancelButton onClick={dialog.close} />

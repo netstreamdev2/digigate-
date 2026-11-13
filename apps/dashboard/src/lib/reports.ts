@@ -103,6 +103,26 @@ export async function companyClients(org: string): Promise<{ id: string; name: s
   return must(await supabase.from("clients").select("id, name").eq("org_id", org).order("name").limit(MOST_CLIENTS));
 }
 
+/** An address that gets, or could get, the Security Checks report, and whether its PDF password is set. */
+export type PdfPasswordLine = { email: string; setAt: string | null; onSchedule: boolean };
+
+/**
+ * Everyone a Security Checks schedule sends to, and everyone with a PDF password, in one list. The passwords themselves
+ * never leave digigate-reports.
+ */
+export async function pdfPasswordLines(org: string): Promise<PdfPasswordLine[]> {
+  const supabase = await supabaseServer();
+  const [schedules, status] = await Promise.all([
+    supabase.from("report_schedules").select("recipients, cc, bcc").eq("org_id", org).eq("security_checks", true),
+    supabase.rpc("report_pdf_password_status", { _org: org }),
+  ]);
+  const scheduled = new Set(must(schedules).flatMap((row) => [...row.recipients, ...row.cc, ...row.bcc].map((email) => email.toLowerCase())));
+  const setAt = new Map(must(status).map((row) => [row.email, row.set_at]));
+  return [...new Set([...scheduled, ...setAt.keys()])]
+    .sort()
+    .map((email) => ({ email, setAt: setAt.get(email) ?? null, onSchedule: scheduled.has(email) }));
+}
+
 export async function reportSchedules(org: string): Promise<ReportSchedule[]> {
   const supabase = await supabaseServer();
   const rows = must(

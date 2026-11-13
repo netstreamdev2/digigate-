@@ -1643,6 +1643,43 @@ check('switched back on, it needs the code again', (await as('authenticated', AD
 check('nobody can change the switch through the API', (await as('authenticated', SUPER, 'aal2', 'update digigate.platform_settings set require_mfa = false')).error
   || (await one('select require_mfa from digigate.platform_settings')).require_mfa === true);
 
+// The daily Security Checks report, and the ID numbers it shows.
+const sheetSite = await one(`select org_id, client_id from digigate.sites where id = '${SITE_A}'`);
+const [SHEET_CAR, SHEET_WALK, SHEET_NEXT_DAY] = [u(9101), u(9102), u(9103)];
+await db.exec(`insert into digigate.events (id, org_id, site_id, device_id, type, occurred_at, outcome) values
+  ('${SHEET_CAR}', '${sheetSite.org_id}', '${SITE_A}', '${DEVICE}', 'vehicle_entry', '2026-11-13T06:00:00Z', 'clear'),
+  ('${SHEET_WALK}', '${sheetSite.org_id}', '${SITE_A}', '${DEVICE}', 'pedestrian_exit', '2026-11-13T21:59:00Z', 'warning'),
+  ('${SHEET_NEXT_DAY}', '${sheetSite.org_id}', '${SITE_A}', '${DEVICE}', 'vehicle_exit', '2026-11-13T22:01:00Z', 'clear')`);
+await db.exec(`insert into digigate.event_details (event_id, org_id, site_id, payload) values
+  ('${SHEET_CAR}', '${sheetSite.org_id}', '${SITE_A}', '{"visit_type":"visitor","occupants":3,"driver":{"person_key":"k1","initials":"T","surname":"KHUMALO","id_number":"8001015009087","id_number_sealed":"c2VhbGVk"},"vehicle":{"plate":"TT00TTGP"}}'),
+  ('${SHEET_WALK}', '${sheetSite.org_id}', '${SITE_A}', '{"person":{"person_key":"k2","names":"Lerato","surname":"MOKOENA","id_number":"9002020123088"}}'),
+  ('${SHEET_NEXT_DAY}', '${sheetSite.org_id}', '${SITE_A}', '{"driver":{"person_key":"k1","initials":"T","surname":"KHUMALO"}}')`);
+const carDetails = (await one(`select payload from digigate.event_details where event_id = '${SHEET_CAR}'`)).payload;
+check('a plain ID number never stays in a check', !('id_number' in carDetails.driver) && carDetails.driver.id_number_sealed === 'c2VhbGVk' && carDetails.driver.surname === 'KHUMALO');
+check('nor for someone on foot', !('id_number' in (await one(`select payload from digigate.event_details where event_id = '${SHEET_WALK}'`)).payload.person));
+await db.exec(`update digigate.event_details set payload = jsonb_set(payload, '{driver,id_number}', '"8001015009087"') where event_id = '${SHEET_CAR}'`);
+check('nor when a check is changed later', !('id_number' in (await one(`select payload from digigate.event_details where event_id = '${SHEET_CAR}'`)).payload.driver));
+
+const sheetRows = (await service(`select * from digigate.check_sheet($1, null, '2026-11-13', 100)`, [sheetSite.org_id])).rows;
+const sheetIds = sheetRows.map((row) => row.id);
+const carRow = sheetRows.find((row) => row.id === SHEET_CAR);
+check('the report has the day\'s checks, on the gate clock', sheetIds.includes(SHEET_CAR) && sheetIds.includes(SHEET_WALK) && !sheetIds.includes(SHEET_NEXT_DAY));
+check('newest first', sheetIds.indexOf(SHEET_WALK) < sheetIds.indexOf(SHEET_CAR));
+check('a check carries what the report shows', carRow?.person === 'T KHUMALO' && carRow.id_sealed === 'c2VhbGVk' && carRow.occupants === 3 && carRow.plate === 'TT00TTGP'
+  && carRow.visit_type === 'visitor' && carRow.outcome === 'clear' && typeof carRow.scanned_by === 'string');
+check('the same person is the same, without saying who', carRow?.person_ref === sheetRows.find((row) => row.id === SHEET_CAR)?.person_ref && carRow?.person_ref !== 'k1');
+check('every row knows the day\'s total', Number(carRow?.total) === sheetRows.length);
+check('the limit cuts it short but keeps the total', (await service(`select * from digigate.check_sheet($1, null, '2026-11-13', 1)`, [sheetSite.org_id])).rows.length === 1);
+check('another client\'s report leaves these out', !(await service(`select id from digigate.check_sheet($1, $2, '2026-11-13', 100)`, [sheetSite.org_id, CLIENT_SPARE])).rows.some((row) => row.id === SHEET_CAR));
+check('signed-in people cannot read the report rows', (await as('authenticated', SUPER, 'aal2', `select * from digigate.check_sheet('${sheetSite.org_id}', null, '2026-11-13', 10)`)).error);
+
+await service(`insert into digigate.report_pdf_passwords (org_id, email, sealed) values ($1, 'manager@example.com', 'c2VhbGVk')`, [sheetSite.org_id]);
+check('nobody signed in can read the report passwords', (await as('authenticated', SUPER, 'aal2', 'select * from digigate.report_pdf_passwords')).error);
+const passwordStatus = (await as('authenticated', SUPER, 'aal2', 'select * from digigate.report_pdf_password_status($1)', [sheetSite.org_id])).rows;
+check('staff see which addresses have a password, never the password', passwordStatus.length === 1 && passwordStatus[0].email === 'manager@example.com' && !('sealed' in passwordStatus[0]));
+check('another company sees none of them', (await as('authenticated', sheetSite.org_id === ORG_A ? ADMIN_B : ADMIN_A, 'aal2', 'select * from digigate.report_pdf_password_status($1)', [sheetSite.org_id])).rows.length === 0);
+check('an address must be written in lower case', (await service(`insert into digigate.report_pdf_passwords (org_id, email, sealed) values ($1, 'Boss@Example.com', 'x')`, [sheetSite.org_id])).error);
+
 console.log(`${passed} passed, ${failures.length} failed`);
 for (const failure of failures) console.log('FAILED:', failure);
 process.exitCode = failures.length ? 1 : 0;

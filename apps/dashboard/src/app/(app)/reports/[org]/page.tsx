@@ -39,12 +39,13 @@ import { companyBrand } from "@/lib/company-brand";
 import { addDays, ago, dayParam, plural, shortDate, siteToday, timeOfDay } from "@/lib/format";
 import { pageHref, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
-import { againstPrior, companyClients, reportSchedules, reportSends, reportSummary, trendFor, type ReportSchedule, type ReportSend } from "@/lib/reports";
+import { againstPrior, companyClients, pdfPasswordLines, reportSchedules, reportSends, reportSummary, trendFor, type ReportSchedule, type ReportSend } from "@/lib/reports";
 import { currentUser } from "@/lib/session";
 import { isDigiGateStaff } from "@/lib/access";
 
 import { deleteSchedule, setScheduleActive } from "../actions";
 import { AutomateButton, EmailReportButton } from "../report-forms";
+import { PdfPasswords } from "./pdf-passwords";
 
 function ScheduleRow({ schedule }: { schedule: ReportSchedule }) {
   return (
@@ -110,7 +111,12 @@ async function CompanyReport({ params, searchParams }: { params: Promise<{ org: 
 
   const clients = await companyClients(org);
   const client = clients.find((row) => row.id === textParam(query, "client"))?.id ?? "";
-  const [report, schedules, sends] = await Promise.all([reportSummary(org, frequency, day, client), reportSchedules(org), reportSends(org)]);
+  const [report, schedules, sends, passwordLines] = await Promise.all([
+    reportSummary(org, frequency, day, client),
+    reportSchedules(org),
+    reportSends(org),
+    pdfPasswordLines(org),
+  ]);
   if (!report) return <NoAccess message="That company isn't one of yours, or it's no longer there." />;
 
   const path = `/reports/${org}`;
@@ -252,6 +258,10 @@ async function CompanyReport({ params, searchParams }: { params: Promise<{ org: 
           )}
         </GlassPanel>
       </div>
+
+      <GlassPanel className="mt-6" title="Security Checks passwords" subtitle="Each person opens the daily Security Checks PDF with their own password, given to them by phone, never by email">
+        <PdfPasswords org={org} lines={passwordLines} />
+      </GlassPanel>
     </AppShell>
   );
 }

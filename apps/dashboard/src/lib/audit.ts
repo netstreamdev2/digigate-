@@ -80,6 +80,8 @@ const WORDS: Readonly<Record<string, string>> = {
   "schedule.deleted": "deleted the automated report",
   "report.sent": "emailed",
   "report.failed": "could not email",
+  "report.pdf_password_set": "set the Security Checks PDF password for",
+  "report.pdf_password_removed": "removed the Security Checks PDF password of",
   "gate.sign_in": "signed in at",
   "gate.sign_in_failed": "failed to sign in at",
   "gate.locked_out": "was locked out at",

@@ -51,7 +51,21 @@ function tile(label: string, value: string, note: string): string {
   </td>`;
 }
 
-export function renderReportEmail(data: ReportData, message: string, fileName: string): string {
+/**
+ * The Security Checks report that can travel with a daily report: attached and locked with the reader's own password,
+ * or left off because no password is set for their address yet. The password itself never appears in an email.
+ */
+export type ChecksAttachment = { state: 'attached'; fileName: string } | { state: 'no-password' };
+
+function checksNote(checks: ChecksAttachment | undefined): string {
+  if (!checks) return '';
+  if (checks.state === 'attached') {
+    return `<br><strong>Also attached:</strong> ${escapeHtml(checks.fileName)}, every check with photos and ID numbers. It's locked with your personal PDF password, which DigiGate never emails.`;
+  }
+  return "<br><strong>Security Checks not attached:</strong> no PDF password is set for your address yet. Ask your DigiGate administrator to set one; they'll give it to you by phone.";
+}
+
+export function renderReportEmail(data: ReportData, message: string, fileName: string, checks?: ChecksAttachment): string {
   const { totals, prior } = data;
   const count = (key: 'checks' | 'exits' | 'blocked' | 'warnings') => totals[key] ?? 0;
   const before = (key: 'checks' | 'exits' | 'blocked' | 'warnings') => prior[key] ?? 0;
@@ -113,14 +127,18 @@ export function renderReportEmail(data: ReportData, message: string, fileName: s
         <tr><td style="padding:20px 23px 24px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${colors.tileSky};border-radius:14px;">
             <tr><td style="padding:13px 16px;font-family:${FONT};font-size:13px;line-height:19px;color:${colors.brand};">
-              <strong>Attached:</strong> ${escapeHtml(fileName)}
+              <strong>Attached:</strong> ${escapeHtml(fileName)}${checksNote(checks)}
             </td></tr>
           </table>
         </td></tr>
       </table>
     </td></tr>
     <tr><td style="padding:18px 8px 0;font-family:${FONT};font-size:12px;line-height:18px;color:${colors.inkMuted};">
-      This report holds counts only: no names, ID numbers or number plates. It's private to ${scope} and the people it was sent to.
+      ${
+        checks?.state === 'attached'
+          ? `The summary holds counts only. The Security Checks PDF holds personal information protected by POPIA: don't forward it, and never share its password. It's private to ${scope} and the people it was sent to.`
+          : `This report holds counts only: no names, ID numbers or number plates. It's private to ${scope} and the people it was sent to.`
+      }
     </td></tr>
   </table>
 </td></tr>

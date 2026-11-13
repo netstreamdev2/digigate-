@@ -1245,6 +1245,7 @@ export type Database = {
           next_run_at: string
           org_id: string
           recipients: string[]
+          security_checks: boolean
           send_at: string
         }
         Insert: {
@@ -1262,6 +1263,7 @@ export type Database = {
           next_run_at?: string
           org_id: string
           recipients: string[]
+          security_checks?: boolean
           send_at: string
         }
         Update: {
@@ -1279,6 +1281,7 @@ export type Database = {
           next_run_at?: string
           org_id?: string
           recipients?: string[]
+          security_checks?: boolean
           send_at?: string
         }
         Relationships: [
@@ -2285,6 +2288,13 @@ export type Database = {
         Returns: undefined
       }
       remove_hotlist_entry: { Args: { _id: string }; Returns: undefined }
+      report_pdf_password_status: {
+        Args: { _org: string }
+        Returns: {
+          email: string
+          set_at: string
+        }[]
+      }
       report_board: {
         Args: { _day: string; _limit: number; _offset: number; _search: string }
         Returns: {

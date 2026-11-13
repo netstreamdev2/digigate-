@@ -21,7 +21,29 @@ const PROBLEMS: Record<string, string> = {
   "email-failed": "The report couldn't be sent. Nothing went out, so it's safe to try again.",
   "needs-mfa": "Sign in again, then try this.",
   "not-allowed": "Your account can't do that.",
+  "sealing-not-set-up": "Passwords can't be stored yet: the GUARD_RECORD_KEY secret needs setting in Supabase first.",
+  invalid: "That email address doesn't look right.",
 };
+
+/** A PDF password just set: shown to the admin once, then gone. */
+export type PdfPasswordState = { problem: string | null; email: string | null; password: string | null };
+
+export async function setPdfPassword(_previous: PdfPasswordState, form: FormData): Promise<PdfPasswordState> {
+  const org = text(form, "org");
+  const email = text(form, "email").toLowerCase();
+  if (!EMAIL.test(email)) return { problem: PROBLEMS.invalid ?? SOMETHING_FAILED, email: null, password: null };
+  const response = await callReports({ action: "pdf-password", org, email });
+  const body = (await response.json().catch(() => ({}))) as { password?: string; error?: string };
+  if (!response.ok || !body.password) return { problem: PROBLEMS[body.error ?? ""] ?? SOMETHING_FAILED, email: null, password: null };
+  revalidatePath(`/reports/${org}`);
+  return { problem: null, email, password: body.password };
+}
+
+export async function removePdfPassword(form: FormData): Promise<void> {
+  const org = text(form, "org");
+  await callReports({ action: "pdf-password-remove", org, email: text(form, "email") });
+  revalidatePath(`/reports/${org}`);
+}
 
 const SOMETHING_FAILED = "That didn't work. Try again.";
 
@@ -62,6 +84,7 @@ export async function sendReport(_previous: FormState, form: FormData): Promise<
     to,
     cc,
     bcc,
+    securityChecks: form.get("securityChecks") === "on",
   });
   if (!response.ok) {
     const { error } = (await response.json().catch(() => ({}))) as { error?: string };
@@ -97,6 +120,7 @@ export async function saveSchedule(_previous: FormState, form: FormData): Promis
     cc,
     bcc,
     message: String(form.get("message") ?? "").slice(0, 4000),
+    security_checks: frequency === "daily" && form.get("securityChecks") === "on",
   });
   if (error) return failed(error.code === "42501" ? PROBLEMS["not-allowed"] ?? SOMETHING_FAILED : SOMETHING_FAILED);
 
