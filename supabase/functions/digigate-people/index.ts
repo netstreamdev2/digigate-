@@ -3,12 +3,13 @@
 // and never reaches the dashboard. Deployed with --no-verify-jwt: the session is checked below, and it must have passed
 // MFA. Super users are never created here.
 // Logs carry error names only: requests hold names and temporary passwords.
-import { admin, asCaller, audit, callerOf, canManage, isSuper, type Caller } from '../_shared/caller.ts';
+import { admin, asCaller, audit, callerOf, canManage, isStaff, type Caller } from '../_shared/caller.ts';
+import { canCreateRole, canManagePerson } from '../_shared/account-access.ts';
 import { json, randomHex, sql } from '../_shared/device.ts';
 import { readGuardRecord, revealGuardIdNumber, saveGuardPhoto, saveGuardRecord } from '../_shared/guard-records.ts';
 
 const USERNAME_DOMAIN = 'digigate.local';
-const ROLES = ['admin', 'manager', 'control_room', 'supervisor', 'client_viewer', 'host'];
+const ROLES = ['admin', 'manager', 'control_room', 'supervisor', 'client_viewer', 'host', 'technician'];
 const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,6 +50,7 @@ async function createPerson(caller: Caller, body: Record<string, unknown>): Prom
   const role = String(body.role ?? '');
   const siteIds = Array.isArray(body.siteIds) ? body.siteIds.map(String) : [];
   const isClientLogin = role === 'client_viewer';
+  const isTechnician = role === 'technician';
   const isEmail = EMAIL.test(typed);
   // A host signs in to the invite app on their phone, with this number or their username or email.
   const typedPhone = String(body.phone ?? '').replace(/[\s()-]/g, '');
@@ -58,6 +60,8 @@ async function createPerson(caller: Caller, body: Record<string, unknown>): Prom
 
   if (!fullName) return json({ error: 'name' }, 400);
   if (!ROLES.includes(role)) return json({ error: 'role' }, 400);
+  if (!canCreateRole(caller, role)) return json({ error: 'not-allowed' }, 403);
+  if (isTechnician && (!isEmail || siteIds.length > 0)) return json({ error: 'technician-email' }, 400);
   if (phone === 'bad') return json({ error: 'phone' }, 400);
   if (phone) {
     const [holder] = await sql`select 1 from digigate.profiles where phone = ${phone}`;
@@ -69,7 +73,10 @@ async function createPerson(caller: Caller, body: Record<string, unknown>): Prom
   let orgId: string | null = null;
   let clientId: string | null = null;
   let responsibleOrg: string | null = null;
-  if (isClientLogin) {
+  if (isTechnician) {
+    // DigiGate's own technicians belong to no company and use their work email, with MFA like other dashboard staff.
+    orgId = null;
+  } else if (isClientLogin) {
     clientId = String(body.clientId ?? '');
     if (!UUID.test(clientId)) return json({ error: 'client' }, 400);
     const [client] = await sql`select org_id from digigate.clients where id = ${clientId}`;
@@ -83,8 +90,8 @@ async function createPerson(caller: Caller, body: Record<string, unknown>): Prom
     responsibleOrg = orgId;
   }
 
-  const [company] = await sql`select code from digigate.organisations where id = ${responsibleOrg}`;
-  if (!company) return json({ error: 'not-allowed' }, 403);
+  const [company] = responsibleOrg ? await sql`select code from digigate.organisations where id = ${responsibleOrg}` : [];
+  if (!company && !isTechnician) return json({ error: 'not-allowed' }, 403);
   const login = isEmail ? typed : `${name}@${company.code}`;
 
   // Taken within this company: say who has it, someone the caller looks after anyway, and offer a free one.
@@ -120,7 +127,7 @@ async function changePerson(caller: Caller, body: Record<string, unknown>): Prom
   const id = String(body.id ?? '');
   if (!UUID.test(id) || id === caller.id) return json({ error: 'not-allowed' }, 403);
   const target = await companyOf(id);
-  if (!target || target.roles.includes('super_user') || !canManage(caller, target.org_id)) return json({ error: 'not-allowed' }, 403);
+  if (!target || !canManagePerson(caller, target)) return json({ error: 'not-allowed' }, 403);
 
   if (body.action === 'set-active') {
     const active = body.active === true;
@@ -150,7 +157,7 @@ async function selfieLink(caller: Caller, body: Record<string, unknown>): Promis
     join digigate.profiles p on p.id = ${caller.id}
     left join digigate.gate_users g on g.id = x.gate_user_id
     where x.id = ${shiftId}
-      and ('super_user' = any (p.roles) or (x.org_id = p.org_id and ('admin' = any (p.roles) or x.site_id = any (p.site_ids))))`;
+      and (p.roles::text[] && array['super_user', 'technician'] or (x.org_id = p.org_id and ('admin' = any (p.roles) or x.site_id = any (p.site_ids))))`;
   if (!shift) return json({ error: 'not-allowed' }, 403);
   if (!shift.selfie_path) return json({ error: 'no-selfie' }, 404);
 
@@ -209,7 +216,7 @@ Deno.serve(async (request) => {
     if (body.action === 'selfie-link') return await selfieLink(caller, body);
     if (body.action === 'licence-photo-link') return await licencePhotoLink(caller, request, body);
     if (body.action === 'plate-photo-link') return await platePhotoLink(caller, request, body);
-    if (!isSuper(caller) && !caller.roles.includes('admin')) return json({ error: 'not-allowed' }, 403);
+    if (!isStaff(caller) && !caller.roles.includes('admin')) return json({ error: 'not-allowed' }, 403);
     if (body.action === 'create') return await createPerson(caller, body);
     if (body.action === 'set-active' || body.action === 'reset-password') return await changePerson(caller, body);
     if (body.action === 'guard-record') return await readGuardRecord(caller, body);

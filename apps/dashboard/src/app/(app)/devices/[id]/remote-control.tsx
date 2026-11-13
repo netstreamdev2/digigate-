@@ -8,7 +8,7 @@ import { ago, shortDate, timeOfDay } from "@/lib/format";
 import { requestAppUpdate, requestLock, requestRestart } from "../actions";
 
 /*
- * A super user's remote control of one handheld: lock it, restart it, or send it a newer DigiGate. Each reaches the
+ * DigiGate staff's remote control of one handheld: lock it, restart it, or send it a newer DigiGate. Each reaches the
  * handheld at its next sync (within a minute when it's online) and is carried out once; the list says what was asked
  * and how the handheld answered.
  */

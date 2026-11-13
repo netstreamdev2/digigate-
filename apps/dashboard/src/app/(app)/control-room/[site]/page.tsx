@@ -185,7 +185,7 @@ async function LiveSite({ params, searchParams }: { params: Promise<{ site: stri
         </div>
       ) : null}
 
-      <LiveAlerts alerts={alerts} total={openTotal} gateLabel={gateLabel} canClose={!user.roles.includes("client_viewer")} />
+      <LiveAlerts alerts={alerts} red={open.red} amber={open.amber} gateLabel={gateLabel} canClose={!user.roles.includes("client_viewer")} now={now} />
 
       <section aria-label="Key figures" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile

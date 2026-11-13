@@ -27,11 +27,12 @@ type Props = {
   userRole: string;
   /** The company a signed-in admin or control room works for. Super users have none: they move between companies. */
   company: CompanyBrand | null;
-  /** A super user gets the rail and a company's own sidebar while working inside a company. */
-  isSuperUser: boolean;
+  /** DigiGate staff get the rail and a company's own sidebar while working inside it. */
+  acrossCompanies: boolean;
 };
 
-const isActive = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
+const isActive = (path: string, href: string, items: readonly NavItem[]) =>
+  (path === href || path.startsWith(`${href}/`)) && !items.some((item) => item.href.length > href.length && (path === item.href || path.startsWith(`${item.href}/`)));
 
 /** A row in an open sidebar. The one pill (globals.css names it) slides to the page just opened. */
 function NavRow({ label, icon, href, active, onNavigate }: { label: string; icon: IconName; href: string; active: boolean; onNavigate?: () => void }) {
@@ -56,7 +57,7 @@ function NavLinks({ items, onNavigate }: { items: readonly NavItem[]; onNavigate
   return (
     <nav aria-label="Main" className="flex flex-col gap-1">
       {items.map((item) => (
-        <NavRow key={item.href} {...item} active={isActive(path, item.href)} onNavigate={onNavigate} />
+        <NavRow key={item.href} {...item} active={isActive(path, item.href, items)} onNavigate={onNavigate} />
       ))}
     </nav>
   );
@@ -189,7 +190,7 @@ function Rail({ items, inside, userName }: { items: readonly NavItem[]; inside: 
       <nav aria-label="Main" className="flex flex-col items-center gap-1.5">
         <SearchTrigger shape="rail" />
         {items.map((item) => {
-          const active = isActive(path, item.href);
+          const active = isActive(path, item.href, items);
           return (
             <Link
               key={item.href}
@@ -251,12 +252,12 @@ function CompanyPanel({ company }: { company: CompanyBrand }) {
  * stays put between pages. A super user working inside a company gets their own sidebar folded to icons, with the
  * company's own sidebar open beside it, so they can work as that company's admin without losing their way back.
  */
-export function Sidebar({ items, userName, userRole, company, isSuperUser }: Props) {
+export function Sidebar({ items, userName, userRole, company, acrossCompanies }: Props) {
   const path = usePathname();
   const search = useSearchParams();
   const address = `${path}?${search.toString()}`;
   const context = useCompanyContext();
-  const inside = isSuperUser && context && stillInside(context, address) ? context.company : null;
+  const inside = acrossCompanies && context && stillInside(context, address) ? context.company : null;
   const [open, setOpen] = useState(false);
 
   // Leaving the company's pages leaves the company.

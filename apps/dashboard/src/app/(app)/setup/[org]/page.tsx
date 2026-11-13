@@ -14,16 +14,18 @@ import { companyBrand } from "@/lib/company-brand";
 import { likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
 import { counted, must } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { canAdminister, isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { CompanyChecklist } from "./company-checklist";
 import { CompanyLook } from "./company-look";
+import { SiteLicencePrompt } from "../site-licence-prompt";
 
 const SITE_TYPES: Record<string, string> = { hospital: "Hospital", estate: "Residential estate" };
 
 async function Company({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<Query> }) {
   const user = await currentUser();
-  if (!user || (!user.roles.includes("super_user") && !user.roles.includes("admin"))) {
+  if (!user || !canAdminister(user)) {
     return <NoAccess message="Setting up gates needs an administrator. Your own dashboard is on the way." />;
   }
 
@@ -49,13 +51,13 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
   return (
     <AppShell
       company={company}
-      eyebrow={<Breadcrumbs items={user.roles.includes("super_user") ? [{ label: "Security companies", href: "/setup" }, { label: company.name }] : [{ label: company.name }]} />}
+      eyebrow={<Breadcrumbs items={isDigiGateStaff(user) ? [{ label: "Security companies", href: "/setup" }, { label: company.name }] : [{ label: company.name }]} />}
       title={company.name}
       chips={
         <>
-          <Link href={`${path}/new-site`} className="inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink">
+          {user.roles.includes("super_user") ? <Link href={`${path}/new-site`} className="inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink">
             Add site
-          </Link>
+          </Link> : !isDigiGateStaff(user) ? <SiteLicencePrompt orgId={org} /> : null}
         </>
       }
     >
@@ -67,7 +69,7 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
       </FilterBar>
       <ListCard
         isEmpty={places.length === 0}
-        empty={search ? "Nothing matches that search." : "No sites yet. Add the first one."}
+        empty={search ? "Nothing matches that search." : "No sites have been created for this company yet."}
         footer={<Pagination page={page} total={count ?? 0} hrefFor={(next) => pageHref(path, query, next)} />}
       >
         {places.map((place) => {

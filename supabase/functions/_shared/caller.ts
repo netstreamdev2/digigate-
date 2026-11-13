@@ -20,11 +20,7 @@ function assuranceLevel(token: string): string | null {
   }
 }
 
-export const isSuper = (caller: Caller) => caller.roles.includes('super_user');
-
-export function canManage(caller: Caller, orgId: string | null): boolean {
-  return isSuper(caller) || (caller.roles.includes('admin') && orgId !== null && caller.org_id === orgId);
-}
+export { canManage, isStaff, isSuper } from './account-access.ts';
 
 /** The signed-in person, or the response that turns them away. */
 export async function callerOf(request: Request): Promise<Caller | Response> {

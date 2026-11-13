@@ -418,6 +418,8 @@ A decode failure prompts a rescan. Never guess fields.
 
 ## Open decisions
 
+**Prepared locally, 2026-11-13 (migration 47, not deployed):** company admins request new-site licences from Add site; DigiGate super users process the queue under Site licences and create sites. Technicians are DigiGate staff with global visibility and remote commands, without new companies/sites, suspension/reinstatement or handheld release. Only super users appoint/manage technicians, using work email. `is_super_user` stays strict; `is_digigate_staff` grants support access. See `docs/release-47.md` for the permission audit and user-run migration/function/dashboard release order. There are no gate-app changes.
+
 - Gate layout: one lane or separate entry and exit lanes? Devices per gate? Is the pedestrian gate a separate device?
 - Connectivity at the gate (Wi-Fi, LTE, none). Shapes sync intervals, and SOS can't work without it.
 - Staff cards (for NFC, later): does the hospital already issue them, and are they 13.56 MHz (reusable) or 125 kHz (we issue our own)?

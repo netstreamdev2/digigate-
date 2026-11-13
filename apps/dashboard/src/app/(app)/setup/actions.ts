@@ -12,6 +12,7 @@ import { anyColumnLike, likePattern } from "@/lib/paging";
 import { hashPin } from "@/lib/pin-record";
 import { findPlaces, type PlaceChoice } from "@/lib/places";
 import { currentUser } from "@/lib/session";
+import { canAdminister } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export type PairingState = { problem: string | null; code: string | null; qr: string | null; expiresAt: string | null; createdAt: string | null };
@@ -54,6 +55,8 @@ function saved(): FormState {
 // insert hand back a site it has only just made, so each is found again by what makes it unique, newest first.
 
 export async function addOrganisation(_previous: FormState, form: FormData): Promise<FormState> {
+  const user = await currentUser();
+  if (!user?.roles.includes("super_user")) return { problem: "Only a DigiGate super user can add a company.", saved: 0 };
   const name = text(form, "name");
   if (!name) return { problem: "Enter the security company's name.", saved: 0 };
   const slug = slugOf(name);
@@ -67,6 +70,7 @@ export async function addOrganisation(_previous: FormState, form: FormData): Pro
 
 type SiteInput = {
   orgId: string;
+  licenceRequestId?: string | null;
   /** Set only to finish a place that has a name but no site yet. */
   placeId: string | null;
   site: { name: string; siteType: string; code: string; address: string; location: string; radiusM: number; openParking: boolean; parkingSpaces: string };
@@ -78,6 +82,8 @@ type SiteInput = {
  * Goes straight to the site's gate staff, the next thing to set up.
  */
 export async function createSite(input: SiteInput): Promise<{ problem: string }> {
+  const user = await currentUser();
+  if (!user?.roles.includes("super_user")) return { problem: "A new site needs a DigiGate licence. Ask your company's administrator to request one." };
   const { site } = input;
   const name = site.name.trim();
   const code = site.code.trim().toUpperCase();
@@ -100,6 +106,7 @@ export async function createSite(input: SiteInput): Promise<{ problem: string }>
     _org: input.orgId,
     ...(input.placeId ? { _client: input.placeId } : {}),
     _site: {
+      licenceRequestId: input.licenceRequestId ?? null,
       name,
       siteType: site.siteType === "estate" ? "estate" : "hospital",
       code,
@@ -200,7 +207,7 @@ const PLACE_SEARCH_MIN = 3;
 /** Addresses for the site wizard, as they're typed. Signed-in administrators only, so it can't be used as an open relay. */
 export async function placeChoices(search: string): Promise<{ places: PlaceChoice[]; problem: string | null }> {
   const user = await currentUser();
-  if (!user || (!user.roles.includes("super_user") && !user.roles.includes("admin"))) return { places: [], problem: "Your account can't do that." };
+  if (!user || !canAdminister(user)) return { places: [], problem: "Your account can't do that." };
   const term = search.trim().slice(0, 120);
   if (term.length < PLACE_SEARCH_MIN) return { places: [], problem: null };
   try {

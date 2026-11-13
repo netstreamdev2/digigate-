@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { CompanyBrand } from "@/lib/company-brand";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 
 import { CompanyBanner } from "./company-banner";
 import { CompanyBeacon } from "./company-beacon";
@@ -28,12 +29,12 @@ type Props = {
 /** The top of every dashboard page and what's under it. The sidebar around it lives in the layout and stays put. */
 export async function AppShell({ eyebrow, title, chips, actions, company = null, siteId = null, children }: Props) {
   const user = company ? await currentUser() : null;
-  const asSuperUser = user?.roles.includes("super_user") ?? false;
+  const asDigiGateStaff = user ? isDigiGateStaff(user) : false;
 
   return (
     <div className="dg-page">
-      {company && asSuperUser ? <CompanyBeacon company={company} siteId={siteId} /> : null}
-      {company && asSuperUser ? <CompanyBanner company={company} /> : null}
+      {company && asDigiGateStaff ? <CompanyBeacon company={company} siteId={siteId} /> : null}
+      {company && asDigiGateStaff ? <CompanyBanner company={company} role={user?.roles.includes("super_user") ? "Super user" : "Technician"} /> : null}
 
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">

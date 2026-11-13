@@ -97,7 +97,7 @@ function PasswordHandOver({ name, login, password, host = false }: { name: strin
 }
 
 /** `role` fixes the role, for a button that only ever adds one kind of login, such as a company's administrator. */
-function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Named[]; fixedRole?: string; onClose: () => void }) {
+function PersonSteps({ companies, fixedRole, onClose, preview = false }: { companies: readonly Named[]; fixedRole?: string; onClose: () => void; preview?: boolean }) {
   const [state, action, pending] = useActionState(createPerson, NOTHING_YET);
   const [role, setRole] = useState(fixedRole ?? "control_room");
   const [orgId, setOrgId] = useState(companies[0]?.id ?? "");
@@ -106,7 +106,7 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
   // Only this company's clients and sites are fetched, so the form stays light however many companies there are.
   useEffect(() => {
     let current = true;
-    if (orgId) {
+    if (orgId && role !== "technician") {
       void companyOptions(orgId).then((next) => {
         if (current) setOptions(next);
       });
@@ -114,7 +114,7 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
     return () => {
       current = false;
     };
-  }, [orgId]);
+  }, [orgId, role]);
 
   if (state.created) {
     return (
@@ -133,6 +133,7 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
   // Sent by hand because React empties a form once its action finishes, which would wipe what was typed when it's refused.
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (preview) return;
     const form = new FormData(event.currentTarget);
     startTransition(() => action(form));
   };
@@ -142,13 +143,13 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
 
   return (
     <>
-      <DialogHeading icon="users" tone="neutral" title={fixedLabel ? `Add ${company}'s ${fixedLabel.toLowerCase()}` : "Add a person"} />
+      <DialogHeading icon="users" tone="neutral" title={role === "technician" ? "Add a DigiGate technician" : fixedLabel ? `Add ${company}'s ${fixedLabel.toLowerCase()}` : "Add a person"} />
       <form onSubmit={submit} className="mt-5 flex flex-col gap-3">
         <FormProblem message={state.problem} />
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Full name" name="fullName" autoComplete="off" autoFocus required />
-          <Field label="Username or email" name="login" autoCapitalize="none" autoComplete="off" spellCheck={false} required />
+          <Field label={role === "technician" ? "Work email" : "Username or email"} type={role === "technician" ? "email" : "text"} name="login" autoCapitalize="none" autoComplete="off" spellCheck={false} required />
         </div>
 
         {fixedRole ? (
@@ -163,7 +164,7 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
           </SelectField>
         )}
 
-        {companies.length > 1 ? (
+        {role === "technician" ? <p className="rounded-md bg-tile-sky p-4 text-sm">A DigiGate technician sees every company and can use remote control. Super users handle new companies, site licences, suspensions and handheld release.</p> : companies.length > 1 ? (
           <SelectField label="Security company" name="orgId" value={orgId} onChange={(event) => setOrgId(event.target.value)}>
             {companies.map((company) => (
               <option key={company.id} value={company.id}>
@@ -194,7 +195,7 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
           </>
         ) : null}
 
-        {role !== "admin" && role !== "client_viewer" ? (
+        {role !== "admin" && role !== "client_viewer" && role !== "technician" ? (
           <fieldset className="flex flex-col gap-1.5 text-sm font-medium">
             <legend className="mb-1.5">Which sites</legend>
             {options.sites.length ? (
@@ -214,16 +215,16 @@ function PersonSteps({ companies, fixedRole, onClose }: { companies: readonly Na
 
         <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <CancelButton onClick={onClose} />
-          <ConfirmButton label="Create login" pendingLabel="Creating…" tone="neutral" pending={pending} />
+          <ConfirmButton label={preview ? "Preview only" : "Create login"} pendingLabel="Creating…" tone="neutral" pending={pending || preview} />
         </div>
       </form>
     </>
   );
 }
 
-type AddPersonProps = { companies: readonly Named[]; role?: string; label?: string; compact?: boolean };
+type AddPersonProps = { companies: readonly Named[]; role?: string; label?: string; compact?: boolean; preview?: boolean };
 
-export function AddPersonButton({ companies, role, label = "Add a person", compact = false }: AddPersonProps) {
+export function AddPersonButton({ companies, role, label = "Add a person", compact = false, preview = false }: AddPersonProps) {
   const dialog = useDialog();
   const router = useRouter();
   // Closing starts it fresh, so a temporary password never lingers behind the popup. The page catches up only then: a
@@ -247,7 +248,7 @@ export function AddPersonButton({ companies, role, label = "Add a person", compa
         {label}
       </button>
       <Dialog dialogRef={dialog.ref} onClose={close}>
-        <PersonSteps key={round} companies={companies} fixedRole={role} onClose={dialog.close} />
+        <PersonSteps key={round} companies={companies} fixedRole={role} onClose={dialog.close} preview={preview} />
       </Dialog>
     </>
   );

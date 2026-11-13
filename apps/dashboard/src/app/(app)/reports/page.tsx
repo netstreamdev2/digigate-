@@ -20,6 +20,7 @@ import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { BOARD_PAGE_SIZE, dayTotals, reportBoard, trendFor, type CompanyDay } from "@/lib/reports";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 
 const AGAINST = "the day before";
 
@@ -76,8 +77,8 @@ function CompanyCard({ company, day, index }: { company: CompanyDay; day: string
 async function Board({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  const isSuperUser = user.roles.includes("super_user");
-  if (!isSuperUser && !user.roles.includes("admin")) redirect("/control-room");
+  const acrossCompanies = isDigiGateStaff(user);
+  if (!acrossCompanies && !user.roles.includes("admin")) redirect("/control-room");
 
   const query = await searchParams;
   const search = textParam(query, "q");
@@ -87,7 +88,7 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
 
   const [{ companies, total }, { today: figures, before }] = await Promise.all([reportBoard(day, search, page), dayTotals(day)]);
 
-  if (!isSuperUser && companies[0]) redirect(`/reports/${companies[0].id}?day=${day}`);
+  if (!acrossCompanies && companies[0]) redirect(`/reports/${companies[0].id}?day=${day}`);
 
   // A day still running can't be fairly compared with a whole one.
   const running = day === today;

@@ -14,6 +14,7 @@ export type CurrentUser = {
 
 const ROLE_LABELS: Record<string, string> = {
   super_user: "Super user",
+  technician: "DigiGate technician",
   admin: "Administrator",
   manager: "Manager",
   control_room: "Control room",

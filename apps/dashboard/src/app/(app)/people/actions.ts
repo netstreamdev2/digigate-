@@ -23,6 +23,7 @@ const PROBLEMS: Record<string, string> = {
   "not-allowed": "Your account can't do that.",
   phone: "That mobile number doesn't look right. Type it like 082 123 4567.",
   "phone-taken": "That mobile number already has a DigiGate login.",
+  "technician-email": "Use the technician's work email address. Their access covers every company.",
 };
 
 const SOMETHING_FAILED = "That didn't work. Try again.";
@@ -55,7 +56,7 @@ export async function companyOptions(orgId: string): Promise<{ clients: { id: st
 export async function createPerson(_previous: CreateState, form: FormData): Promise<CreateState> {
   const role = String(form.get("role") ?? "");
   const siteIds = form.getAll("siteIds").map(String);
-  if (role !== "admin" && role !== "client_viewer" && siteIds.length === 0) {
+  if (role !== "admin" && role !== "client_viewer" && role !== "technician" && siteIds.length === 0) {
     return { problem: "Tick at least one site for this person.", created: null };
   }
 

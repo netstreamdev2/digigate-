@@ -39,7 +39,16 @@ export function Rail({ label, children }: { label: string; children: ReactNode }
 
   return (
     <div className="relative">
-      <div ref={track} onScroll={measure} role="region" aria-label={label} tabIndex={0} className="dg-rail -mx-2 flex gap-4 overflow-x-auto px-2 py-3 outline-none">
+      <div
+        ref={track}
+        onScroll={measure}
+        role="region"
+        aria-label={label}
+        tabIndex={0}
+        data-at-start={ends.start}
+        data-at-end={ends.end}
+        className="dg-rail -mx-2 flex gap-4 overflow-x-auto px-2 py-3 outline-none"
+      >
         {children}
       </div>
       <div className="pointer-events-none absolute inset-y-0 -left-3 flex items-center">

@@ -5,6 +5,7 @@ import { addDays, shortDate, siteToday, timeOfDay } from "@/lib/format";
 import { canWatchGates } from "@/lib/nav";
 import { anyColumnLike, likePattern, withEveryWord } from "@/lib/paging";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export type SearchHit = { group: string; label: string; detail: string; href: string; icon: IconName };
@@ -23,15 +24,15 @@ export async function quickSearch(term: string): Promise<{ hits: SearchHit[]; pr
   if (text.length < SHORTEST) return { hits: [], problem: null };
   const user = await currentUser();
   if (!user) return { hits: [], problem: null };
-  const isSuperUser = user.roles.includes("super_user");
-  const isAdministrator = isSuperUser || user.roles.includes("admin");
+  const acrossCompanies = isDigiGateStaff(user);
+  const isAdministrator = acrossCompanies || user.roles.includes("admin");
   const pattern = likePattern(text);
   const now = Date.now();
   const since = `${addDays(siteToday(now), -CHECK_DAYS)}T00:00:00+02:00`;
   const supabase = await supabaseServer();
 
   const [companies, sites, inside, checks, staff, hotlist] = await Promise.all([
-    isSuperUser ? supabase.from("organisations").select("id, name").ilike("name", pattern).order("name").limit(EACH) : null,
+    acrossCompanies ? supabase.from("organisations").select("id, name").ilike("name", pattern).order("name").limit(EACH) : null,
     supabase.from("sites").select("id, name, code, organisations(name)").or(anyColumnLike(["name", "code"], text)).order("name").limit(EACH),
     withEveryWord(supabase.from("visit_records").select("id, site_id, person_name, plate, kind").is("exited_at", null), ["person_name", "plate", "vehicle_search"], text).limit(EACH),
     withEveryWord(

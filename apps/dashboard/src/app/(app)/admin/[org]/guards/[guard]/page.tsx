@@ -11,6 +11,7 @@ import { longDate, siteToday } from "@/lib/format";
 import { callPeople } from "@/lib/people-api";
 import { maybe, must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { ResetPinButton } from "../../../../reset-pin";
@@ -45,8 +46,8 @@ function recordOf(value: unknown): GuardRecordView {
 async function Guard({ params }: { params: Promise<{ org: string; guard: string }> }) {
   const user = await currentUser();
   const { org, guard: guardId } = await params;
-  const isSuper = user?.roles.includes("super_user") ?? false;
-  if (!user || (!isSuper && !(user.roles.includes("admin") && user.orgId === org))) {
+  const acrossCompanies = user ? isDigiGateStaff(user) : false;
+  if (!user || (!acrossCompanies && !(user.roles.includes("admin") && user.orgId === org))) {
     return <NoAccess message="Guard records are for your company's administrators." />;
   }
 
@@ -64,7 +65,7 @@ async function Guard({ params }: { params: Promise<{ org: string; guard: string 
   const { status, data } = await callPeople({ action: "guard-record", gateUserId: guard.id });
   const name = `${guard.first_name} ${guard.last_name}`;
   const crumbs = [
-    ...(isSuper ? [{ label: "Admin", href: "/admin" }] : []),
+    ...(acrossCompanies ? [{ label: "Admin", href: "/admin" }] : []),
     { label: company.name, href: `/admin/${org}` },
     { label: name },
   ];

@@ -12,6 +12,7 @@ import { companyBrand } from "@/lib/company-brand";
 import { textParam, type Query } from "@/lib/paging";
 import { maybe } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { AccessPointFormFields } from "../../../../setup/access-point-editor";
@@ -25,8 +26,8 @@ const hoursOf = (minutes: number | null) => (minutes === null ? "" : `${Math.rou
 async function SiteAdmin({ params, searchParams }: { params: Promise<{ org: string; site: string }>; searchParams: Promise<Query> }) {
   const user = await currentUser();
   const { org, site: siteId } = await params;
-  const isSuper = user?.roles.includes("super_user") ?? false;
-  if (!user || (!isSuper && !(user.roles.includes("admin") && user.orgId === org))) {
+  const acrossCompanies = user ? isDigiGateStaff(user) : false;
+  if (!user || (!acrossCompanies && !(user.roles.includes("admin") && user.orgId === org))) {
     return <NoAccess message="Admin is for your company's administrators." />;
   }
 
@@ -44,7 +45,7 @@ async function SiteAdmin({ params, searchParams }: { params: Promise<{ org: stri
 
   const path = `/admin/${org}/sites/${siteId}`;
   const crumbs = [
-    ...(isSuper ? [{ label: "Admin", href: "/admin" }] : []),
+    ...(acrossCompanies ? [{ label: "Admin", href: "/admin" }] : []),
     { label: company.name, href: `/admin/${org}?tab=sites` },
     { label: site.name },
   ];

@@ -1,11 +1,10 @@
 import type { NavItem } from "@/components/sidebar";
 
 import type { CurrentUser } from "./session";
+import { canAdminister, isDigiGateStaff } from "./access";
 
 /** Who looks after the hotlist and books visitors in: the people running a company's sites day to day. */
-export const canWatchGates = (user: CurrentUser) => ["super_user", "admin", "manager", "control_room"].some((role) => user.roles.includes(role));
-
-const isAdministrator = (user: CurrentUser) => user.roles.includes("super_user") || user.roles.includes("admin");
+export const canWatchGates = (user: CurrentUser) => isDigiGateStaff(user) || ["admin", "manager", "control_room"].some((role) => user.roles.includes(role));
 
 /** The sidebar for the signed-in dashboard. Setting things up is for administrators. */
 export function appNav(user: CurrentUser): readonly NavItem[] {
@@ -14,14 +13,14 @@ export function appNav(user: CurrentUser): readonly NavItem[] {
     { label: "Checks", icon: "visits", href: "/checks" },
   ];
   if (canWatchGates(user)) {
-    // The control room sees its handhelds' battery, network and location; everything else about them is a super user's.
+    // The control room sees battery, network and location; DigiGate staff see the full handheld diagnostics.
     items.push(
       { label: "Hotlist", icon: "watchlist", href: "/hotlist" },
       { label: "Expected visitors", icon: "invite", href: "/expected" },
       { label: "Devices", icon: "device", href: "/devices" },
     );
   }
-  if (isAdministrator(user)) {
+  if (canAdminister(user)) {
     items.push(
       { label: "Reports", icon: "reports", href: "/reports" },
       { label: "Audit log", icon: "audit-log", href: "/audit" },
@@ -29,6 +28,7 @@ export function appNav(user: CurrentUser): readonly NavItem[] {
       { label: "People", icon: "people", href: "/people" },
       { label: "Admin", icon: "settings", href: "/admin" },
     );
+    if (isDigiGateStaff(user)) items.push({ label: "Site licences", icon: "sites", href: "/setup/licence-requests" });
   }
   return items;
 }

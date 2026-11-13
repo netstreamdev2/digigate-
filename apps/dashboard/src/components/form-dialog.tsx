@@ -10,6 +10,9 @@ import type { IconName } from "./icon";
 
 const BUTTON = "inline-flex h-11 shrink-0 items-center rounded-pill bg-brand px-5 text-sm font-semibold text-ink-inverse transition hover:bg-ink";
 const COMPACT_BUTTON = "shrink-0 rounded-pill bg-surface-muted px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-border";
+// The same small button on a dark panel: outlined, filling in under the pointer.
+const COMPACT_ON_DARK =
+  "shrink-0 rounded-pill border border-ink-inverse/30 px-3.5 py-1.5 text-xs font-semibold text-ink-inverse transition hover:border-ink-inverse hover:bg-ink-inverse hover:text-ink focus-visible:bg-ink-inverse focus-visible:text-ink";
 
 type Props = {
   /** The button on the page. */
@@ -23,6 +26,8 @@ type Props = {
   fields?: Record<string, string>;
   /** A small button, for use inside a row. */
   compact?: boolean;
+  /** The small button sits on a dark panel. */
+  onDark?: boolean;
   /** A wider popup, for forms with more in them. */
   wide?: boolean;
   /** The inputs. */
@@ -30,7 +35,7 @@ type Props = {
 };
 
 /** A form that opens in a popup, so a list page stays a list however much can be added to it. */
-export function FormDialog({ label, title, icon, submitLabel, pendingLabel, action, fields = {}, compact = false, wide = false, children }: Props) {
+export function FormDialog({ label, title, icon, submitLabel, pendingLabel, action, fields = {}, compact = false, onDark = false, wide = false, children }: Props) {
   const dialog = useDialog();
   const { ref } = dialog;
   const [state, formAction, pending] = useActionState(action, FORM_START);
@@ -51,7 +56,7 @@ export function FormDialog({ label, title, icon, submitLabel, pendingLabel, acti
       <button
         type="button"
         onClick={dialog.open}
-        className={compact ? COMPACT_BUTTON : BUTTON}
+        className={compact ? (onDark ? COMPACT_ON_DARK : COMPACT_BUTTON) : BUTTON}
       >
         {label}
       </button>

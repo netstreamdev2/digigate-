@@ -41,6 +41,7 @@ import { pageHref, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { againstPrior, companyClients, reportSchedules, reportSends, reportSummary, trendFor, type ReportSchedule, type ReportSend } from "@/lib/reports";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 
 import { deleteSchedule, setScheduleActive } from "../actions";
 import { AutomateButton, EmailReportButton } from "../report-forms";
@@ -96,8 +97,8 @@ function SendRow({ send, now }: { send: ReportSend; now: number }) {
 async function CompanyReport({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  const isSuperUser = user.roles.includes("super_user");
-  if (!isSuperUser && !user.roles.includes("admin")) redirect("/control-room");
+  const acrossCompanies = isDigiGateStaff(user);
+  if (!acrossCompanies && !user.roles.includes("admin")) redirect("/control-room");
 
   const { org } = await params;
   const query = await searchParams;
@@ -128,7 +129,7 @@ async function CompanyReport({ params, searchParams }: { params: Promise<{ org: 
   return (
     <AppShell
       company={await companyBrand(org)}
-      eyebrow={<Breadcrumbs items={isSuperUser ? [{ label: "Reports", href: `/reports?day=${day}` }, { label: report.company }] : [{ label: "Reports" }, { label: report.company }]} />}
+      eyebrow={<Breadcrumbs items={acrossCompanies ? [{ label: "Reports", href: `/reports?day=${day}` }, { label: report.company }] : [{ label: "Reports" }, { label: report.company }]} />}
       title={scope}
       actions={
         <>

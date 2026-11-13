@@ -16,6 +16,7 @@ import { canWatchGates } from "@/lib/nav";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { bookingPage, type BookingRow, type BookingTab } from "@/lib/watch-lists";
 
 import { cancelBooking } from "./actions";
@@ -105,11 +106,11 @@ async function Expected({ searchParams }: { searchParams: Promise<Query> }) {
   const tab: BookingTab = asked === "arrived" || asked === "past" ? asked : "coming";
   const search = textParam(query, "q");
   const page = pageParam(query);
-  const company = user.roles.includes("super_user") ? textParam(query, "company") : "";
+  const company = isDigiGateStaff(user) ? textParam(query, "company") : "";
   const now = readClock();
   const [{ rows, total }, brand] = await Promise.all([bookingPage({ tab, search, company }, page, now), company ? companyBrand(company) : null]);
   // The forms open on the company being looked at: the super user's chosen one, or the signed-in person's own.
-  const formCompany = brand ?? (user.orgId && !user.roles.includes("super_user") ? await companyBrand(user.orgId) : null);
+  const formCompany = brand ?? (user.orgId && !isDigiGateStaff(user) ? await companyBrand(user.orgId) : null);
 
   return (
     <AppShell

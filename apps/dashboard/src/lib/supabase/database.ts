@@ -14,6 +14,39 @@ export type Database = {
   }
   digigate: {
     Tables: {
+      site_licence_requests: {
+        Row: {
+          id: string
+          org_id: string
+          site_name: string
+          site_type: string
+          note: string
+          requested_by: string
+          requested_at: string
+          status: string
+          resolved_by: string | null
+          resolved_at: string | null
+          site_id: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "site_licence_requests_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_licence_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alerts: {
         Row: {
           event_id: string | null
@@ -1905,6 +1938,19 @@ export type Database = {
         }
         Returns: string
       }
+      request_site_licence: {
+        Args: { _org: string; _name: string; _site_type: string; _note?: string }
+        Returns: string
+      }
+      decline_site_licence: {
+        Args: { _request: string }
+        Returns: undefined
+      }
+      fulfil_site_licence: {
+        Args: { _request: string; _site: string }
+        Returns: undefined
+      }
+      is_digigate_staff: { Args: never; Returns: boolean }
       data_period_start: {
         Args: { _renews_day: number; _today: string }
         Returns: string
@@ -2400,6 +2446,7 @@ export type Database = {
         | "supervisor"
         | "client_viewer"
         | "host"
+        | "technician"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2535,6 +2582,7 @@ export const Constants = {
         "supervisor",
         "client_viewer",
         "host",
+        "technician",
       ],
     },
   },

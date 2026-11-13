@@ -14,6 +14,7 @@ import { canWatchGates } from "@/lib/nav";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { hotlistPage, type HotlistRow, type HotlistTab } from "@/lib/watch-lists";
 
 import { takeOffHotlist } from "./actions";
@@ -72,11 +73,11 @@ async function Hotlist({ searchParams }: { searchParams: Promise<Query> }) {
   const tab: HotlistTab = textParam(query, "tab") === "off" ? "off" : "in-force";
   const search = textParam(query, "q");
   const page = pageParam(query);
-  const company = user.roles.includes("super_user") ? textParam(query, "company") : "";
+  const company = isDigiGateStaff(user) ? textParam(query, "company") : "";
   const now = readClock();
   const [{ rows, total }, brand] = await Promise.all([hotlistPage({ tab, search, company }, page, now), company ? companyBrand(company) : null]);
   // The forms open on the company being looked at: the super user's chosen one, or the signed-in person's own.
-  const formCompany = brand ?? (user.orgId && !user.roles.includes("super_user") ? await companyBrand(user.orgId) : null);
+  const formCompany = brand ?? (user.orgId && !isDigiGateStaff(user) ? await companyBrand(user.orgId) : null);
 
   const tabHref = (next: HotlistTab) => pageHref("/hotlist", { ...query, tab: next === "in-force" ? undefined : next }, 1);
 
@@ -114,7 +115,7 @@ async function Hotlist({ searchParams }: { searchParams: Promise<Query> }) {
         ) : (
           <ul className="divide-y divide-ink/5">
             {rows.map((row) => (
-              <Entry key={row.id} row={row} showCompany={user.roles.includes("super_user") && !company} inForce={tab === "in-force"} />
+              <Entry key={row.id} row={row} showCompany={isDigiGateStaff(user) && !company} inForce={tab === "in-force"} />
             ))}
           </ul>
         )}

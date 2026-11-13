@@ -16,6 +16,7 @@ import { canWatchGates } from "@/lib/nav";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 
 import { ResetPinButton } from "../reset-pin";
 
@@ -27,7 +28,7 @@ async function Board({ searchParams }: { searchParams: Promise<Query> }) {
   const search = textParam(query, "q");
   const page = pageParam(query);
   // A super user working inside a company sees that company's sites; everyone else sees theirs anyway.
-  const company = user.roles.includes("super_user") ? textParam(query, "company") : "";
+  const company = isDigiGateStaff(user) ? textParam(query, "company") : "";
   const [{ sites, total }, brand] = await Promise.all([siteBoard(search, page, company), company ? companyBrand(company) : null]);
   const siteHref = (id: string) => (company ? `/control-room/${id}?company=${company}` : `/control-room/${id}`);
 

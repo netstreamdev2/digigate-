@@ -17,6 +17,7 @@ import { addDays, dayParam, longDate, siteToday } from "@/lib/format";
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { CheckActivity } from "../control-room/check-activity";
@@ -42,7 +43,7 @@ const pick = <T extends string>(value: string, options: readonly { value: T }[])
 async function Checks({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  const isSuperUser = user.roles.includes("super_user");
+  const acrossCompanies = isDigiGateStaff(user);
 
   const query = await searchParams;
   const now = readClock();
@@ -57,12 +58,12 @@ async function Checks({ searchParams }: { searchParams: Promise<Query> }) {
   const search = textParam(query, "q");
   const page = pageParam(query);
   const supabase = await supabaseServer();
-  const companies = isSuperUser ? must(await supabase.from("organisations").select("id, name").order("name").limit(MOST_CHOICES)) : [];
+  const companies = acrossCompanies ? must(await supabase.from("organisations").select("id, name").order("name").limit(MOST_CHOICES)) : [];
   const company = companies.find((row) => row.id === textParam(query, "company"))?.id ?? "";
   // Sites to narrow to: one company's when a super user is inside it, otherwise the ones this person looks after.
   let siteList = supabase.from("sites").select("id, name").eq("is_active", true).order("name").limit(MOST_CHOICES);
   if (company) siteList = siteList.eq("org_id", company);
-  const sites = isSuperUser && !company ? [] : must(await siteList);
+  const sites = acrossCompanies && !company ? [] : must(await siteList);
   const site = sites.find((row) => row.id === textParam(query, "site"))?.id ?? "";
 
   // DigiGate's own checks and those brought over from a site's old gate system, in one list.
@@ -103,7 +104,7 @@ async function Checks({ searchParams }: { searchParams: Promise<Query> }) {
 
       <FilterBar label="Filter the checks">
         <SearchBox placeholder="Name, plate or car: white hatchback" />
-        {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+        {acrossCompanies ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
         {sites.length > 1 ? <FilterSelect name="site" label="All sites" options={sites.map((row) => ({ value: row.id, label: row.name }))} /> : null}
         <FilterSelect name="lane" label="Vehicles and pedestrians" options={LANES} />
         <FilterSelect name="result" label="Every result" options={RESULTS} />

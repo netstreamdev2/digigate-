@@ -12,6 +12,7 @@ import { deviceData, devicePage, deviceStory } from "@/lib/devices";
 import { timeWithSeconds } from "@/lib/format";
 import { must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { revokeDevice } from "../../setup/actions";
@@ -24,7 +25,7 @@ const DATA_DAYS = 35;
 const STORY_LINES = 40;
 const COMMANDS_SHOWN = 6;
 
-/** What super users last asked of this handheld, newest first. Row security shows them to super users only. */
+/** What DigiGate staff last asked of this handheld, newest first, through row security. */
 async function recentCommands(deviceId: string): Promise<DeviceCommandRow[]> {
   const supabase = await supabaseServer();
   const rows = must(
@@ -53,15 +54,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function Device({ params }: { params: Promise<{ id: string }> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  const isSuperUser = user.roles.includes("super_user");
-  if (!isSuperUser && !["admin", "manager", "control_room"].some((role) => user.roles.includes(role))) redirect("/control-room");
+  const acrossCompanies = isDigiGateStaff(user);
+  if (!acrossCompanies && !["admin", "manager", "control_room"].some((role) => user.roles.includes(role))) redirect("/control-room");
 
   const { id } = await params;
   if (!UUID.test(id)) notFound();
   const device = await devicePage(id);
   if (!device) notFound();
   const now = readClock();
-  const [data, story, commands] = await Promise.all([deviceData(id, DATA_DAYS), deviceStory(id, STORY_LINES), isSuperUser ? recentCommands(id) : []]);
+  const [data, story, commands] = await Promise.all([deviceData(id, DATA_DAYS), deviceStory(id, STORY_LINES), acrossCompanies ? recentCommands(id) : []]);
 
   return (
     <AppShell
@@ -78,7 +79,7 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
       actions={
         device.canManage ? (
           <>
-          <ConfirmAction
+          {user.roles.includes("super_user") ? <ConfirmAction
             label="Release from DigiGate"
             title={`Release ${device.name}?`}
             confirmLabel="Yes, release it"
@@ -90,7 +91,7 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
           >
             At its next sync it stops being locked to DigiGate: its other apps, hotspot and settings come back, and DigiGate becomes an ordinary app on it.
             It stays paired. Only super users can do this, and it&apos;s in the audit log.
-          </ConfirmAction>
+          </ConfirmAction> : null}
           <ConfirmAction
             label="Revoke"
             title={`Revoke ${device.name}?`}
@@ -113,8 +114,8 @@ async function Device({ params }: { params: Promise<{ id: string }> }) {
         </>
       }
     >
-      {isSuperUser && device.status !== "revoked" ? <RemoteControl deviceId={device.id} name={device.name} commands={commands} now={now} /> : null}
-      <DeviceView device={device} data={data} story={story} now={now} full={isSuperUser} />
+      {acrossCompanies && device.status !== "revoked" ? <RemoteControl deviceId={device.id} name={device.name} commands={commands} now={now} /> : null}
+      <DeviceView device={device} data={data} story={story} now={now} full={acrossCompanies} />
     </AppShell>
   );
 }

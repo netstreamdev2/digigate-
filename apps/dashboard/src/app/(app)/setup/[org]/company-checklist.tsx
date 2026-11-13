@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { Icon } from "@/components/icon";
 import { counted, must } from "@/lib/reads";
 import { supabaseServer } from "@/lib/supabase/server";
+import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 
 import { AddPersonButton } from "../../people/people-forms";
 import { AddGateStaffButton } from "../gate-staff-form";
@@ -30,6 +32,9 @@ function StepLink({ href, label }: { href: string; label: string }) {
  * It goes away once everything is done.
  */
 export async function CompanyChecklist({ company }: { company: { id: string; name: string } }) {
+  const user = await currentUser();
+  const canCreateSite = user?.roles.includes("super_user") ?? false;
+  const canRequestLicence = user ? !isDigiGateStaff(user) && user.roles.includes("admin") : false;
   const supabase = await supabaseServer();
   const head = { count: "exact", head: true } as const;
   const [admins, places, sites, posts, located, staff, devices] = await Promise.all([
@@ -77,7 +82,7 @@ export async function CompanyChecklist({ company }: { company: { id: string; nam
         counts.sites > 0
           ? `${plural(counts.sites, "site")}.`
           : "The hospital, estate or mall they guard: its details, then each access point, in one go. Its records stay with it, even if it changes security company.",
-      action: counts.sites === 0 ? <StepLink href={wizardPath} label={unfinished ? `Set up ${unfinished.name}` : "Add the site"} /> : null,
+      action: counts.sites === 0 && (canCreateSite || canRequestLicence) ? <StepLink href={wizardPath} label={canCreateSite ? unfinished ? `Set up ${unfinished.name}` : "Add the site" : "Request a licence"} /> : null,
     },
     {
       title: "Access points, with their locations",

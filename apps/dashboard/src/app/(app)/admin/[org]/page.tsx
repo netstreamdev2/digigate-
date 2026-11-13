@@ -15,6 +15,7 @@ import { plural } from "@/lib/format";
 import { anyColumnLike, likePattern, PAGE_SIZE, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
 import { counted, maybe, must } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { AddGateStaffButton } from "../../setup/gate-staff-form";
@@ -120,8 +121,8 @@ async function SitesTab({ org, query, path }: { org: string; query: Query; path:
 async function Company({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<Query> }) {
   const user = await currentUser();
   const { org } = await params;
-  const isSuper = user?.roles.includes("super_user") ?? false;
-  if (!user || (!isSuper && !(user.roles.includes("admin") && user.orgId === org))) {
+  const acrossCompanies = user ? isDigiGateStaff(user) : false;
+  if (!user || (!acrossCompanies && !(user.roles.includes("admin") && user.orgId === org))) {
     return <NoAccess message="Admin is for your company's administrators." />;
   }
 
@@ -132,7 +133,7 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
   if (!company) notFound();
 
   const path = `/admin/${org}`;
-  const crumbs = isSuper ? [{ label: "Admin", href: "/admin" }, { label: company.name }] : [{ label: "Admin" }];
+  const crumbs = acrossCompanies ? [{ label: "Admin", href: "/admin" }, { label: company.name }] : [{ label: "Admin" }];
 
   return (
     <AppShell
@@ -155,7 +156,7 @@ async function Company({ params, searchParams }: { params: Promise<{ org: string
         </div>
       }
     >
-      {isSuper ? <SuspensionPanel orgId={org} company={company.name} suspendedAt={company.suspended_at} reason={company.suspended_reason} /> : null}
+      {acrossCompanies ? <SuspensionPanel orgId={org} company={company.name} suspendedAt={company.suspended_at} reason={company.suspended_reason} canManage={user.roles.includes("super_user")} /> : null}
 
       <FilterBar label={tab === "guards" ? "Filter the guards" : "Filter the sites"}>
         <SearchBox key={tab} placeholder={tab === "guards" ? "Search name or employee number" : "Search a site name or code"} />

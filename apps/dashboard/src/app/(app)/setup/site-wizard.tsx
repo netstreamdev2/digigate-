@@ -194,12 +194,12 @@ function SummaryStep({ site, points }: { site: SiteDraft; points: readonly Acces
 }
 
 /** `placeId` finishes a place added before sites and clients were one, which has a name but no site yet. */
-type Props = { orgId: string; placeId: string | null; initialName: string; cancelHref: string };
+type Props = { orgId: string; placeId: string | null; initialName: string; initialType?: "hospital" | "estate"; licenceRequestId?: string | null; cancelHref: string };
 
 /** A new site in three steps: the site, then each access point on its own, then a summary to confirm. Nothing saves until the end. */
-export function SiteWizard({ orgId, placeId, initialName, cancelHref }: Props) {
+export function SiteWizard({ orgId, placeId, initialName, initialType = "hospital", licenceRequestId = null, cancelHref }: Props) {
   const [step, setStep] = useState(0);
-  const [site, setSite] = useState<SiteDraft>({ name: initialName, siteType: "hospital", code: "", address: "", location: "", radiusM: 300, openParking: true, parkingSpaces: "" });
+  const [site, setSite] = useState<SiteDraft>({ name: initialName, siteType: initialType, code: "", address: "", location: "", radiusM: 300, openParking: true, parkingSpaces: "" });
   const [points, setPoints] = useState<AccessPointDraft[]>([{ ...NEW_ACCESS_POINT, label: "Main Gate" }]);
   const [current, setCurrent] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
@@ -237,7 +237,7 @@ export function SiteWizard({ orgId, placeId, initialName, cancelHref }: Props) {
   const create = () => {
     setProblem(null);
     startSaving(async () => {
-      const result = await createSite({ orgId, placeId, site, accessPoints: points });
+      const result = await createSite({ orgId, placeId, licenceRequestId, site, accessPoints: points });
       if (result) setProblem(result.problem);
     });
   };

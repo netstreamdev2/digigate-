@@ -96,7 +96,7 @@ function chartDays(rows: readonly DataDay[], today: string): DataColumn[] {
 }
 
 /** A handheld's page under its title: its signs as the app's tiles, its data by day, what happened to it, and its SIM. */
-/** `full` is for super users. A company's own people see the handheld's battery, network, location and whereabouts only. */
+/** `full` is for DigiGate staff. A company's own people see battery, network, location and whereabouts only. */
 export function DeviceView({ device, data, story, now, full }: { device: DevicePage; data: readonly DataDay[]; story: readonly StoryEntry[]; now: number; full: boolean }) {
   const health = device.health;
   const inPeriod = data.filter((row) => row.day >= device.periodStart);

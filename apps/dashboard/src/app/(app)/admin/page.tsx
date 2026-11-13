@@ -12,13 +12,14 @@ import { companyCardOf } from "@/lib/company-brand";
 import { likePattern, PAGE_SIZE, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
 import { must } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 /** Admin opens straight onto a company's own records; only a super user, who looks after every company, picks one first. */
 async function Admin({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  if (!user.roles.includes("super_user")) {
+  if (!isDigiGateStaff(user)) {
     if (user.roles.includes("admin") && user.orgId) redirect(`/admin/${user.orgId}`);
     return <NoAccess message="Admin is for your company's administrators." />;
   }

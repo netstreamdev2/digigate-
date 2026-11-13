@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { PGlite } from '@electric-sql/pglite';
+import { canCreateRole, canManage, canManagePerson, isStaff, isSuper } from '../functions/_shared/account-access.ts';
 
 const migrations = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 const db = new PGlite();
@@ -82,17 +83,19 @@ check('admin cannot create an organisation', (await as('authenticated', ADMIN_A,
 check('super user without MFA cannot', (await as('authenticated', SUPER, 'aal1', `insert into digigate.organisations (name, slug) values ('X','x')`)).error);
 check('super user with MFA can', !(await as('authenticated', SUPER, 'aal2', `insert into digigate.organisations (name, slug) values ('X','x')`)).error);
 check('admin sees only their organisation', (await as('authenticated', ADMIN_A, 'aal2', 'select id from digigate.organisations')).rows.length === 1);
-check('admin adds a client', !(await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}','Second client')`)).error);
+check('admin cannot add a client without a licence', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}','Unlicensed')`)).error);
+check('super user adds a client', !(await as('authenticated', SUPER, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}','Second client')`)).error);
 check('a new client starts an engagement', (await count(`digigate.engagements e join digigate.clients c on c.id = e.client_id where c.name = 'Second client' and e.ended_at is null`)) === 1);
 check('admin of another organisation cannot add one', (await as('authenticated', ADMIN_B, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}','Sneaky')`)).error);
 // The dashboard reads a new row straight back, which row security has to allow at the moment it's created.
-check('admin adds a site and reads it back', (await as('authenticated', ADMIN_A, 'aal2', `with c as (insert into digigate.clients (org_id, name) values ('${ORG_A}','New') returning id) insert into digigate.sites (org_id, client_id, name, site_type) select '${ORG_A}', id, 'New', 'hospital' from c returning id`)).rows.length === 1);
+check('super user adds a site and reads it back', (await as('authenticated', SUPER, 'aal2', `with c as (insert into digigate.clients (org_id, name) values ('${ORG_A}','New') returning id) insert into digigate.sites (org_id, client_id, name, site_type) select '${ORG_A}', id, 'New', 'hospital' from c returning id`)).rows.length === 1);
 check('super user adds a site and reads it back', (await as('authenticated', SUPER, 'aal2', `with c as (insert into digigate.clients (org_id, name) values ('${ORG_A}','New by super') returning id) insert into digigate.sites (org_id, client_id, name, site_type) select '${ORG_A}', id, 'New by super', 'hospital' from c returning id`)).rows.length === 1);
-check('admin adds a client and reads it back', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}','Read back') returning id`)).rows.length === 1);
+check('super user adds a client and reads it back', (await as('authenticated', SUPER, 'aal2', `insert into digigate.clients (org_id, name) values ('${ORG_A}','Read back') returning id`)).rows.length === 1);
 check('super user adds a company and reads it back', (await as('authenticated', SUPER, 'aal2', `insert into digigate.organisations (name, slug) values ('Read back','read-back') returning id`)).rows.length === 1);
 check('a site cannot go under another company\'s client', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_B}','Wrong','hospital')`)).error);
 check('admin of another organisation cannot add a site', (await as('authenticated', ADMIN_B, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_SPARE}','New2','hospital')`)).error);
 check('deactivated admin cannot', (await as('authenticated', OFF, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_SPARE}','New3','hospital')`)).error);
+check('admin cannot add a site directly to an existing client without a licence', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.sites (org_id, client_id, name, site_type) values ('${ORG_A}','${CLIENT_SPARE}','Unlicensed','hospital')`)).error);
 check('admin adds a post', !(await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_A}','main','Main','{vehicle,pedestrian}')`)).error);
 check('a post cannot point at another organisation', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_B}','x','X','{vehicle}')`)).error);
 check('control room cannot change posts', (await as('authenticated', ROOM_A, 'aal2', `insert into digigate.posts (org_id, site_id, code, label, lanes) values ('${ORG_A}','${SITE_A}','y','Y','{vehicle}')`)).error);
@@ -438,9 +441,9 @@ check('the send history cannot be written from the dashboard', (await as('authen
 
 // The audit log.
 const auditFor = (where) => one(`select * from digigate.audit_log where ${where} order by at desc limit 1`);
-await as('authenticated', ADMIN_A, 'aal2', `with c as (insert into digigate.clients (org_id, name) values ('${ORG_A}', 'Audited Site') returning id) insert into digigate.sites (org_id, client_id, name, site_type) select '${ORG_A}', id, 'Audited Site', 'hospital' from c`);
+await as('authenticated', SUPER, 'aal2', `with c as (insert into digigate.clients (org_id, name) values ('${ORG_A}', 'Audited Site') returning id) insert into digigate.sites (org_id, client_id, name, site_type) select '${ORG_A}', id, 'Audited Site', 'hospital' from c`);
 const added = await auditFor(`action = 'site.added' and target = 'Audited Site'`);
-check('a dashboard change is logged with who did it', added?.actor_id === ADMIN_A && added.category === 'setup' && added.org_id === ORG_A);
+check('a dashboard change is logged with who did it', added?.actor_id === SUPER && added.category === 'setup' && added.org_id === ORG_A);
 check('the audit names them', added?.actor_name?.length > 0);
 const seenBefore = await count(`digigate.audit_log where device_id = '${DEVICE}'`);
 await service('select digigate.device_for_token($1) as id', ['t1']);
@@ -660,9 +663,10 @@ const wizardPoints = [
   { label: 'Main Gate', gateType: 'main', lanes: ['vehicle'], booms: ['automatic', 'automatic', 'manual', 'automatic'], manned: true, cctvCameras: 4, anpr: true, latitude: -29.851, longitude: 31.021, radiusM: 50 },
   { label: 'Main Gate', gateType: 'pedestrian', lanes: ['pedestrian'], booms: [], manned: false, cctvCameras: 0, anpr: false },
 ];
-const created = await newSite(ADMIN_A, wizardSite, wizardPoints);
+check('an admin must request a licence instead of using the site wizard', (await newSite(ADMIN_A, wizardSite, wizardPoints)).error);
+const created = await newSite(SUPER, wizardSite, wizardPoints);
 const createdId = created.rows[0]?.id;
-check('an admin creates a site with its access points in one go', Boolean(createdId) && !created.error);
+check('a super user creates a site with its access points in one go', Boolean(createdId) && !created.error);
 const createdRow = await one('select * from digigate.sites where id = $1', [createdId]);
 check('the site keeps its code, address, geofence and parking', createdRow.code === 'RVW' && createdRow.address === '12 Riverside Road, Durban' && createdRow.radius_m === 400 && createdRow.open_parking === false && createdRow.parking_spaces === 120);
 const createdPoints = (await db.query('select * from digigate.posts where site_id = $1 order by created_at, code', [createdId])).rows;
@@ -678,15 +682,15 @@ check('a pedestrian gate has no booms', createdPoints.find((point) => point.gate
 const sitesBefore = await count('digigate.sites');
 check('the control room cannot create a site', (await newSite(ROOM_A, { ...wizardSite, code: 'CRM' }, wizardPoints)).error);
 check('another company cannot create one in this company', (await newSite(ADMIN_B, { ...wizardSite, code: 'OTH' }, wizardPoints)).error);
-check('a site needs at least one access point', (await newSite(ADMIN_A, { ...wizardSite, code: 'NOP' }, [])).error);
-check('an unknown kind of boom is refused', (await newSite(ADMIN_A, { ...wizardSite, code: 'BAD' }, [{ ...wizardPoints[0], booms: ['flying'] }])).error);
-check('ANPR needs at least one camera', (await newSite(ADMIN_A, { ...wizardSite, code: 'ANP' }, [{ ...wizardPoints[0], cctvCameras: 0 }])).error);
-check('a site code is used once in a company', (await newSite(ADMIN_A, wizardSite, wizardPoints)).error);
+check('a site needs at least one access point', (await newSite(SUPER, { ...wizardSite, code: 'NOP' }, [])).error);
+check('an unknown kind of boom is refused', (await newSite(SUPER, { ...wizardSite, code: 'BAD' }, [{ ...wizardPoints[0], booms: ['flying'] }])).error);
+check('ANPR needs at least one camera', (await newSite(SUPER, { ...wizardSite, code: 'ANP' }, [{ ...wizardPoints[0], cctvCameras: 0 }])).error);
+check('a site code is used once in a company', (await newSite(SUPER, wizardSite, wizardPoints)).error);
 check('a refused site leaves nothing half made', (await count('digigate.sites')) === sitesBefore);
-check('managed parking needs a number of spaces', (await newSite(ADMIN_A, { ...wizardSite, code: 'PRK', parkingSpaces: null }, wizardPoints)).error);
-check('a place set up already cannot get a second site', (await newSite(ADMIN_A, { ...wizardSite, code: 'TWO' }, wizardPoints, ORG_A, CLIENT_A)).error);
-check('a place in another company cannot be finished from here', (await newSite(ADMIN_A, { ...wizardSite, code: 'OTB' }, wizardPoints, ORG_A, CLIENT_B)).error);
-const adopted = await newSite(ADMIN_A, { ...wizardSite, name: 'Spare Hospital', code: 'SPR' }, wizardPoints, ORG_A, CLIENT_SPARE);
+check('managed parking needs a number of spaces', (await newSite(SUPER, { ...wizardSite, code: 'PRK', parkingSpaces: null }, wizardPoints)).error);
+check('a place set up already cannot get a second site', (await newSite(SUPER, { ...wizardSite, code: 'TWO' }, wizardPoints, ORG_A, CLIENT_A)).error);
+check('a place in another company cannot be finished from here', (await newSite(SUPER, { ...wizardSite, code: 'OTB' }, wizardPoints, ORG_A, CLIENT_B)).error);
+const adopted = await newSite(SUPER, { ...wizardSite, name: 'Spare Hospital', code: 'SPR' }, wizardPoints, ORG_A, CLIENT_SPARE);
 check('a place with no site yet is finished by the wizard', !adopted.error && (await one('select client_id from digigate.sites where id = $1', [adopted.rows[0]?.id])).client_id === CLIENT_SPARE);
 check('and is renamed after the site', (await one('select name from digigate.clients where id = $1', [CLIENT_SPARE])).name === 'Spare Hospital');
 check('anon cannot create a site', (await as('anon', '', '', `select digigate.create_site('${ORG_A}', '{}', '[]')`)).error);
@@ -1475,6 +1479,149 @@ check('a real email address is left as it is', (await one(`select p.login, u.ema
 check('a super user keeps a plain username', (await one(`select login from digigate.profiles where id = '${SUPER}'`)).login === 'super' && (await one(`select email from auth.users where id = '${SUPER}'`)).email === 'super@digigate.local');
 check('moving again changes nothing', loginsMoved > 0 && (await one('select digigate.scope_logins() as n')).n === 0);
 check('two companies can each have the same name in front', !(await db.query(`insert into digigate.profiles (id, org_id, full_name, login, roles) values ('${NOBODY}', '${ORG_B}', 'Thandi B', 'thandi@company2', '{manager}')`).then(() => null, (error) => error)));
+
+// DigiGate technicians: the same global reads as a super user, with commercial controls and release still closed.
+const TECH = u(960), TECH_DEVICE = u(961);
+await db.exec(`
+  insert into auth.users (id, email) values ('${TECH}', 'technician@example.test');
+  insert into digigate.profiles (id, full_name, login, roles) values ('${TECH}', 'Test Technician', 'technician@example.test', '{technician}');
+  insert into digigate.devices (id, org_id, site_id, name, token_hash) values ('${TECH_DEVICE}', '${ORG_B}', '${SITE_B}', 'Test handheld', 'tech-token');
+  insert into digigate.device_data_days (device_id, org_id, site_id, day, device_bytes, app_bytes)
+    values ('${TECH_DEVICE}', '${ORG_B}', '${SITE_B}', current_date, 2048, 1024);
+`);
+const technicianReads = [
+  ['companies', 'select id from digigate.organisations order by id'],
+  ['clients', 'select id from digigate.clients order by id'],
+  ['sites', 'select id from digigate.sites order by id'],
+  ['engagements', 'select id from digigate.engagements order by id'],
+  ['profiles', 'select id from digigate.profiles order by id'],
+  ['gate staff', 'select id from digigate.gate_users order by id'],
+  ['checks', 'select id from digigate.all_check_records order by id limit 25'],
+  ['visits', 'select id from digigate.visit_records order by id limit 25'],
+  ['alerts', 'select id from digigate.alerts order by id'],
+  ['audit log', 'select id from digigate.audit_log order by id limit 25'],
+  ['company board', "select * from digigate.company_board('',100,0)"],
+  ['people board', "select * from digigate.people_board('','','',false,100,0)"],
+  ['people counts', "select * from digigate.people_counts('') order by role,is_active"],
+  ['gate staff board', "select * from digigate.gate_staff_board('','','',false,100,0)"],
+  ['gate staff counts', "select * from digigate.gate_staff_counts('') order by role,is_active"],
+  ['report board', "select * from digigate.report_board(current_date,'',100,0)"],
+  ['report totals', 'select * from digigate.report_day_totals(current_date)'],
+  ['report summary', `select digigate.report_summary('${ORG_B}','daily',current_date)`],
+  ['device board', "select * from digigate.device_board('','',100,0)"],
+  ['device details', `select * from digigate.device_detail('${TECH_DEVICE}')`],
+  ['device data', `select * from digigate.device_data('${TECH_DEVICE}',35)`],
+  ['device story', `select * from digigate.device_story('${TECH_DEVICE}',40)`],
+];
+for (const [name, sql] of technicianReads) {
+  const expected = await as('authenticated', SUPER, 'aal2', sql);
+  const actual = await as('authenticated', TECH, 'aal2', sql);
+  check(`technician sees the same ${name} as a super user`, !actual.error && !expected.error && JSON.stringify(actual.rows) === JSON.stringify(expected.rows));
+}
+check('technician is staff but never a super user', (await as('authenticated', TECH, 'aal2', 'select digigate.is_digigate_staff() staff, digigate.is_super_user() super')).rows[0]?.staff === true
+  && (await as('authenticated', TECH, 'aal2', 'select digigate.is_super_user() super')).rows[0]?.super === false);
+check('technician cannot read a guard PIN', (await as('authenticated', TECH, 'aal2', 'select pin from digigate.gate_users')).error);
+check('technician cannot read a device token', (await as('authenticated', TECH, 'aal2', 'select token_hash from digigate.devices')).error);
+check('technician can manage normal gate configuration', !(await as('authenticated', TECH, 'aal2', `update digigate.posts set radius_m = 75 where site_id = '${SITE_B}'`)).error);
+check('technician can set a SIM and bundle', !(await as('authenticated', TECH, 'aal2', `select digigate.set_device_plan('${TECH_DEVICE}',null,1024,1::smallint)`)).error);
+for (const kind of ['lock', 'restart', 'update_app']) {
+  const payload = kind === 'update_app' ? { url: 'https://example.test/digigate.apk', version_code: 6 } : {};
+  const result = await as('authenticated', TECH, 'aal2', 'select digigate.request_device_command($1,$2,$3) id', [TECH_DEVICE, kind, JSON.stringify(payload)]);
+  check(`technician can remotely request ${kind}`, Boolean(result.rows[0]?.id) && !result.error);
+}
+check('technician sees remote command history', (await as('authenticated', TECH, 'aal2', `select id from digigate.device_commands where device_id = '${TECH_DEVICE}'`)).rows.length === 3);
+check('technician remote requests are audited', (await count(`digigate.audit_log where actor_id = '${TECH}' and action in ('device.lock_requested','device.restart_requested','device.update_app_requested')`)) === 3);
+for (const [name, sql, argumentsForCheck = []] of [
+  ['add a company', "insert into digigate.organisations (name,slug) values ('Forbidden','forbidden-tech')"],
+  ['add a client directly', `insert into digigate.clients (org_id,name) values ('${ORG_B}','Forbidden')`],
+  ['add a site directly', `insert into digigate.sites (org_id,client_id,name,site_type) values ('${ORG_A}','${CLIENT_SPARE}','Forbidden','hospital')`],
+  ['use the site wizard', 'select digigate.create_site($1,$2::jsonb,$3::jsonb)', [ORG_B, JSON.stringify({ ...wizardSite, code: 'TCH' }), JSON.stringify(wizardPoints)]],
+  ['suspend a company', `select digigate.set_company_suspended('${ORG_B}',true,'Forbidden')`],
+  ['reinstate a company', `select digigate.set_company_suspended('${ORG_B}',false,'')`],
+  ['release a handheld', `select digigate.request_device_release('${TECH_DEVICE}')`],
+  ['write release fields', `update digigate.devices set release_requested_at = now() where id = '${TECH_DEVICE}'`],
+  ['write suspension fields', `update digigate.organisations set suspended_at = now() where id = '${ORG_B}'`],
+  ['move a client', `select digigate.transfer_client('${CLIENT_B}','${ORG_A}')`],
+  ['grant themselves super-user access', `update digigate.profiles set roles = '{super_user}' where id = '${TECH}'`],
+]) check(`technician cannot ${name}`, (await as('authenticated', TECH, 'aal2', sql, argumentsForCheck)).error);
+check('technician never leaves a release waiting', (await one(`select release_requested_at from digigate.devices where id = '${TECH_DEVICE}'`)).release_requested_at === null);
+for (const [name, sql] of technicianReads.filter(([name]) => ['companies','sites','people board','gate staff board','device board'].includes(name))) {
+  const result = await as('authenticated', TECH, 'aal1', sql);
+  check(`technician without MFA cannot read ${name}`, !result.error && result.rows.length === 0);
+}
+check('technician without MFA cannot send remote commands', (await as('authenticated', TECH, 'aal1', `select digigate.request_device_command('${TECH_DEVICE}','lock')`)).error);
+await as('authenticated', SUPER, 'aal2', `select digigate.set_company_suspended('${ORG_B}',true,'Test suspension')`);
+check('technician still sees suspended companies and sites', (await as('authenticated', TECH, 'aal2', `select id from digigate.sites where id = '${SITE_B}'`)).rows.length === 1);
+check('technician still sees suspended handheld diagnostics', (await as('authenticated', TECH, 'aal2', `select * from digigate.device_detail('${TECH_DEVICE}')`)).rows.length === 1);
+await as('authenticated', SUPER, 'aal2', `select digigate.set_company_suspended('${ORG_B}',false,'')`);
+await db.exec(`update digigate.profiles set is_active = false where id = '${TECH}'`);
+check('inactive technician sees no companies', (await as('authenticated', TECH, 'aal2', 'select id from digigate.organisations')).rows.length === 0);
+check('inactive technician cannot send remote commands', (await as('authenticated', TECH, 'aal2', `select digigate.request_device_command('${TECH_DEVICE}','lock')`)).error);
+await db.exec(`update digigate.profiles set is_active = true, org_id = '${ORG_A}' where id = '${TECH}'`);
+check('a technician with an assigned org still reads across companies', (await as('authenticated', TECH, 'aal2', 'select digigate.viewer_org() org')).rows[0]?.org === null);
+
+// Edge Functions also use the role boundaries; their service credential must never grant technicians a peer's account.
+const techCaller = { org_id: null, roles: ['technician'] }, superCaller = { org_id: null, roles: ['super_user'] };
+const adminCaller = { org_id: ORG_A, roles: ['admin'] };
+check('function caller recognises staff without making technician super', isStaff(techCaller) && !isSuper(techCaller));
+check('technician can administer company accounts and guard records', canManage(techCaller, ORG_A) && canManage(techCaller, ORG_B));
+check('company admin cannot appoint a technician', !canCreateRole(adminCaller, 'technician'));
+check('technician cannot appoint another technician', !canCreateRole(techCaller, 'technician'));
+check('super user can appoint a technician', canCreateRole(superCaller, 'technician'));
+check('nobody can create a super user through the people function', !canCreateRole(superCaller, 'super_user'));
+check('technician cannot reset or deactivate a super user', !canManagePerson(techCaller, superCaller));
+check('technician cannot reset or deactivate a peer', !canManagePerson(techCaller, techCaller));
+check('company admin cannot reset or deactivate a technician even if assigned to their company', !canManagePerson(adminCaller, { ...techCaller, org_id: ORG_A }));
+check('super user can reset or deactivate a technician', canManagePerson(superCaller, techCaller));
+
+// New-site licensing: company-scoped requests, an idempotent send, and a super-user-only, atomic fulfilment.
+const requestLicence = (profile, org = ORG_B, name = 'Licensed Estate', aal = 'aal2') =>
+  as('authenticated', profile, aal, 'select digigate.request_site_licence($1,$2,$3,$4) id', [org, name, 'estate', 'Go live next month']);
+const requested = await requestLicence(ADMIN_B);
+const licenceId = requested.rows[0]?.id;
+check('company admin can request a site licence', Boolean(licenceId) && !requested.error);
+check('a repeated request returns the pending request', (await requestLicence(ADMIN_B, ORG_B, '  licensed estate  ')).rows[0]?.id === licenceId);
+check('a repeated request has one queue row and one audit record', (await count(`digigate.site_licence_requests where id = '${licenceId}'`)) === 1
+  && (await count(`digigate.audit_log where action = 'site_licence.requested' and target = '${licenceId}'`)) === 1);
+for (const profile of [SUPER, TECH, ADMIN_B]) check(`licence queue visible to ${profile}`, (await as('authenticated', profile, 'aal2', `select id from digigate.site_licence_requests where id = '${licenceId}'`)).rows.length === 1);
+check('other company cannot read the request', (await as('authenticated', ADMIN_A, 'aal2', 'select id from digigate.site_licence_requests')).rows.length === 0);
+check('admin cannot request for another company', (await requestLicence(ADMIN_A)).error);
+check('control room cannot request licences', (await requestLicence(ROOM_A, ORG_A)).error);
+check('technician cannot submit a company licence request', (await requestLicence(TECH)).error);
+check('admin needs MFA to request licences', (await requestLicence(ADMIN_B, ORG_B, 'No MFA', 'aal1')).error);
+check('empty site name is refused', (await requestLicence(ADMIN_B, ORG_B, ' ')).error);
+check('long site name is refused', (await requestLicence(ADMIN_B, ORG_B, 'x'.repeat(121))).error);
+check('invalid site type is refused', (await as('authenticated', ADMIN_B, 'aal2', 'select digigate.request_site_licence($1,$2,$3,$4)', [ORG_B, 'Invalid', 'unknown', ''])).error);
+check('long licence note is refused', (await as('authenticated', ADMIN_B, 'aal2', 'select digigate.request_site_licence($1,$2,$3,$4)', [ORG_B, 'Long note', 'estate', 'x'.repeat(501)])).error);
+check('admin cannot forge a queue row', (await as('authenticated', ADMIN_B, 'aal2', `insert into digigate.site_licence_requests (org_id,site_name,site_type,requested_by) values ('${ORG_B}','Forged','estate','${SUPER}')`)).error);
+for (const profile of [ADMIN_B, TECH]) {
+  check(`${profile} cannot fulfil a request`, (await as('authenticated', profile, 'aal2', 'select digigate.fulfil_site_licence($1,$2)', [licenceId, SITE_B])).error);
+  check(`${profile} cannot decline a request`, (await as('authenticated', profile, 'aal2', 'select digigate.decline_site_licence($1)', [licenceId])).error);
+}
+const licensedDraft = { ...wizardSite, name: 'Licensed Estate', siteType: 'estate', code: 'LIC', licenceRequestId: licenceId };
+check('a request cannot be fulfilled in another company', (await newSite(SUPER, licensedDraft, wizardPoints, ORG_A)).error);
+check('a failed wizard leaves the request pending', (await newSite(SUPER, licensedDraft, [], ORG_B)).error && (await one('select status from digigate.site_licence_requests where id = $1', [licenceId])).status === 'pending');
+const licensed = await newSite(SUPER, licensedDraft, wizardPoints, ORG_B);
+check('super user creates the licensed site', Boolean(licensed.rows[0]?.id) && !licensed.error);
+const licence = await one('select * from digigate.site_licence_requests where id = $1', [licenceId]);
+check('creation fulfils the request with its site and operator', licence.status === 'fulfilled' && licence.site_id === licensed.rows[0]?.id && licence.resolved_by === SUPER && licence.resolved_at !== null);
+check('fulfilment is audited without the free-text note', (await count(`digigate.audit_log where action = 'site_licence.fulfilled' and target = '${licenceId}' and detail is null`)) === 1);
+check('a fulfilled request cannot create a second site', (await newSite(SUPER, { ...licensedDraft, code: 'LIC2' }, wizardPoints, ORG_B)).error);
+const declinedId = (await requestLicence(ADMIN_B, ORG_B, 'Closed Estate')).rows[0]?.id;
+check('super user can close a request without creating a site', !(await as('authenticated', SUPER, 'aal2', 'select digigate.decline_site_licence($1)', [declinedId])).error);
+check('a closed request cannot create a site', (await newSite(SUPER, { ...licensedDraft, code: 'CLO', licenceRequestId: declinedId }, wizardPoints, ORG_B)).error);
+check('the company can request again after closure', (await requestLicence(ADMIN_B, ORG_B, 'Closed Estate')).rows[0]?.id !== declinedId);
+await as('authenticated', SUPER, 'aal2', `select digigate.set_company_suspended('${ORG_B}',true,'Test suspension')`);
+check('a suspended admin cannot request a licence', (await requestLicence(ADMIN_B, ORG_B, 'Suspended')).error);
+await as('authenticated', SUPER, 'aal2', `select digigate.set_company_suspended('${ORG_B}',false,'')`);
+await db.exec(`update digigate.profiles set is_active = false where id = '${ADMIN_B}'`);
+check('inactive admin cannot request a licence', (await requestLicence(ADMIN_B, ORG_B, 'Inactive')).error);
+
+const superOnlyFunctions = (await db.query(`select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'digigate' and p.prosrc like '%digigate.is_super_user()%' order by p.proname`)).rows.map((row) => row.proname);
+check('every remaining super-user-only function is an audited commercial or release control', JSON.stringify(superOnlyFunctions) === JSON.stringify([
+  'create_site', 'decline_site_licence', 'fulfil_site_licence', 'request_device_release', 'set_company_suspended', 'transfer_client',
+]));
 
 console.log(`${passed} passed, ${failures.length} failed`);
 for (const failure of failures) console.log('FAILED:', failure);

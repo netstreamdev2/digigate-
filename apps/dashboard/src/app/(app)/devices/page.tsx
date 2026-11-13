@@ -23,6 +23,7 @@ import { ago, dataSize, MB, plural, shortDate, timeWithSeconds } from "@/lib/for
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { PairDeviceButton } from "../setup/pair-device";
@@ -90,9 +91,9 @@ function DeviceTable({ devices, now, full }: { devices: readonly FleetDevice[]; 
 async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  const isSuperUser = user.roles.includes("super_user");
-  // A company's admins, managers and control room see their handhelds' battery, network and location; the rest is a super user's.
-  if (!isSuperUser && !["admin", "manager", "control_room"].some((role) => user.roles.includes(role))) redirect("/control-room");
+  const acrossCompanies = isDigiGateStaff(user);
+  // Company staff see battery, network and location; DigiGate staff see the full handheld diagnostics.
+  if (!acrossCompanies && !["admin", "manager", "control_room"].some((role) => user.roles.includes(role))) redirect("/control-room");
 
   const query = await searchParams;
   const search = textParam(query, "q");
@@ -101,7 +102,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
   const asTable = textParam(query, "view") === "table";
 
   const supabase = await supabaseServer();
-  const companies = isSuperUser ? must(await supabase.from("organisations").select("id, name").order("name").limit(MOST_COMPANIES)) : [];
+  const companies = acrossCompanies ? must(await supabase.from("organisations").select("id, name").order("name").limit(MOST_COMPANIES)) : [];
   const company = companies.find((row) => row.id === textParam(query, "company"))?.id ?? "";
 
   const filter = { search, company };
@@ -116,12 +117,12 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
   return (
     <AppShell
       company={company ? await companyBrand(company) : null}
-      eyebrow={isSuperUser ? "Every handheld at every company, trouble first" : "Every handheld your company runs, trouble first"}
+      eyebrow={acrossCompanies ? "Every handheld at every company, trouble first" : "Every handheld your company runs, trouble first"}
       title="Devices"
       chips={
         <>
           <LiveStatus renderedAt={now} updatedAt={timeWithSeconds(now)} />
-          {isSuperUser || user.roles.includes("admin") ? (
+          {acrossCompanies || user.roles.includes("admin") ? (
             <div className="sm:ml-auto">
               <PairDeviceButton company={companies.find((row) => row.id === company)} />
             </div>
@@ -151,7 +152,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
           </div>
           <Rail label="Handhelds that need attention">
             {needAttention.map((device, index) => (
-              <DeviceCard key={device.id} device={device} now={now} index={index} narrow full={isSuperUser} />
+              <DeviceCard key={device.id} device={device} now={now} index={index} narrow full={acrossCompanies} />
             ))}
           </Rail>
         </section>
@@ -178,7 +179,7 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
 
       <FilterBar label="Filter the devices">
         <SearchBox placeholder="Search a device, site or company" />
-        {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+        {acrossCompanies ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
       </FilterBar>
 
       {devices.length === 0 ? (
@@ -187,13 +188,13 @@ async function Devices({ searchParams }: { searchParams: Promise<Query> }) {
         </Card>
       ) : asTable ? (
         <Card className="mt-6" title={active?.label ?? "All"} subtitle="A device that stops answering keeps working offline. Its scans arrive when it reconnects.">
-          <DeviceTable devices={devices} now={now} full={isSuperUser} />
+          <DeviceTable devices={devices} now={now} full={acrossCompanies} />
         </Card>
       ) : (
         <ul className="dg-ripple mt-6 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {devices.map((device, index) => (
             <li key={device.id} className="flex">
-              <DeviceCard device={device} now={now} index={index} full={isSuperUser} />
+              <DeviceCard device={device} now={now} index={index} full={acrossCompanies} />
             </li>
           ))}
         </ul>

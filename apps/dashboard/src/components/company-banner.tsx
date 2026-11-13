@@ -13,7 +13,7 @@ import { Icon } from "./icon";
  * list they've just filtered to it is still the everyday view, and offers a way in instead. The company's own pages
  * are in the sidebar beside the rail; on a phone, in the menu.
  */
-export function CompanyBanner({ company }: { company: CompanyBrand }) {
+export function CompanyBanner({ company, role }: { company: CompanyBrand; role: string }) {
   const inside = useCompanyContext()?.company.id === company.id;
   if (!inside) {
     return (
@@ -36,7 +36,7 @@ export function CompanyBanner({ company }: { company: CompanyBrand }) {
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-brand">
             <Icon name="supervisor" className="size-4" />
-            Super user, working inside
+            {role}, working inside
           </p>
           <p className="mt-1 truncate font-display text-2xl font-bold tracking-tight sm:text-3xl">{company.name}</p>
         </div>

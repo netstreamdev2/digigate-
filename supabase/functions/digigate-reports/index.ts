@@ -1,7 +1,7 @@
 // Builds report PDFs and emails them, on request from the dashboard or on a schedule. Deployed with --no-verify-jwt: a
 // person proves themselves with their session, and the scheduler with its own secret. Reports hold counts only, so an
 // email never carries a name, ID number or plate. Logs carry error names only: requests hold email addresses.
-import { audit, callerOf, canManage, isSuper, type Caller } from '../_shared/caller.ts';
+import { audit, callerOf, canManage, isStaff, type Caller } from '../_shared/caller.ts';
 import { json, sha256Hex, sql } from '../_shared/device.ts';
 import { renderReportEmail } from '../_shared/report-email.ts';
 import { renderReportPdf } from '../_shared/report-pdf.ts';
@@ -136,7 +136,7 @@ async function previewEmail(scope: Scope, body: Record<string, unknown>): Promis
 
 async function downloadPdf(scope: Scope): Promise<Response> {
   const data = await reportFor(scope);
-  return new Response(await renderReportPdf(data, generatedAt()), {
+  return new Response(new Uint8Array(await renderReportPdf(data, generatedAt())), {
     headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${reportFileName(data)}"` },
   });
 }
@@ -203,7 +203,7 @@ Deno.serve(async (request) => {
 
     const caller = await callerOf(request);
     if (caller instanceof Response) return caller;
-    if (!isSuper(caller) && !caller.roles.includes('admin')) return json({ error: 'not-allowed' }, 403);
+    if (!isStaff(caller) && !caller.roles.includes('admin')) return json({ error: 'not-allowed' }, 403);
 
     const scope = readScope(body);
     if (!scope) return json({ error: 'invalid' }, 400);

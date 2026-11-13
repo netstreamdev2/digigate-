@@ -18,6 +18,7 @@ import { addDays, dayParam, longDate, siteMidnightUtc, siteToday, timeWithSecond
 import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 const DEFAULT_DAYS = 30;
@@ -59,8 +60,8 @@ function byDay(entries: readonly AuditEntry[]): { day: string; entries: AuditEnt
 async function AuditLog({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  const isSuperUser = user.roles.includes("super_user");
-  if (!isSuperUser && !user.roles.includes("admin")) redirect("/control-room");
+  const acrossCompanies = isDigiGateStaff(user);
+  if (!acrossCompanies && !user.roles.includes("admin")) redirect("/control-room");
 
   const query = await searchParams;
   const today = siteToday(readClock());
@@ -71,7 +72,7 @@ async function AuditLog({ searchParams }: { searchParams: Promise<Query> }) {
   const page = pageParam(query);
 
   const supabase = await supabaseServer();
-  const companies = isSuperUser ? must(await supabase.from("organisations").select("id, name").order("name").limit(MOST_COMPANIES)) : [];
+  const companies = acrossCompanies ? must(await supabase.from("organisations").select("id, name").order("name").limit(MOST_COMPANIES)) : [];
   const company = companies.find((row) => row.id === textParam(query, "company"))?.id ?? "";
 
   const range = { company, from: siteMidnightUtc(fromDay), to: siteMidnightUtc(addDays(toDay, 1)) };
@@ -107,7 +108,7 @@ async function AuditLog({ searchParams }: { searchParams: Promise<Query> }) {
 
       <FilterBar label="Filter the log">
         <SearchBox placeholder="Search a person, device, site or rule" />
-        {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+        {acrossCompanies ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
         <DateRange from={fromDay} to={toDay} latest={today} />
       </FilterBar>
 

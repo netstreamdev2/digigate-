@@ -11,6 +11,7 @@ import { SidebarSkeleton } from "@/components/skeleton";
 import { companyBrand } from "@/lib/company-brand";
 import { appNav } from "@/lib/nav";
 import { currentUser, roleLabel } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 
 /**
  * Everyone who works for one company sees the dashboard in that company's colours, with its logo in the sidebar. A
@@ -19,13 +20,13 @@ import { currentUser, roleLabel } from "@/lib/session";
 async function SignedInFrame() {
   const user = await currentUser();
   if (!user) return <SidebarSkeleton />;
-  const isSuperUser = user.roles.includes("super_user");
-  const company = user.orgId && !isSuperUser ? await companyBrand(user.orgId) : null;
+  const acrossCompanies = isDigiGateStaff(user);
+  const company = user.orgId && !acrossCompanies ? await companyBrand(user.orgId) : null;
   return (
     <>
       {company ? <CompanyTheme company={company} /> : null}
-      {isSuperUser ? <CompanyThemeSync /> : null}
-      <Sidebar items={appNav(user)} userName={user.fullName} userRole={roleLabel(user)} company={company} isSuperUser={isSuperUser} />
+      {acrossCompanies ? <CompanyThemeSync /> : null}
+      <Sidebar items={appNav(user)} userName={user.fullName} userRole={roleLabel(user)} company={company} acrossCompanies={acrossCompanies} />
       <QuickSearch pages={appNav(user)} />
       <AlertToasts />
     </>

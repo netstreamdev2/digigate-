@@ -19,7 +19,7 @@ function simNumberOf(typed: string): string | null {
   return null;
 }
 
-/** The SIM's number and its bundle, set by an admin of the device's company. Row security refuses anyone else. */
+/** The SIM's number and bundle, set by DigiGate staff through the restricted database function. */
 export async function saveDevicePlan(_previous: FormState, form: FormData): Promise<FormState> {
   const id = text(form, "id");
   const typedNumber = text(form, "simNumber");
@@ -44,14 +44,14 @@ export async function saveDevicePlan(_previous: FormState, form: FormData): Prom
     _bundle_mb: bundleMb ?? undefined,
     _renews_day: renewsDay ?? undefined,
   });
-  if (error) return { problem: error.code === "42501" ? "Only a super user can set a SIM and bundle." : SOMETHING_FAILED, saved: 0 };
+  if (error) return { problem: error.code === "42501" ? "Only DigiGate staff can set a SIM and bundle." : SOMETHING_FAILED, saved: 0 };
   revalidatePath("/devices", "layout");
   return { problem: null, saved: Date.now() };
 }
 
-const commandProblem = (code: string | undefined) => (code === "42501" ? "Only a super user can do that to a handheld." : SOMETHING_FAILED);
+const commandProblem = (code: string | undefined) => (code === "42501" ? "Only DigiGate staff can do that to a handheld." : SOMETHING_FAILED);
 
-/** A super user locks a handheld, or restarts it. It does so itself at its next sync, within a minute when it's online. */
+/** DigiGate staff lock or restart a handheld. It does so at its next sync, within a minute when online. */
 export async function requestLock(form: FormData): Promise<void> {
   const supabase = await supabaseServer();
   const { error } = await supabase.rpc("request_device_command", { _device: text(form, "id"), _kind: "lock" });
@@ -67,7 +67,7 @@ export async function requestRestart(form: FormData): Promise<void> {
 }
 
 /**
- * A super user sends a handheld a newer DigiGate: the APK's download link (an EAS build's), its version code, and
+ * DigiGate staff send a handheld a newer DigiGate: the APK's download link (an EAS build's), its version code, and
  * optionally its SHA-256. The handheld installs it itself when nobody is mid-check, and refuses anything that isn't a
  * newer DigiGate signed by us.
  */

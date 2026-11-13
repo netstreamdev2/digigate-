@@ -15,6 +15,7 @@ import { companyBrand } from "@/lib/company-brand";
 import { anyColumnLike, likePattern, pageHref, pageParam, rangeOf, textParam, type Query } from "@/lib/paging";
 import { counted, maybe, must, readClock } from "@/lib/reads";
 import { currentUser } from "@/lib/session";
+import { canAdminister, isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { AccessPointFormFields } from "../../access-point-editor";
@@ -169,7 +170,7 @@ function summaryLine(site: SiteSummary): string {
 
 async function Site({ params, searchParams }: { params: Promise<SiteIds>; searchParams: Promise<Query> }) {
   const user = await currentUser();
-  if (!user || (!user.roles.includes("super_user") && !user.roles.includes("admin"))) {
+  if (!user || !canAdminister(user)) {
     return <NoAccess message="Setting up gates needs an administrator. Your own dashboard is on the way." />;
   }
 
@@ -199,7 +200,7 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
   return (
     <AppShell
       company={await companyBrand(ids.org)}
-      eyebrow={<Breadcrumbs items={user.roles.includes("super_user") ? [{ label: "Security companies", href: "/setup" }, ...crumbs] : crumbs} />}
+      eyebrow={<Breadcrumbs items={isDigiGateStaff(user) ? [{ label: "Security companies", href: "/setup" }, ...crumbs] : crumbs} />}
       title={site.name}
       chips={
         <div className="flex w-full flex-col gap-4">

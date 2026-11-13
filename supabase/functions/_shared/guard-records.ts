@@ -168,7 +168,7 @@ export async function saveGuardRecord(caller: Caller, body: Record<string, unkno
 
   const [before] = await sql`select * from digigate.gate_user_records where gate_user_id = ${guard.id}`;
   const changed = Object.keys(values).filter((column) => column !== 'id_number_hmac' && column !== 'id_number_last4' && column !== 'id_type' && (before?.[column] ?? null) !== values[column]);
-  const row = { gate_user_id: guard.id, org_id: guard.org_id, ...values, updated_at: new Date(), updated_by: caller.id };
+  const row: Record<string, string | Date | null> = { gate_user_id: guard.id, org_id: guard.org_id, ...values, updated_at: new Date(), updated_by: caller.id };
   try {
     await sql`
       insert into digigate.gate_user_records ${sql(row)}

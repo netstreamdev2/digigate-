@@ -20,6 +20,7 @@ import { pageHref, pageParam, textParam, type Query } from "@/lib/paging";
 import { gateStaffBoard, gateStaffCounts, loginBoard, loginCounts, type GateStaffMember, type Login, type PeopleFilter, type RoleCounts } from "@/lib/people";
 import { must } from "@/lib/reads";
 import { currentUser, roleName } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { setGateUserActive } from "../setup/actions";
@@ -32,6 +33,7 @@ const NO_VALUE = "—";
 
 const LOGIN_TABS = [
   { role: "super_user", label: "Super users" },
+  { role: "technician", label: "Technicians" },
   { role: "admin", label: "Administrators" },
   { role: "manager", label: "Managers" },
   { role: "control_room", label: "Control room" },
@@ -46,6 +48,7 @@ const STAFF_TABS = [
 
 const ROLE_TINTS: Readonly<Record<string, string>> = {
   super_user: "bg-ink text-ink-inverse",
+  technician: "bg-tile-sky text-brand",
   admin: "bg-tile-lilac text-brand",
   manager: "bg-tile-sky text-brand",
   control_room: "bg-tile-mint text-brand",
@@ -97,14 +100,14 @@ function ActiveChip({ active }: { active: boolean }) {
 }
 
 function accessOf(person: Login): string {
-  if (person.role === "super_user") return "Everything";
+  if (person.role === "super_user" || person.role === "technician") return "Everything";
   if (person.role === "admin") return "All sites";
   if (person.role === "client_viewer") return "Their site";
   return plural(person.sites, "site");
 }
 
-function loginRow(person: Login, ownId: string) {
-  const locked = person.id === ownId || person.role === "super_user";
+function loginRow(person: Login, ownId: string, canManageTechnicians: boolean) {
+  const locked = person.id === ownId || person.role === "super_user" || (person.role === "technician" && !canManageTechnicians);
   return {
     id: person.id,
     cells: {
@@ -177,7 +180,7 @@ function staffRow(person: GateStaffMember) {
   };
 }
 
-async function loginTable(filter: PeopleFilter, page: number, ownId: string): Promise<{ total: number; table: ReactNode }> {
+async function loginTable(filter: PeopleFilter, page: number, ownId: string, canManageTechnicians: boolean): Promise<{ total: number; table: ReactNode }> {
   const { people, total } = await loginBoard(filter, page);
   return {
     total,
@@ -191,7 +194,7 @@ async function loginTable(filter: PeopleFilter, page: number, ownId: string): Pr
           { key: "status", label: "Status" },
           { key: "actions", label: "", align: "right" },
         ]}
-        rows={people.map((person) => loginRow(person, ownId))}
+        rows={people.map((person) => loginRow(person, ownId, canManageTechnicians))}
       />
     ),
   };
@@ -246,8 +249,8 @@ function NothingHere({ filtered }: { filtered: boolean }) {
 async function People({ searchParams }: { searchParams: Promise<Query> }) {
   const user = await currentUser();
   if (!user) return <NoAccess message="Your account isn't set up yet. Ask your administrator." />;
-  const isSuperUser = user.roles.includes("super_user");
-  if (!isSuperUser && !user.roles.includes("admin")) redirect("/control-room");
+  const acrossCompanies = isDigiGateStaff(user);
+  if (!acrossCompanies && !user.roles.includes("admin")) redirect("/control-room");
 
   const query = await searchParams;
   const onGateStaff = textParam(query, "view") === "gate";
@@ -266,7 +269,7 @@ async function People({ searchParams }: { searchParams: Promise<Query> }) {
   const [logins, staff, shown] = await Promise.all([
     loginCounts(search, company),
     gateStaffCounts(search, company),
-    onGateStaff ? staffTable(filter, page) : loginTable(filter, page, user.id),
+    onGateStaff ? staffTable(filter, page) : loginTable(filter, page, user.id, user.roles.includes("super_user")),
   ]);
   const filtered = Boolean(search || role || status || company);
 
@@ -286,6 +289,7 @@ async function People({ searchParams }: { searchParams: Promise<Query> }) {
       }
       chips={
         <>
+          {user.roles.includes("super_user") && !company ? <AddPersonButton companies={[]} role="technician" label="Add a technician" /> : null}
           <SegmentedLinks
             label="Who to show"
             items={[
@@ -309,7 +313,7 @@ async function People({ searchParams }: { searchParams: Promise<Query> }) {
 
       <FilterBar label={onGateStaff ? "Filter the gate staff" : "Filter the logins"}>
         <SearchBox placeholder={onGateStaff ? "Name, number or company" : "Name, username or company"} />
-        {isSuperUser ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
+        {acrossCompanies ? <FilterSelect name="company" label="All companies" options={companies.map((row) => ({ value: row.id, label: row.name }))} /> : null}
         <FilterSelect
           name="status"
           label="Any status"

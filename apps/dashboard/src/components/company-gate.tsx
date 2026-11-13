@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { currentUser } from "@/lib/session";
+import { isDigiGateStaff } from "@/lib/access";
 import { supabaseServer } from "@/lib/supabase/server";
 
 import { Icon } from "./icon";
@@ -11,7 +12,7 @@ import { Icon } from "./icon";
  */
 export async function CompanyGate({ children }: { children: ReactNode }) {
   const user = await currentUser();
-  if (!user || user.roles.includes("super_user")) return children;
+  if (!user || isDigiGateStaff(user)) return children;
   const supabase = await supabaseServer();
   const { data } = await supabase.rpc("my_company_status");
   const status = data?.[0];
