@@ -39,7 +39,7 @@ const LOCK_MESSAGES: Record<LockReason, string> = {
 /** Employee number and PIN at sign-in, or just the PIN when the screen is locked. */
 export function SignInPanel() {
   const insets = useSafeAreaInsets();
-  const { state, signIn, unlock, signOut, storageProblem } = useSession();
+  const { state, signIn, signInWithPin, unlock, signOut, storageProblem } = useSession();
   const { db } = useLocalDatabase();
   const sync = useSync();
   const [guardCount, setGuardCount] = useState<number | null>(null);
@@ -62,6 +62,8 @@ export function SignInPanel() {
     );
   }, [db, sync.status]);
   const [employeeNumber, setEmployeeNumber] = useState('');
+  // Sign-in is the PIN alone. The employee number is asked for only when two guards share a PIN, or the guard asks.
+  const [askNumber, setAskNumber] = useState(false);
   const [enteringPin, setEnteringPin] = useState(false);
   const [pin, setPin] = useState('');
   const [checking, setChecking] = useState(false);
@@ -70,14 +72,18 @@ export function SignInPanel() {
   const [forgot, setForgot] = useState(false);
   // Development builds show how long the PIN check took, to tune hash iterations on real devices.
   const [lastCheckMs, setLastCheckMs] = useState<number | null>(null);
-  const pinStep = lockedUser !== null || enteringPin;
+  const pinOnly = lockedUser === null && !askNumber;
+  const pinStep = lockedUser !== null || pinOnly || enteringPin;
 
   const submit = async (fullPin: string) => {
     setChecking(true);
     const started = Date.now();
     try {
-      const result = lockedUser ? await unlock(fullPin) : await signIn(employeeNumber, fullPin);
-      if (!result.ok) setProblem(pinProblem(result));
+      const result = lockedUser ? await unlock(fullPin) : pinOnly ? await signInWithPin(fullPin) : await signIn(employeeNumber, fullPin);
+      if (!result.ok) {
+        setProblem(pinProblem(result, pinOnly));
+        if (result.reason === 'shared-pin') setAskNumber(true);
+      }
     } catch {
       setProblem({ tone: 'warning', title: 'Try again', message: "Couldn't check the PIN. Enter it again." });
     } finally {
@@ -109,16 +115,19 @@ export function SignInPanel() {
   const startOver = () => {
     setPin('');
     setEnteringPin(false);
+    setAskNumber(false);
     setEmployeeNumber('');
     setProblem(null);
     setForgot(false);
     if (lockedUser) signOut();
   };
 
-  const title = lockedUser ? `Welcome back,\n${lockedUser.firstName}` : pinStep ? 'Enter your PIN' : "Who's on shift?";
+  const title = lockedUser ? `Welcome back,\n${lockedUser.firstName}` : pinOnly ? "Who's on shift?" : pinStep ? 'Enter your PIN' : "Who's on shift?";
   const subtitle =
     state.status === 'locked'
       ? LOCK_MESSAGES[state.reason]
+      : pinOnly
+      ? 'Type your PIN'
       : pinStep
       ? `Employee ${employeeNumber}`
       : 'Type your employee number';
@@ -207,7 +216,18 @@ export function SignInPanel() {
 
       <View style={styles.controls}>
         <Keypad onDigit={onDigit} onDelete={onDelete} disabled={checking} />
-        {pinStep ? (
+        {pinOnly ? (
+          <PillButton
+            label="Use my employee number"
+            variant="secondary"
+            onPress={() => {
+              setPin('');
+              setProblem(null);
+              setForgot(false);
+              setAskNumber(true);
+            }}
+          />
+        ) : pinStep ? (
           <PillButton
             label={lockedUser ? 'Switch guard' : 'Change employee number'}
             variant="secondary"

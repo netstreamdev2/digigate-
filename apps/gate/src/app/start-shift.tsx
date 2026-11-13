@@ -17,9 +17,10 @@ import type { ShiftMove, ShiftPhoto } from '@/db/shifts';
 import { SupervisorOverride } from '@/gate/supervisor-override';
 import { currentPosts, currentShiftPeriods, shiftPeriodAt, siteConfig, siteName } from '@/site/site-config';
 import { useShift } from '@/shift/shift-context';
-import { ShiftSelfie } from '@/shift/shift-selfie';
 
 const HOUR_MS = 60 * 60_000;
+// A shift starts without a photo (13 November: the selfie held guards up at the start of a shift).
+const NO_SELFIE: ShiftPhoto = { status: 'skipped' };
 
 /** Where and since when, in a guard's words: "Back Gate, Durban Hospital on DT50-2 since 06:00". */
 function whereOnDuty(duty: DutyElsewhere): string {
@@ -64,12 +65,10 @@ export default function StartShiftScreen() {
   const postWide = wideTiles(posts.map((option) => option.label));
   const periodWide = wideTiles(periods.map((option) => option.label));
   const [period, setPeriod] = useState<string>(() => shiftPeriodAt(Date.now())?.code ?? '');
-  const [takingPhoto, setTakingPhoto] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startProblem, setStartProblem] = useState<string | null>(null);
 
   const begin = async (photo: ShiftPhoto) => {
-    setTakingPhoto(false);
     setStarting(true);
     setStartProblem(null);
     try {
@@ -79,8 +78,6 @@ export default function StartShiftScreen() {
       setStarting(false);
     }
   };
-
-  if (takingPhoto) return <ShiftSelfie onDone={begin} onCancel={() => setTakingPhoto(false)} />;
 
   if (approving && elsewhere) {
     return (
@@ -92,7 +89,6 @@ export default function StartShiftScreen() {
         onConfirmed={(supervisor) => {
           setApproving(false);
           setMove({ fromShiftId: elsewhere.shiftId, bySupervisorId: supervisor.id });
-          setTakingPhoto(true);
         }}
       />
     );
@@ -183,7 +179,7 @@ export default function StartShiftScreen() {
         </View>
         <Switch
           value={starting}
-          onValueChange={() => setTakingPhoto(true)}
+          onValueChange={() => void begin(NO_SELFIE)}
           disabled={starting || blocked}
           trackColor={{ false: colors.border, true: colors.clear }}
           thumbColor={colors.surface}
