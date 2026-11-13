@@ -1,5 +1,5 @@
-// Who is calling a dashboard function. These are deployed with --no-verify-jwt, so the session is checked here, and every
-// account must have passed MFA. The service key stays in Supabase and never reaches the dashboard.
+// Who is calling a dashboard function. These are deployed with --no-verify-jwt, so the session is checked here, and while
+// MFA is switched on every account must have passed it. The service key stays in Supabase and never reaches the dashboard.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 import { json, sql } from './device.ts';
@@ -27,7 +27,11 @@ export async function callerOf(request: Request): Promise<Caller | Response> {
   const token = (request.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   const { data, error } = await admin.auth.getUser(token);
   if (error || !data.user) return json({ error: 'not-signed-in' }, 401);
-  if (assuranceLevel(token) !== 'aal2') return json({ error: 'needs-mfa' }, 403);
+  // MFA is a switch in the database (digigate.platform_settings), off since 13 November.
+  if (assuranceLevel(token) !== 'aal2') {
+    const [{ required }] = await sql`select digigate.mfa_required() as required`;
+    if (required !== false) return json({ error: 'needs-mfa' }, 403);
+  }
 
   const [profile] = await sql`select full_name, org_id, roles::text[] as roles from digigate.profiles where id = ${data.user.id} and is_active`;
   if (!profile) return json({ error: 'not-allowed' }, 403);

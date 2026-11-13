@@ -236,7 +236,7 @@ async function Site({ params, searchParams }: { params: Promise<SiteIds>; search
       <FilterBar label={searchPlaceholder}>
         <SearchBox key={tab} placeholder={searchPlaceholder} />
       </FilterBar>
-      <LaunchGrace siteId={ids.site} until={site.launch_grace_until} now={readClock()} />
+      <LaunchGrace siteId={ids.site} until={site.launch_grace_until} now={readClock()} canStart={user.roles.includes("super_user")} />
       {tab === "points" ? <AccessPointList siteId={ids.site} query={query} path={base} near={near} /> : null}
       {tab === "staff" ? <StaffTab ids={ids} query={query} path={base} /> : null}
       {tab === "devices" ? <DevicesTab ids={ids} query={query} path={base} /> : null}

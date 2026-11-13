@@ -28,6 +28,9 @@ for (const file of readdirSync(migrations).sort()) {
     process.exit(1);
   }
 }
+// Production runs with MFA off (migration 48). These tests check every rule with it on, as the stricter case; the
+// switch itself is tested at the end.
+await db.exec('update digigate.platform_settings set require_mfa = true');
 
 let passed = 0;
 const failures = [];
@@ -1022,19 +1025,21 @@ check('the stays must be a list by visit type', (await as('authenticated', ADMIN
 await as('authenticated', ROOM_A, 'aal2', `update digigate.sites set stay_minutes = '{"visitor": 30}' where id = '${SITE_A}'`);
 check('the control room cannot change them', (await one(`select stay_minutes from digigate.sites where id = '${SITE_A}'`)).stay_minutes.visitor === 120);
 await db.exec(`update digigate.sites set stay_minutes = '{}' where id = '${SITE_A}'`);
-// The launch grace: 7 days from when an admin starts it, then it ends by itself.
+// The launch grace: 7 days from when a super user starts it, then it ends by itself (migration 49).
 check('the control room cannot start a launch grace', (await as('authenticated', ROOM_A, 'aal2', 'select digigate.start_launch_grace($1)', [SITE_A])).error);
 check('nor can another company', (await as('authenticated', ADMIN_B, 'aal2', 'select digigate.start_launch_grace($1)', [SITE_A])).error);
-const graceStarted = await as('authenticated', ADMIN_A, 'aal2', 'select digigate.start_launch_grace($1) as until', [SITE_A]);
-check('an admin starts it', !graceStarted.error);
+check('nor the site\'s own admin: only DigiGate starts it', (await as('authenticated', ADMIN_A, 'aal2', 'select digigate.start_launch_grace($1)', [SITE_A])).error);
+const graceStarted = await as('authenticated', SUPER, 'aal2', 'select digigate.start_launch_grace($1) as until', [SITE_A]);
+check('a super user starts it', !graceStarted.error);
 const graceDays = Number((await one(`select extract(epoch from launch_grace_until - now()) / 86400 as d from digigate.sites where id = '${SITE_A}'`)).d);
 check('and it runs for 7 days', graceDays > 6.99 && graceDays <= 7);
 check('the handheld learns when it ends', (await service('select digigate.device_snapshot($1) as s', [DEVICE])).rows[0].s.launchGraceUntil > Date.now());
 check('starting it is in the log, with when it ends', (await one(`select count(*)::int n from digigate.audit_log where action = 'site.grace_started' and detail like 'until %'`)).n === 1);
-await as('authenticated', ADMIN_A, 'aal2', 'select digigate.end_launch_grace($1)', [SITE_A]);
-check('an admin can end it early', (await one(`select launch_grace_until <= now() as ended from digigate.sites where id = '${SITE_A}'`)).ended === true);
+check('the site\'s admin cannot end it either', (await as('authenticated', ADMIN_A, 'aal2', 'select digigate.end_launch_grace($1)', [SITE_A])).error);
+await as('authenticated', SUPER, 'aal2', 'select digigate.end_launch_grace($1)', [SITE_A]);
+check('a super user can end it early', (await one(`select launch_grace_until <= now() as ended from digigate.sites where id = '${SITE_A}'`)).ended === true);
 check('and that is in the log too', (await one(`select count(*)::int n from digigate.audit_log where action = 'site.grace_ended'`)).n === 1);
-await as('authenticated', ADMIN_A, 'aal2', 'select digigate.end_launch_grace($1)', [SITE_A]);
+await as('authenticated', SUPER, 'aal2', 'select digigate.end_launch_grace($1)', [SITE_A]);
 check('ending one that has ended does nothing more', (await one(`select count(*)::int n from digigate.audit_log where action = 'site.grace_ended'`)).n === 1);
 await db.exec(`update digigate.sites set launch_grace_until = null where id = '${SITE_A}'`);
 check('dashboard users cannot write the log themselves', (await as('authenticated', ADMIN_A, 'aal2', `insert into digigate.audit_log (category, action) values ('alerts', 'alert.raised')`)).error);
@@ -1620,8 +1625,18 @@ check('inactive admin cannot request a licence', (await requestLicence(ADMIN_B, 
 const superOnlyFunctions = (await db.query(`select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'digigate' and p.prosrc like '%digigate.is_super_user()%' order by p.proname`)).rows.map((row) => row.proname);
 check('every remaining super-user-only function is an audited commercial or release control', JSON.stringify(superOnlyFunctions) === JSON.stringify([
-  'create_site', 'decline_site_licence', 'fulfil_site_licence', 'request_device_release', 'set_company_suspended', 'transfer_client',
+  'create_site', 'decline_site_licence', 'end_launch_grace', 'fulfil_site_licence', 'request_device_release', 'set_company_suspended',
+  'start_launch_grace', 'transfer_client',
 ]));
+
+// The MFA switch: off, a password alone is enough; on again, the code is needed.
+await db.exec('update digigate.platform_settings set require_mfa = false');
+check('with MFA switched off, a signed-in session passes without a code', (await as('authenticated', ADMIN_B, 'aal1', 'select digigate.mfa_passed() as ok')).rows[0]?.ok === true
+  && (await as('authenticated', ADMIN_B, 'aal1', 'select digigate.mfa_required() as on')).rows[0]?.on === false);
+await db.exec('update digigate.platform_settings set require_mfa = true');
+check('switched back on, it needs the code again', (await as('authenticated', ADMIN_B, 'aal1', 'select digigate.mfa_passed() as ok')).rows[0]?.ok === false);
+check('nobody can change the switch through the API', (await as('authenticated', SUPER, 'aal2', 'update digigate.platform_settings set require_mfa = false')).error
+  || (await one('select require_mfa from digigate.platform_settings')).require_mfa === true);
 
 console.log(`${passed} passed, ${failures.length} failed`);
 for (const failure of failures) console.log('FAILED:', failure);

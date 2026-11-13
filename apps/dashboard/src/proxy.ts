@@ -31,11 +31,16 @@ export async function proxy(request: NextRequest) {
 
   if (!user) return path === LOGIN_PATH ? response : redirectTo(LOGIN_PATH);
 
+  // MFA is a switch in the database (digigate.platform_settings), off since 13 November. When it's on, a session that
+  // hasn't passed it goes to the code screen; when it's off, the code screen is still there for anyone who opens it.
   const { data: level } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  const passedMfa = level?.currentLevel === "aal2";
-  if (!passedMfa) return path === MFA_PATH ? response : redirectTo(MFA_PATH);
+  if (level?.currentLevel !== "aal2") {
+    const { data: required, error } = await supabase.schema("digigate").rpc("mfa_required");
+    // If the switch can't be read, ask for the code: never let a failed read lower the bar.
+    if (error || required !== false) return path === MFA_PATH ? response : redirectTo(MFA_PATH);
+  }
   if (user.app_metadata.must_change_password === true) return path === PASSWORD_PATH ? response : redirectTo(PASSWORD_PATH);
-  return [LOGIN_PATH, MFA_PATH, PASSWORD_PATH].includes(path) ? redirectTo("/setup") : response;
+  return [LOGIN_PATH, PASSWORD_PATH].includes(path) ? redirectTo("/setup") : response;
 }
 
 export const config = {

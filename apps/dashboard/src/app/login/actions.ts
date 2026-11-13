@@ -40,7 +40,8 @@ export async function signIn(_previous: SignInState, form: FormData): Promise<Si
   if (login.includes("@")) {
     const { error } = await supabase.auth.signInWithPassword({ email: accountEmail(login), password });
     if (error) return { problem: NO_MATCH, choices: null };
-    redirect("/mfa");
+    // In through the front door: the page guard sends them to the code screen first if MFA is switched on.
+    redirect("/");
   }
 
   const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/functions/v1/digigate-signin`, {
@@ -69,7 +70,7 @@ export async function signIn(_previous: SignInState, form: FormData): Promise<Si
   }
   const { error } = await supabase.auth.setSession({ access_token: session.accessToken, refresh_token: session.refreshToken });
   if (error) return { problem: "That didn't work. Try again.", choices: null };
-  redirect("/mfa");
+  redirect("/");
 }
 
 /** The name a person signs in with: just their username, never the company code behind it, or their real email. */
