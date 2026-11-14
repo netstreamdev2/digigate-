@@ -69,7 +69,6 @@ export function SignInPanel() {
   // The employee numbers as tiles to tap, and which are on duty on another handheld. Null tiles: too many to show.
   const [tiles, setTiles] = useState<NumberTile[] | null>(null);
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
-  const [typing, setTyping] = useState(false);
   useEffect(() => {
     signInTiles(db, MOST_TILES).then(setTiles, () => setTiles(null));
     onDutyElsewhereIds(db, Date.now(), siteConfig.maxShiftHours * HOUR_MS).then(setBusy, () => setBusy(new Set()));
@@ -84,7 +83,9 @@ export function SignInPanel() {
   // Development builds show how long the PIN check took, to tune hash iterations on real devices.
   const [lastCheckMs, setLastCheckMs] = useState<number | null>(null);
   const pinStep = lockedUser !== null || enteringPin;
-  const showTiles = !pinStep && !typing && tiles !== null && tiles.length > 0;
+  // With tiles there is no typing (14 November): guards who typed couldn't find their way back. A handheld with too
+  // many numbers for tiles still has the keypad.
+  const showTiles = !pinStep && tiles !== null && tiles.length > 0;
 
   const pick = (number: string) => {
     setProblem(null);
@@ -131,7 +132,6 @@ export function SignInPanel() {
   const startOver = () => {
     setPin('');
     setEnteringPin(false);
-    setTyping(false);
     setEmployeeNumber('');
     setProblem(null);
     setForgot(false);
@@ -209,12 +209,9 @@ export function SignInPanel() {
       )}
 
       {showTiles && tiles ? (
-        <>
-          <View style={styles.tiles}>
-            <NumberTiles tiles={tiles} busy={busy} onPick={pick} />
-          </View>
-          <PillButton label="Type a number instead" variant="secondary" onPress={() => setTyping(true)} />
-        </>
+        <View style={styles.tiles}>
+          <NumberTiles tiles={tiles} busy={busy} onPick={pick} />
+        </View>
       ) : (
         <>
           <View style={styles.entry}>
